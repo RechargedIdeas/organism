@@ -1,9 +1,8 @@
-"""v0.2 federation stubs — fail closed. Distributed Organism remains E.8 OOS.
+"""Federation gate — v0.2 fail-closed by default; v0.3-M3 optional multi-node.
 
-Provides single-node stubs that:
-- refuse federated oxytocin consensus
-- refuse multi-node HormoneBus mirror lag simulation as a real cluster
-and record unsupported diagnosis events for CI gate proof.
+When ``enable_multi_node=False`` (default), federated oxytocin and mirror-lag
+APIs raise ``FederationUnsupported`` (preserves v0.2 stub tests).
+When enabled, delegates to ``MultiNodeCluster``.
 """
 from __future__ import annotations
 
@@ -44,13 +43,31 @@ class UnsupportedEvent:
 
 
 class FederationGate:
-    """Single-node gate: federation features fail closed and are audited."""
+    """Gate: federation features fail closed unless enable_multi_node=True."""
 
     TAG = "federation_unsupported"
 
-    def __init__(self, workspace: WorkspaceClient | None = None) -> None:
+    def __init__(
+        self,
+        workspace: WorkspaceClient | None = None,
+        *,
+        enable_multi_node: bool = False,
+        node_ids: list[str] | None = None,
+        default_lag_ms: float = 5.0,
+        lag_slo_ms: float = 50.0,
+    ) -> None:
         self._ws = workspace
         self.events: list[UnsupportedEvent] = []
+        self.enable_multi_node = enable_multi_node
+        self._cluster = None
+        if enable_multi_node:
+            from organism_sdk.multinode import MultiNodeCluster
+
+            self._cluster = MultiNodeCluster(
+                node_ids or ["node_a", "node_b", "node_c"],
+                default_lag_ms=default_lag_ms,
+                lag_slo_ms=lag_slo_ms,
+            )
 
     def _record(self, kind: UnsupportedKind, detail: str) -> UnsupportedEvent:
         ev = UnsupportedEvent(kind, detail)
@@ -77,41 +94,74 @@ class FederationGate:
             self._ws.write(rec)
         return ev
 
+    @property
+    def cluster(self):
+        return self._cluster
+
     def federated_oxytocin_release(
         self, *, adapter_acceptance_rate: float, peer_nodes: list[str]
     ) -> HormoneLevels:
-        """Refuse multi-node oxytocin consensus; single-node local release only via HormoneBus."""
-        if peer_nodes:
+        if not self.enable_multi_node or self._cluster is None:
+            if peer_nodes:
+                self._record(
+                    "FEDERATED_OXYTOCIN",
+                    f"federated oxytocin refused for peers={peer_nodes}; enable_multi_node=False",
+                )
+                raise FederationUnsupported(
+                    "FEDERATED_OXYTOCIN",
+                    "Federated oxytocin requires enable_multi_node=True (v0.3-M3)",
+                )
             self._record(
                 "FEDERATED_OXYTOCIN",
-                f"federated oxytocin refused for peers={peer_nodes}; E.8 distributed OOS",
+                "federation API invoked on single node; use HormoneBus.oxytocin_release locally",
             )
             raise FederationUnsupported(
                 "FEDERATED_OXYTOCIN",
-                "Federated oxytocin requires Distributed Organism (E.8 out of scope)",
+                "Federated oxytocin API unsupported without multi-node; use local HormoneBus",
             )
-        # Zero peers: still not a federation — fail closed on the federation API
-        self._record(
-            "FEDERATED_OXYTOCIN",
-            "federation API invoked on single node; use HormoneBus.oxytocin_release locally",
-        )
-        raise FederationUnsupported(
-            "FEDERATED_OXYTOCIN",
-            "Federated oxytocin API is unsupported in v0.2; use local HormoneBus",
-        )
+        # Multi-node path: peer_nodes map to votes at given rate
+        votes = {nid: adapter_acceptance_rate for nid in self._cluster.nodes}
+        for p in peer_nodes:
+            if p in votes:
+                votes[p] = adapter_acceptance_rate
+        result = self._cluster.federated_oxytocin(votes=votes)
+        if not result.agreed:
+            raise FederationUnsupported(
+                "FEDERATED_OXYTOCIN",
+                f"oxytocin quorum failed: {result.reason}",
+            )
+        # Return levels from first live node
+        for n in self._cluster.nodes.values():
+            if not n.partitioned:
+                return n.bus._mirror
+        return HormoneLevels(oxytocin=result.oxytocin)
 
     def simulate_multi_node_mirror_lag(
         self, bus: HormoneBus, *, peer_count: int, lag_ms: float
     ) -> dict[str, Any]:
-        """Do not build a cluster. Record unsupported and raise."""
-        self._record(
-            "MULTI_NODE_MIRROR_LAG",
-            f"multi-node mirror lag refused peer_count={peer_count} lag_ms={lag_ms}",
+        if not self.enable_multi_node or self._cluster is None:
+            self._record(
+                "MULTI_NODE_MIRROR_LAG",
+                f"multi-node mirror lag refused peer_count={peer_count} lag_ms={lag_ms}",
+            )
+            raise FederationUnsupported(
+                "MULTI_NODE_MIRROR_LAG",
+                "Multi-node HormoneBus mirror lag requires enable_multi_node=True (v0.3-M3)",
+            )
+        # Use cluster: release on node_a, advance past lag
+        ids = list(self._cluster.nodes.keys())
+        src = ids[0]
+        self._cluster.release_and_mirror(
+            src, lag_ms=lag_ms, stress_load=0.5, viability_score=0.8
         )
-        raise FederationUnsupported(
-            "MULTI_NODE_MIRROR_LAG",
-            "Multi-node HormoneBus mirror lag simulation requires Distributed Organism (E.8)",
-        )
+        self._cluster.advance(wait_ms=lag_ms + 2.0)
+        self._cluster.assert_lag_slo()
+        return {
+            "peer_count": len(ids) - 1,
+            "lag_ms_configured": lag_ms,
+            "lag_ms_observed_max": self._cluster.max_observed_lag_ms(),
+            "supported": True,
+        }
 
     def is_distributed_supported(self) -> bool:
-        return False
+        return bool(self.enable_multi_node and self._cluster is not None)

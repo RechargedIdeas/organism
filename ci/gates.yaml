@@ -161,3 +161,8 @@ category_bio:
     blocking: true
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_metamodel.py"
+
+  - id: v03:multinode
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_multinode.py"
