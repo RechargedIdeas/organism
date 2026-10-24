@@ -1,7 +1,8 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Corpus:** closed v0.1 + v0.2 biological + v0.3 + **v0.4 hardening opening**  
+**Release:** **v0.4.0** (API freeze — see `docs/API_FREEZE_v0.4.md`, `CHANGELOG.md`)  
+**Corpus:** closed v0.1 + v0.2 biological + v0.3 + **v0.4 hardening complete**  
 **Repo:** https://github.com/RechargedIdeas/organism (private)
 
 ## Milestone summary
@@ -21,10 +22,11 @@
 | **v0.4-M1 Soak** | **green** | Multi-window harness; GC proxy; traces reconstructible |
 | **v0.4-M2 Perf budgets** | **green** | Budgets in PERF.md; blocking perf:* gates |
 | **v0.4-M3 Security fuzz** | **green** | Malformed/forge/byzantine/capability/justification |
+| **v0.4 API freeze / tag** | **green** | `docs/API_FREEZE_v0.4.md` + `CHANGELOG.md` + versions `0.4.0` + tag `v0.4.0` |
 
-**Full suite (default):** 115 passed (2 slow deselected) after v0.4-M3.
+**Full suite (default):** 115 passed (2 slow deselected) at v0.4.0 freeze.
 
-**Plans:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md) · [docs/v0.4/PLAN.md](docs/v0.4/PLAN.md)
+**Plans:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md) · [docs/v0.4/PLAN.md](docs/v0.4/PLAN.md) · [docs/v0.4/PERF.md](docs/v0.4/PERF.md) · [docs/API_FREEZE_v0.4.md](docs/API_FREEZE_v0.4.md)
 
 ---
 
@@ -162,3 +164,8 @@ Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substr
 
 ### v0.4 complete (M0–M3)
 Hardening path green. Still OOS: real neuromorphic silicon, full BFT cluster, live NAS, molecular substrates.
+
+### v0.4.0 release freeze
+- Versions bumped to `0.4.0` (root + sdk pyproject, Cargo workspace, `organism_sdk.__version__`).
+- Public API freeze documented; experimental biology / multi-node / SNN explicitly non-frozen.
+- Annotated git tag `v0.4.0` on the freeze commit; GitHub Release notes from CHANGELOG.
