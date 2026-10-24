@@ -50,5 +50,3 @@ markers = [
     "slow: full wall-clock SLO (~480s); opt-in via ORGANISM_WALL_CLOCK_FULL=1",
 ]
 
-[tool.pytest.ini_options.markers]
-# note: hatch/toml nested — use inline list under ini_options instead

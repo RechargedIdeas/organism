@@ -1,4 +1,4 @@
-# E.5 CI gate definitions — Organism v0.1
+# E.5 CI gate definitions — Organism v0.1 (+ wall-clock perf:slo)
 
 gates:
   - id: proto:lint
@@ -43,10 +43,22 @@ gates:
 
   - id: perf:slo
     blocking: false
-    status: green-pending
-    notes: "Wall-clock SLO timing deferred; virtual-clock B.6 green in degradation:transitions"
+    status: green
+    notes: >
+      Fast wall-clock hysteresis suite (T_DOWN_FAST/T_UP_FAST, time.monotonic).
+      Proves L0→L1→L2→L1→L0 physiology + no-flapping under real time.
+      Default pytest excludes @pytest.mark.slow full-480s path.
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_wall_clock_slo.py -m 'not slow'"
 
 category_i:
+  - id: e5_1b_wall_clock_fast
+    status: green
+    notes: >
+      Scaled E-5 1b under wall clock (T_up on order 2–3s, T_up ≥ 5·T_down).
+      Covered by perf:slo / test_wall_clock_e5_1b_fast_physiology.
   - id: e5_1b_wall_clock_480s
-    status: green-pending
-    notes: "Exercised via virtual clock; wall-clock perf:slo pending"
+    status: green-pending-opt-in
+    notes: >
+      Full B.4 hysteresis (~455–480s). Opt-in:
+      ORGANISM_WALL_CLOCK_FULL=1 pytest -m slow sdk/python/tests/test_wall_clock_slo.py::test_e5_1b_wall_clock_480s
+      Gate exists and is runnable; default CI stays fast.
