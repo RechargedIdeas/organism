@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Placeholder crate (Batch 1 workspace stub; implementation in a later batch)"
+description = "Structural router — form/tier/level eligibility (v1.0-F parity)"
 
 [dependencies]
+organism-registry = { path = "../registry" }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }

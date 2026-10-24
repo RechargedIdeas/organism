@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Placeholder crate (Batch 1 workspace stub; implementation in a later batch)"
+description = "Degradation state machine L0–L4 (v1.0-F parity)"
 
 [dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
