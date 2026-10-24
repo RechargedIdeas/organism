@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package organism.v1.rule;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+
+option go_package = "github.com/organism/v1/rule;rule";
+
+// ============================================================
+// Rule-Trace Format — A1.
+// ============================================================
+
+message RuleTrace {
+  string                    format              = 1;  // "typed-json:rule-trace/v1"
+  bytes                     trace_id            = 2;
+  google.protobuf.Timestamp emitted_at          = 3;
+  EngineInfo                engine              = 4;
+  TraceInput                input               = 5;
+  Evaluation                evaluation          = 6;
+  TraceOutput               output              = 7;
+  Signature                 signature           = 8;
+}
+
+message EngineInfo {
+  string module_id        = 1;
+  string module_version   = 2;
+  bytes  contract_digest  = 3;
+  string rulebook_id      = 4;
+  string rulebook_version = 5;
+  bytes  rulebook_digest  = 6;
+}
+
+message TraceInput {
+  bytes                          task_descriptor_digest = 1;
+  bytes                          workspace_snapshot_id  = 2;
+  repeated BindingRead           workspace_bindings_read = 3;
+  repeated SignalObserved        signals_observed       = 4;
+}
+
+message BindingRead {
+  string binding_id       = 1;
+  bytes  binding_checksum = 2;
+  uint64 at_sequence      = 3;
+}
+
+message SignalObserved {
+  string     signal_name   = 1;
+  TypedValue value         = 2;
+  string     source        = 3;
+  google.protobuf.Timestamp observed_at = 4;
+}
+
+message TypedValue {
+  oneof kind {
+    int64  int_value  = 1;
+    bool   bool_value = 2;
+    string str_value  = 3;
+  }
+}
+
+message Evaluation {
+  string                 rule_fired           = 1;
+  repeated string        rule_chain           = 2;
+  string                 predicate_satisfied  = 3;
+  repeated RuleResult    intermediate_results = 4;
+}
+
+message RuleResult {
+  string          rule_id             = 1;
+  bool            predicate_truth     = 2;
+  repeated string signal_values_used  = 3;
+}
+
+message TraceOutput {
+  ActionDescriptor output_action       = 1;
+  Confidence       confidence          = 2;
+  repeated string  constraints_checked = 3;
+}
+
+message ActionDescriptor {
+  string action_type  = 1;
+  bytes  action_body  = 2;
+}
+
+message Confidence {
+  string kind  = 1;
+  int64  value = 2;
+}
+
+message Signature {
+  string algorithm = 1;
+  string key_id    = 2;
+  bytes  signature = 3;
+}
+
+message Rulebook {
+  string                rulebook_id          = 1;
+  string                version              = 2;
+  bytes                 digest               = 3;
+  repeated string       declared_constraints = 4;
+  repeated string       predicates_allowed   = 5;
+  repeated Rule         rules                = 6;
+  ModuleLifecycleState  lifecycle_state      = 7;
+}
+
+message Rule {
+  string          rule_id       = 1;
+  int32           priority      = 2;
+  string          precondition  = 3;
+  ActionDescriptor action       = 4;
+  repeated string constraints   = 5;
+  string          documentation = 6;
+}

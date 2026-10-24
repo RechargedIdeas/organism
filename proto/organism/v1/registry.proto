@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package organism.v1.registry;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+import "organism/v1/contract.proto";
+
+option go_package = "github.com/organism/v1/registry;registry";
+
+// ============================================================
+// SubstrateRegistry — A.2 with amendments.
+// ============================================================
+
+service SubstrateRegistry {
+  rpc Register       (RegisterRequest)        returns (RegisterResponse);
+  rpc Deregister     (DeregisterRequest)      returns (DeregisterResponse);
+  rpc Query          (QueryRequest)           returns (QueryResponse);
+  rpc GetContract    (ContractRequest)        returns (organism.v1.SubstrateContract);
+  rpc Health         (HealthRequest)          returns (HealthReport);
+  rpc Promote        (PromoteRequest)         returns (PromoteResponse);
+  rpc HotSwap        (HotSwapRequest)         returns (HotSwapResponse);
+  rpc ListVersions   (ListVersionsRequest)    returns (ListVersionsResponse);
+  rpc DiffContracts  (DiffRequest)            returns (DiffResponse);
+  rpc GetAuditLog    (AuditLogRequest)        returns (stream AuditLogEntry);
+}
+
+message RegisterRequest {
+  organism.v1.SubstrateContract contract = 1;
+  bytes                          artifact_digest   = 2;
+  bytes                          author_signature  = 3;
+  repeated string                promotion_evidence = 4;
+  // R-28: per-registration lifecycle bypass. Nullable via presence.
+  ModuleLifecycleState           test_bypass_promote = 5;
+}
+
+message RegisterResponse {
+  string                          module_id          = 1;
+  ModuleLifecycleState            initial_state      = 2;
+  repeated ValidationIssue        validation_issues  = 3;
+}
+
+message DeregisterRequest {
+  string       module_id          = 1;
+  DrainPolicy  drain              = 2;
+  int32        drain_timeout_s    = 3;
+  bool         accept_chain_break = 4;
+}
+
+message DeregisterResponse {
+  bool                     accepted          = 1;
+  repeated ValidationIssue validation_issues = 2;
+}
+
+message QueryRequest {
+  CapabilityFilter filter = 1;
+}
+
+message CapabilityFilter {
+  repeated organism.v1.ModuleRole     roles                 = 1;
+  organism.v1.ReliabilityTier         min_reliability       = 2;
+  organism.v1.MaxSafetyTier           min_max_safety        = 3;
+  organism.v1.HardwareRequirement     max_hardware          = 4;
+  organism.v1.BudgetClass             max_budget            = 5;
+  repeated organism.v1.Modality       input_modalities      = 6;
+  organism.v1.OutputForm              required_output       = 7;
+  ModuleLifecycleState                min_lifecycle_state   = 8;
+}
+
+message QueryResponse {
+  repeated organism.v1.ModuleHandle handles = 1;
+}
+
+message ContractRequest {
+  string module_id = 1;
+  string version   = 2;
+}
+
+message HealthRequest {
+  string module_id = 1;
+}
+
+message HealthReport {
+  string                          module_id        = 1;
+  HealthStatus                    status           = 2;
+  float                           score            = 3;
+  repeated FailureSignal          active_failures  = 4;
+  google.protobuf.Timestamp       observed_at      = 5;
+}
+
+enum HealthStatus {
+  HEALTH_UNSPECIFIED = 0;
+  HEALTH_HEALTHY     = 1;
+  HEALTH_DEGRADED    = 2;
+  HEALTH_FAILED      = 3;
+}
+
+message FailureSignal {
+  string                    failure_mode_name = 1;
+  float                     observed_value    = 2;
+  float                     threshold         = 3;
+  google.protobuf.Timestamp first_observed    = 4;
+}
+
+message PromoteRequest {
+  string                          module_id          = 1;
+  ModuleLifecycleState            from_state         = 2;
+  ModuleLifecycleState            to_state           = 3;
+  repeated ShadowValidationRecord shadow_records     = 4;
+  bytes                           approver_signature = 5;
+  bool                            test_bypass_validation = 6;  // R-28
+}
+
+message PromoteResponse {
+  bool                     accepted          = 1;
+  repeated ValidationIssue validation_issues = 2;
+}
+
+message ShadowValidationRecord {
+  int32            invocations      = 1;
+  float            incumbent_error  = 2;
+  float            candidate_error  = 3;
+  float            p95_latency_ms   = 4;
+  repeated string  gates_passed     = 5;
+  bytes            evidence_digest  = 6;
+}
+
+message HotSwapRequest {
+  string       module_id       = 1;
+  string       new_version     = 2;
+  SwapStrategy strategy        = 3;
+  float        drain_timeout_s = 4;
+}
+
+message HotSwapResponse {
+  bool                     accepted          = 1;
+  repeated ValidationIssue validation_issues = 2;
+}
+
+message ListVersionsRequest {
+  string module_id = 1;
+}
+
+message ListVersionsResponse {
+  repeated string versions = 1;
+}
+
+message DiffRequest {
+  string module_id   = 1;
+  string version_a   = 2;
+  string version_b   = 3;
+}
+
+message DiffResponse {
+  string patch_json = 1;
+}
+
+message AuditLogRequest {
+  google.protobuf.Timestamp since = 1;
+  google.protobuf.Timestamp until = 2;
+  string event_type_filter = 3;
+}
+
+message AuditLogEntry {
+  string                    event_type    = 1;
+  string                    module_id     = 2;
+  bytes                     payload_digest = 3;
+  google.protobuf.Timestamp at            = 4;
+}

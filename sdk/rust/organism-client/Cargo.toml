@@ -1,0 +1,17 @@
+[package]
+name = "organism-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Organism Rust runtime SDK — Hypervector + client traits (A3.2)"
+
+[dependencies]
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+parking_lot = { workspace = true }
+rand = "0.8"

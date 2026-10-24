@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package organism.v1.workspace;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+import "organism/v1/contract.proto";
+
+option go_package = "github.com/organism/v1/workspace;workspace";
+
+// ============================================================
+// Workspace — D with A5 and R-34 folded in.
+// ============================================================
+
+message Hypervector {
+  // 10,000 bits packed into 157 u64 words; last word masked.
+  repeated uint64 words = 1;
+}
+
+message BindingRecord {
+  string                       binding_id            = 1;
+  Hypervector                  hypervector           = 2;
+  Hypervector                  role                  = 3;
+  Hypervector                  filler                = 4;
+  Fidelity                     fidelity              = 5;
+  float                        salience              = 6;
+  Provenance                   provenance            = 7;
+  SafetyTag                    safety                = 8;
+  repeated string              tags                  = 9;
+  bytes                        checksum              = 10;
+  uint64                       query_count           = 11;
+  google.protobuf.Timestamp    last_queried_at       = 12;
+}
+
+enum Fidelity {
+  FIDELITY_UNSPECIFIED = 0;
+  FIDELITY_FULL        = 1;
+  FIDELITY_COMPRESSED  = 2;
+  FIDELITY_SUMMARIZED  = 3;
+  FIDELITY_EVICTED     = 4;
+}
+
+message Provenance {
+  string                    module_id        = 1;
+  string                    module_version   = 2;
+  bytes                     contract_digest  = 3;
+  string                    task_id          = 4;
+  google.protobuf.Timestamp written_at       = 5;
+}
+
+message SafetyTag {
+  bool                        affects_control        = 1;
+  bool                        requires_verification  = 2;
+  VerificationStatus          verification_status    = 3;
+  bool                        pinned                 = 4;
+}
+
+enum VerificationStatus {
+  VERIFICATION_UNSPECIFIED = 0;
+  VERIFICATION_NONE        = 1;
+  VERIFICATION_PENDING     = 2;
+  VERIFICATION_PASSED      = 3;
+  VERIFICATION_FAILED      = 4;
+}
+
+message BindingWriteResult {
+  string                      binding_id      = 1;
+  Status                      status          = 2;
+  string                      reason_code     = 3;
+  map<string, string>         reason_params   = 4;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACCEPTED    = 1;
+  STATUS_REJECTED    = 2;
+}
+
+message WorkspaceSnapshot {
+  string                              format_version       = 1;
+  bytes                               snapshot_id          = 2;
+  bytes                               parent_snapshot_id   = 3;
+  google.protobuf.Timestamp           created_at           = 4;
+  string                              created_by           = 5;
+  int32                               dimension            = 6;
+  string                              hypervector_encoding = 7;
+  bytes                               pq_seed              = 8;
+  repeated BindingRecord              full_tier            = 9;
+  repeated bytes                      compressed_tier_blob = 10;
+  repeated bytes                      summarized_tier_blob = 11;
+  repeated bytes                      cluster_metadata     = 12;
+  IndexManifest                       index_manifest       = 13;
+  bytes                               merkle_root          = 14;
+  OpLogRange                          op_log_sequence_range = 15;
+  bytes                               signature            = 16;
+}
+
+message IndexManifest {
+  bytes role_index_digest        = 1;
+  bytes tag_index_digest         = 2;
+  bytes provenance_index_digest  = 3;
+  bytes mih_index_digest         = 4;
+}
+
+message OpLogRange {
+  uint64 start = 1;
+  uint64 end   = 2;
+}
+
+// Workspace ops log entries — D.9.
+message WorkspaceOp {
+  oneof kind {
+    WriteOp             write                = 1;
+    ReadOp              read                 = 2;
+    EvictOp             evict                = 3;
+    CompressOp          compress             = 4;
+    SummarizeOp         summarize            = 5;
+    PromoteOp           promote              = 6;
+    CompactionComplete  compaction_complete  = 7;
+    SnapshotOp          snapshot             = 8;
+  }
+  uint64 sequence = 100;
+}
+
+message WriteOp {
+  BindingRecord binding = 1;
+}
+
+message ReadOp {
+  string binding_id     = 1;
+  bytes  result_digest  = 2;
+  string module_id      = 3;
+  google.protobuf.Timestamp at = 4;
+}
+
+message EvictOp {
+  string binding_id = 1;
+}
+
+message CompressOp {
+  string binding_id = 1;
+  bytes  pq_code    = 2;
+}
+
+message SummarizeOp {
+  repeated string cluster_member_ids = 1;
+  bytes           centroid           = 2;
+}
+
+message PromoteOp {
+  string      binding_id       = 1;
+  Fidelity    new_fidelity     = 2;
+  Hypervector decoded_hypervector = 3;
+}
+
+message CompactionComplete {
+  string                    cycle_id = 1;
+  map<string, int64>        counts   = 2;
+  google.protobuf.Timestamp at       = 3;
+}
+
+message SnapshotOp {
+  bytes  snapshot_id = 1;
+  OpLogRange range   = 2;
+}

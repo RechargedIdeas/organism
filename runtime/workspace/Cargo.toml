@@ -1,0 +1,21 @@
+[package]
+name = "organism-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "In-memory VSA workspace (M2) — binary HV, bind/unbind"
+
+[dependencies]
+organism-client = { path = "../../sdk/rust/organism-client" }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+rand = "0.8"
+
+[dev-dependencies]
+rand = "0.8"

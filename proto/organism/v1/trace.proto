@@ -1,0 +1,246 @@
+syntax = "proto3";
+
+package organism.v1.trace;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+import "organism/v1/contract.proto";
+import "organism/v1/router.proto";
+import "organism/v1/workspace.proto";
+
+option go_package = "github.com/organism/v1/trace;trace";
+
+// ============================================================
+// Trace entries — C.5, B.1, A5.2, A5.10 (R-34).
+// ============================================================
+
+message RoutingTraceEntry {
+  string                          entry_id              = 1;
+  google.protobuf.Timestamp       at                    = 2;
+  string                          task_id               = 3;
+  string                          plan_type             = 4;  // "DispatchPlan" | "DegradedDispatchPlan"
+  string                          policy_id             = 5;
+  bytes                           policy_digest         = 6;
+  Level                           level                 = 7;
+  organism.v1.router.TaskForm     form                  = 8;
+  organism.v1.MaxSafetyTier       safety_tier           = 9;
+  CalibrationState                calibration_state     = 10;
+  organism.v1.ModuleHandle        selected_module       = 11;
+  Disposition                     disposition           = 12;
+  repeated ExcludedCandidate      excluded_candidates   = 13;
+  CrossCheckInfo                  cross_check           = 14;
+  TraceSinkOverride               trace_sink_override   = 15;
+  bytes                           workspace_snapshot_id = 16;
+  HumanAck                        human_ack             = 17;
+}
+
+enum Disposition {
+  DISPOSITION_TRACE_UNSPECIFIED = 0;
+  DISPOSITION_TRACE_DISPATCH    = 1;
+  DISPOSITION_TRACE_HOLD        = 2;
+}
+
+message ExcludedCandidate {
+  string   module_id     = 1;
+  string   reason_code   = 2;
+  map<string, string> reason_params = 3;
+}
+
+message CrossCheckInfo {
+  bool   required          = 1;
+  string module_id         = 2;
+  string justification_kind = 3;
+}
+
+message TraceSinkOverride {
+  string sink_id                          = 1;
+  bool   granted                          = 2;
+  ModuleLifecycleState module_lifecycle_state_at_emit = 3;
+}
+
+message HumanAck {
+  string                    operator_id = 1;
+  google.protobuf.Timestamp signed_at   = 2;
+}
+
+message CalibrationState {
+  // One of c_m_float OR c_m_uninformative is set.
+  double c_m_float                = 1;
+  bool   c_m_uninformative        = 2;
+  string c_m_source               = 3;  // "rolling" | "suspended" | "unrecorded"
+  string reason                   = 4;
+  google.protobuf.Timestamp as_of = 5;
+  double staleness_ms             = 6;
+}
+
+// Consolidated DegradationTraceEntry — B.1 / R-4.
+message DegradationTraceEntry {
+  string                          entry_id              = 1;
+  google.protobuf.Timestamp       at                    = 2;
+  EventClass                      event_class           = 3;
+  Level                           from_level            = 4;
+  Level                           to_level              = 5;
+  string                          diagnosis_code        = 6;
+  Trigger                         trigger               = 7;
+  Hysteresis                      hysteresis            = 8;
+  repeated organism.v1.ModuleHandle active_modules_at_transition = 9;
+  repeated organism.v1.ModuleHandle demoted_modules        = 10;
+  repeated organism.v1.ModuleHandle promoted_modules       = 11;
+  bytes                           workspace_snapshot_id = 12;
+  int32                           safety_shield_interventions_during_window = 13;
+  HumanAck                        human_ack             = 14;
+}
+
+enum EventClass {
+  EVENT_CLASS_UNSPECIFIED = 0;
+  EVENT_CLASS_TRANSITION  = 1;
+  EVENT_CLASS_DIAGNOSIS   = 2;
+}
+
+message Trigger {
+  string                          kind                    = 1;
+  double                          duration_observed_s     = 2;
+  repeated ContributingSignal     contributing_signals    = 3;
+}
+
+message ContributingSignal {
+  string  signal_name          = 1;
+  string  kind                 = 2;
+  double  observed_value       = 3;
+  double  threshold            = 4;
+  double  duration_observed_s  = 5;
+}
+
+message Hysteresis {
+  double window_down_s = 1;
+  double window_up_s   = 2;
+}
+
+// WorkspaceTraceEntry — A5.2.
+message WorkspaceTraceEntry {
+  string                       entry_id                  = 1;
+  google.protobuf.Timestamp    at                        = 2;
+  WorkspaceOperation           operation                 = 3;
+  string                       module_id                 = 4;
+  bytes                        module_contract_digest    = 5;
+  bytes                        batch_id                  = 6;
+  repeated string              binding_ids               = 7;
+  repeated organism.v1.workspace.BindingWriteResult rejections = 8;
+  bytes                        result_digest             = 9;
+  string                       rejection_reason_code     = 10;
+  map<string, string>          rejection_reason_params   = 11;
+  uint64                       at_sequence_start         = 12;
+  uint64                       at_sequence_end           = 13;
+  bytes                        workspace_snapshot_id     = 14;
+  QueryParameters              query_parameters          = 15;
+  int32                        part_index                = 16;
+  int32                        part_total                = 17;
+}
+
+enum WorkspaceOperation {
+  WS_OP_UNSPECIFIED         = 0;
+  WS_OP_WRITE               = 1;
+  WS_OP_WRITE_BATCH         = 2;
+  WS_OP_READ_BY_ROLE        = 3;
+  WS_OP_READ_BY_TAG         = 4;
+  WS_OP_READ_BY_BINDING_ID  = 5;
+  WS_OP_READ_SIMILAR        = 6;
+  WS_OP_READ_BY_PROVENANCE  = 7;
+  WS_OP_EVICT               = 8;
+  WS_OP_COMPRESS            = 9;
+  WS_OP_SUMMARIZE           = 10;
+  WS_OP_PROMOTE             = 11;
+  WS_OP_SNAPSHOT            = 12;
+  WS_OP_COMPACTION_COMPLETE = 13;
+  WS_OP_REJECTION           = 14;
+}
+
+message QueryParameters {
+  bytes                          role_cue_digest    = 1;
+  repeated string                tag_list           = 2;
+  string                         binding_id         = 3;
+  bytes                          hv_digest          = 4;
+  int32                          k                  = 5;
+  string                         module_id_filter   = 6;
+  TimeRange                      time_range         = 7;
+}
+
+message TimeRange {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end   = 2;
+}
+
+// LifecycleTraceEntry — A5.10 / R-34.
+message LifecycleTraceEntry {
+  string                          entry_id              = 1;
+  google.protobuf.Timestamp       at                    = 2;
+  LifecycleOperation              operation             = 3;
+  LifecycleTargetType             target_type           = 4;
+  string                          target_id             = 5;
+  string                          target_version        = 6;
+  bytes                           target_contract_digest = 7;
+  string                          from_state            = 8;
+  string                          to_state              = 9;
+  LifecycleOutcome                outcome               = 10;
+  google.protobuf.Timestamp       outcome_at            = 11;
+  repeated organism.v1.ValidationIssue validation_issues = 12;
+  bytes                           request_digest        = 13;
+  bytes                           response_digest       = 14;
+  bytes                           approver_signature    = 15;
+  bytes                           evidence_digest       = 16;
+  string                          test_bypass_promote   = 17;
+  bool                            test_bypass_validation = 18;
+  bool                            test_mode_active      = 19;
+  DrainInfo                       on_drain              = 20;
+  repeated organism.v1.ModuleHandle affected_modules    = 21;
+  bytes                           audit_log_ref         = 22;
+}
+
+enum LifecycleOperation {
+  LIFECYCLE_OP_UNSPECIFIED       = 0;
+  LIFECYCLE_OP_REGISTER          = 1;
+  LIFECYCLE_OP_PROMOTE           = 2;
+  LIFECYCLE_OP_DEREGISTER        = 3;
+  LIFECYCLE_OP_HOT_SWAP          = 4;
+  LIFECYCLE_OP_DRAIN_STARTED     = 5;
+  LIFECYCLE_OP_DRAIN_COMPLETED   = 6;
+  LIFECYCLE_OP_SEAL              = 7;
+  LIFECYCLE_OP_RETIRE            = 8;
+  LIFECYCLE_OP_SELF_TERMINATE    = 9;
+  LIFECYCLE_OP_SHADOW_VALIDATION = 10;
+  LIFECYCLE_OP_RULEBOOK_PUBLISH  = 11;
+  LIFECYCLE_OP_POLICY_PUBLISH    = 12;
+}
+
+enum LifecycleTargetType {
+  TARGET_UNSPECIFIED    = 0;
+  TARGET_MODULE         = 1;
+  TARGET_SINK           = 2;
+  TARGET_RULEBOOK       = 3;
+  TARGET_ROUTER_POLICY  = 4;
+  TARGET_CALIBRATION_DATASET = 5;
+  TARGET_SINK_CONTRACT  = 6;
+}
+
+enum LifecycleOutcome {
+  OUTCOME_UNSPECIFIED = 0;
+  OUTCOME_ACCEPTED    = 1;
+  OUTCOME_REJECTED    = 2;
+  OUTCOME_IN_PROGRESS = 3;
+  OUTCOME_COMPLETED   = 4;
+  OUTCOME_ABANDONED   = 5;
+  OUTCOME_KILLED      = 6;
+}
+
+message DrainInfo {
+  google.protobuf.Timestamp started_at   = 1;
+  google.protobuf.Timestamp completed_at = 2;
+  DrainOutcome              outcome      = 3;
+}
+
+enum DrainOutcome {
+  DRAIN_OUTCOME_UNSPECIFIED = 0;
+  DRAIN_OUTCOME_COMPLETED   = 1;
+  DRAIN_OUTCOME_ABANDONED   = 2;
+  DRAIN_OUTCOME_KILLED      = 3;
+}

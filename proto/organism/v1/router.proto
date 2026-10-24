@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package organism.v1.router;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+import "organism/v1/contract.proto";
+
+option go_package = "github.com/organism/v1/router;router";
+
+// ============================================================
+// Router — C with R-2, R-3, R-28 folded in.
+// ============================================================
+
+message TaskDescriptor {
+  string                task_id                 = 1;
+  TaskForm              form                    = 2;
+  repeated organism.v1.Modality input_modalities = 3;
+  organism.v1.OutputForm output_form_required   = 4;
+  organism.v1.MaxSafetyTier safety_tier         = 5;
+  google.protobuf.Timestamp submitted_at        = 6;  // R-2
+  double                deadline_ms             = 7;
+  double                energy_budget_j         = 8;
+  bool                  requires_uncertainty    = 9;
+  bool                  requires_interpretability = 10;
+  bool                  requires_determinism    = 11;
+  map<string, string>   metadata                = 12;
+}
+
+enum TaskForm {
+  TASK_FORM_UNSPECIFIED          = 0;
+  TASK_FORM_TEMPORAL_PREDICTION  = 1;
+  TASK_FORM_PATTERN_RECOGNITION  = 2;
+  TASK_FORM_ANOMALY_DETECTION    = 3;
+  TASK_FORM_CONSTRAINED_ALLOCATION = 4;
+  TASK_FORM_CAUSAL_INFERENCE     = 5;
+  TASK_FORM_SYMBOLIC_REASONING   = 6;
+  TASK_FORM_SIGNAL_ANALYSIS      = 7;
+  TASK_FORM_FEATURE_EXTRACTION   = 8;
+  TASK_FORM_RETRIEVAL            = 9;
+  TASK_FORM_GENERATION           = 10;
+  TASK_FORM_CALIBRATION          = 11;
+  TASK_FORM_VERIFICATION         = 12;
+  TASK_FORM_CONTROL_ACTUATION    = 13;
+}
+
+message DispatchPlan {
+  string                          plan_id           = 1;
+  string                          task_id           = 2;
+  string                          policy_id         = 3;
+  bytes                           policy_digest     = 4;
+  Level                           level             = 5;
+  organism.v1.ModuleHandle        primary           = 6;
+  repeated organism.v1.ModuleHandle fallbacks       = 7;
+  repeated string                 constraints_applied = 8;
+  Rationale                       rationale         = 9;
+  bool                            cross_check_required = 10;
+  organism.v1.ModuleHandle        cross_check_module = 11;
+  JustificationKind               justification_required = 12;
+}
+
+message Rationale {
+  TaskForm                 form               = 1;
+  repeated organism.v1.ModuleRole candidate_roles = 2;
+  organism.v1.MaxSafetyTier tier_requirement = 3;
+  repeated ExcludedCandidate excluded        = 4;
+  repeated string          ranking_trace     = 5;
+}
+
+message ExcludedCandidate {
+  string   module_id     = 1;
+  string   reason_code   = 2;  // closed enum per F.6.1 §1.8
+  map<string, string> reason_params = 3;
+}
+
+message DegradedDispatchPlan {
+  string                          plan_id           = 1;
+  string                          task_id           = 2;
+  string                          policy_id         = 3;
+  bytes                           policy_digest     = 4;
+  Level                           level             = 5;
+  DegradedDisposition             disposition       = 6;
+  organism.v1.ModuleHandle        candidate         = 7;
+  organism.v1.ModuleHandle        downstream        = 8;  // correction 1.5
+  repeated organism.v1.ModuleRole constrained_roles = 9;
+  repeated string                 constraints_applied = 10;
+  DegradedRationale               rationale         = 11;
+  bool                            cross_check_required = 12;
+  organism.v1.ModuleHandle        cross_check_module = 13;
+  JustificationKind               justification_required = 14;
+}
+
+enum DegradedDisposition {
+  DISPOSITION_UNSPECIFIED = 0;
+  DISPOSITION_DISPATCH    = 1;
+  DISPOSITION_HOLD        = 2;
+}
+
+message DegradedRationale {
+  string                    level_policy          = 1;
+  repeated ExcludedCandidate excluded             = 2;
+  string                    hold_reason           = 3;
+  double                    retrieval_similarity  = 4;
+}
+
+message RouterPolicyArtifact {
+  string                                policy_id             = 1;
+  string                                version               = 2;
+  bytes                                 digest                = 3;
+  ModuleLifecycleState                  lifecycle_state       = 4;
+  map<string, RoleList>                 form_to_roles         = 5;
+  map<string, LevelPolicy>              level_eligibility     = 6;
+  map<string, TierList>                 tier_requirements     = 7;
+  RerankPolicy                          reranking_rules       = 8;
+  map<string, DegradedPolicy>           degraded_rules        = 9;
+  repeated bytes                        signatures            = 10;
+  string                                rollback_to           = 11;
+}
+
+message RoleList {
+  repeated organism.v1.ModuleRole roles = 1;
+}
+
+message TierList {
+  repeated organism.v1.ReliabilityTier tiers = 1;
+}
+
+message LevelPolicy {
+  repeated organism.v1.ModuleRole eligible_roles = 1;
+  string                          plan_type      = 2;  // "DispatchPlan" | "DegradedDispatchPlan"
+}
+
+message RerankPolicy {
+  repeated string criterion_order = 1;
+}
+
+message DegradedPolicy {
+  repeated organism.v1.ModuleRole candidate_roles = 1;
+}

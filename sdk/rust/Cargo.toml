@@ -1,0 +1,3 @@
+# Rust SDK crates live as workspace members of the root Cargo.toml.
+# This file marks the sdk/rust directory from the Batch 1 layout.
+# Crates: organism-proto (Batch 4 / Batch 1 build scaffolding), organism-client (Batch 4).

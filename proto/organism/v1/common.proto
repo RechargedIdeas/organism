@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package organism.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/organism/v1;organism";
+
+// ============================================================
+// Shared enums used across multiple artifacts.
+// ============================================================
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_WARNING     = 1;
+  SEVERITY_ERROR       = 2;
+}
+
+enum ComparisonOp {
+  OP_UNSPECIFIED = 0;
+  OP_GT          = 1;
+  OP_GE          = 2;
+  OP_LT          = 3;
+  OP_LE          = 4;
+}
+
+// Drain policy for deregistration (R-18).
+enum DrainPolicy {
+  DRAIN_UNSPECIFIED  = 0;
+  DRAIN_IMMEDIATE    = 1;
+  DRAIN_GRACEFUL     = 2;
+  DRAIN_THEN_SWAP    = 3;
+}
+
+// Swap strategies for hot-swap.
+enum SwapStrategy {
+  SWAP_UNSPECIFIED      = 0;
+  SWAP_BLUE_GREEN       = 1;
+  SWAP_CANARY_PERCENT   = 2;
+  SWAP_LIVE_DRAIN       = 3;
+}
+
+// Common validation issue returned by registry operations.
+message ValidationIssue {
+  Severity severity       = 1;
+  string   code           = 2;
+  string   field_path     = 3;
+  string   message        = 4;
+  map<string, string> params = 5;
+}
+
+// A module handle returned by queries.
+message ModuleHandle {
+  string module_id             = 1;
+  string version               = 2;
+  ModuleRole role              = 3;
+  ReliabilityTier tier         = 4;
+  ModuleLifecycleState state   = 5;
+  bytes  contract_digest       = 6;
+}
+
+// Forward declarations used by ModuleHandle (defined in contract.proto).
+enum ModuleRole {
+  ROLE_UNSPECIFIED        = 0;
+  ROLE_PERCEPTION         = 1;
+  ROLE_PREDICTION         = 2;
+  ROLE_SENTINEL           = 3;
+  ROLE_SOLVER             = 4;
+  ROLE_VERIFIER           = 5;
+  ROLE_GOVERNANCE         = 6;
+  ROLE_FEATURE_EXTRACTOR  = 7;
+  ROLE_MEMORY             = 8;
+  ROLE_ACTUATOR           = 9;
+  ROLE_FRONTEND           = 10;
+}
+
+enum ReliabilityTier {
+  TIER_UNSPECIFIED              = 0;
+  TIER_T0_DETERMINISTIC         = 1;
+  TIER_T1_CALIBRATED_NONLEARNED = 2;
+  TIER_T2_LEARNED_CALIBRATED    = 3;
+  TIER_T3_LEARNED_UNCALIBRATED  = 4;
+}
+
+enum MaxSafetyTier {
+  SAFETY_UNSPECIFIED = 0;
+  SAFETY_RESEARCH    = 1;
+  SAFETY_LOW         = 2;
+  SAFETY_MEDIUM      = 3;
+  SAFETY_HIGH        = 4;
+  SAFETY_CRITICAL    = 5;
+}
+
+enum ModuleLifecycleState {
+  LIFECYCLE_UNSPECIFIED      = 0;
+  LIFECYCLE_PROPOSED         = 1;
+  LIFECYCLE_SANDBOXED        = 2;
+  LIFECYCLE_SHADOW_VALIDATED = 3;
+  LIFECYCLE_EXPLORATION      = 4;
+  LIFECYCLE_DELIBERATION     = 5;
+  LIFECYCLE_DEPRECATED       = 6;
+  LIFECYCLE_RETIRED          = 7;
+}
+
+// Degradation level enum (B + A0).
+enum Level {
+  LEVEL_UNSPECIFIED = 0;
+  LEVEL_L0          = 1;
+  LEVEL_L1          = 2;
+  LEVEL_L2          = 3;
+  LEVEL_L3          = 4;
+  LEVEL_L4          = 5;
+}
+
+// Budget class (deprecated in favor of scaling law; retained for compatibility).
+enum BudgetClass {
+  BUDGET_UNSPECIFIED = 0;
+  BUDGET_LEAN        = 1;
+  BUDGET_STANDARD    = 2;
+  BUDGET_HEAVY       = 3;
+  BUDGET_RESEARCH    = 4;
+}
+
+// Hardware requirement.
+enum HardwareRequirement {
+  HW_UNSPECIFIED        = 0;
+  HW_NONE               = 1;
+  HW_NEUROMORPHIC       = 2;
+  HW_EVENT_CAMERA       = 3;
+  HW_PHYSICAL_SUBSTRATE = 4;
+  HW_TPU_NPU            = 5;
+}
+
+// Runtime identifiers.
+enum RuntimeId {
+  RUNTIME_UNSPECIFIED  = 0;
+  RUNTIME_CPU_GENERAL  = 1;
+  RUNTIME_GPU_CUDA     = 2;
+  RUNTIME_GPU_ROCM     = 3;
+  RUNTIME_GPU_METAL    = 4;
+  RUNTIME_NPU          = 5;
+  RUNTIME_NEUROMORPHIC = 6;
+  RUNTIME_WASM         = 7;
+}

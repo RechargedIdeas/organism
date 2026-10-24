@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "organism"
+version = "0.1.0"
+description = "Organism — homeostatic computational ecology substrate"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Organism Contributors" }]
+
+dependencies = [
+    "protobuf>=5.26",
+    "grpcio>=1.62",
+    "grpcio-tools>=1.62",
+    "pydantic>=2.6",
+    "numpy>=1.26",
+    "blake3>=0.4",
+    "cryptography>=42.0",
+    "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.8",
+    "ruff>=0.2",
+    "black>=24.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["sdk/python/organism_sdk", "modules/deterministic_engine", "modules/learned_module"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "modules", "harness", "sdk/python/tests"]
+pythonpath = ["sdk/python", "modules"]
+markers = [
+    "slow: full wall-clock SLO (~480s); opt-in via ORGANISM_WALL_CLOCK_FULL=1",
+]
+
+[tool.pytest.ini_options.markers]
+# note: hatch/toml nested — use inline list under ini_options instead

@@ -1,0 +1,52 @@
+# E.5 CI gate definitions — Organism v0.1
+
+gates:
+  - id: proto:lint
+    blocking: true
+    command: "make proto PYTHON=.venv/bin/python"
+
+  - id: contract:validate
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q tests/contract"
+
+  - id: registry:api
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_m2_registry_workspace.py"
+
+  - id: workspace:unit
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_hypervector.py sdk/python/tests/test_m2_registry_workspace.py"
+
+  - id: workspace:replay
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_workspace_m5.py"
+
+  - id: router:decision
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_router_m3.py"
+
+  - id: router:determinism
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_router_m3.py::test_router_determinism_byte_identical"
+
+  - id: degradation:transitions
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_degradation_m6.py"
+
+  - id: trace:replay
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/integration/test_e2e_bootstrap_m7.py::test_e4_two_module_bootstrap"
+
+  - id: integration:e2e
+    blocking: true
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/integration"
+
+  - id: perf:slo
+    blocking: false
+    status: green-pending
+    notes: "Wall-clock SLO timing deferred; virtual-clock B.6 green in degradation:transitions"
+
+category_i:
+  - id: e5_1b_wall_clock_480s
+    status: green-pending
+    notes: "Exercised via virtual clock; wall-clock perf:slo pending"

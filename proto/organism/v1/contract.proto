@@ -1,0 +1,352 @@
+syntax = "proto3";
+
+package organism.v1;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+
+option go_package = "github.com/organism/v1;organism";
+
+// ============================================================
+// SubstrateContract — A.1 with amendments R-7, R-14, R-19, R-6, R-8, E-7.
+// Every module declares this before registration.
+// ============================================================
+
+message SubstrateContract {
+  Identity             identity       = 1;
+  PerceptionSignature  perception     = 2;
+  EmissionSignature    emission       = 3;
+  MetabolicProfile     metabolic      = 4;
+  FailureSignature     failure        = 5;
+  SafetyDeclaration    safety         = 6;
+  Lifecycle            lifecycle      = 7;
+  CapabilityScopes     capabilities   = 8;
+  repeated Channel     channels       = 9;
+  JustificationSpec    justification  = 10;
+}
+
+message Identity {
+  string           module_id           = 1;
+  string           version             = 2;
+  string           author              = 3;
+  string           license             = 4;
+  ModuleRole       role                = 5;
+  bytes            artifact_digest     = 6;
+  repeated bytes   signatures_b64      = 7;
+}
+
+// ---- Perception --------------------------------------------------
+
+message PerceptionSignature {
+  repeated Modality                            modalities          = 1;
+  map<string, Shape>                           shapes              = 2;
+  map<string, SamplingRequirement>             sampling            = 3;
+  repeated Modality                            required_modalities = 4;  // R-7
+}
+
+enum Modality {
+  MODALITY_UNSPECIFIED      = 0;
+  MODALITY_DENSE_VECTOR     = 1;
+  MODALITY_TEMPORAL_STREAM  = 2;
+  MODALITY_SPIKE_TRAIN      = 3;
+  MODALITY_SYMBOL_GRAPH     = 4;
+  MODALITY_WAVELET_COEFFS   = 5;
+  MODALITY_PHYSICAL_SENSOR  = 6;
+  MODALITY_HYPERVECTOR      = 7;
+  MODALITY_TABULAR          = 8;
+  MODALITY_TEXT             = 9;
+  MODALITY_IMAGE            = 10;
+}
+
+enum DataType {
+  DTYPE_UNSPECIFIED = 0;
+  DTYPE_FP32        = 1;
+  DTYPE_FP16        = 2;
+  DTYPE_INT8        = 3;
+  DTYPE_BINARY      = 4;
+  DTYPE_BOOL        = 5;
+  DTYPE_INT64       = 6;
+}
+
+message Shape {
+  repeated int64 dims = 1;
+  DataType       dtype = 2;
+}
+
+message SamplingRequirement {
+  float  rate_hz       = 1;
+  int64  window_len    = 2;
+  bool   requires_sync = 3;
+}
+
+// ---- Emission ---------------------------------------------------
+
+message EmissionSignature {
+  OutputForm          output_form                  = 1;
+  Shape               shape                        = 2;
+  UncertaintyKind     uncertainty                  = 3;
+  Determinism         determinism                  = 4;
+  repeated string     requires_justification_for   = 5;  // action classes needing a token
+}
+
+enum OutputForm {
+  OUTPUT_UNSPECIFIED            = 0;
+  OUTPUT_HYPERVECTOR            = 1;
+  OUTPUT_SPIKE_TRAIN            = 2;
+  OUTPUT_ENERGY_GRADIENT        = 3;
+  OUTPUT_SYMBOLIC_TRIPLE        = 4;
+  OUTPUT_PROBABILITY_INTERVAL   = 5;
+  OUTPUT_SCALAR                 = 6;
+  OUTPUT_ASSIGNMENT_CERTIFICATE = 7;
+  OUTPUT_FEATURE_VECTOR         = 8;
+  OUTPUT_JUSTIFICATION_TOKEN    = 9;
+}
+
+enum UncertaintyKind {
+  UNCERTAINTY_UNSPECIFIED         = 0;
+  UNCERTAINTY_NONE                = 1;
+  UNCERTAINTY_CONFORMAL_INTERVAL  = 2;
+  UNCERTAINTY_ENSEMBLE_SPREAD     = 3;
+  UNCERTAINTY_ENERGY_LANDSCAPE    = 4;
+  UNCERTAINTY_SYMBOLIC_PROOF      = 5;
+}
+
+enum Determinism {
+  DETERMINISM_UNSPECIFIED   = 0;
+  DETERMINISM_DETERMINISTIC = 1;
+  DETERMINISM_SEEDED        = 2;
+  DETERMINISM_STOCHASTIC    = 3;
+}
+
+// ---- Metabolic profile ------------------------------------------
+
+message MetabolicProfile {
+  float                 latency_p50_ms              = 1;
+  float                 latency_p95_ms              = 2;
+  float                 latency_p99_ms              = 3;
+  float                 energy_per_inference_j      = 4;
+  float                 memory_footprint_mb         = 5;
+  float                 memory_peak_mb              = 6;
+  bool                  requires_gradient_training  = 7;
+  bool                  requires_gpu                = 8;
+  HardwareRequirement   requires_special_hardware   = 9;
+  int32                 max_concurrent_invocations  = 10;
+  BudgetClass           metabolic_budget_class      = 11;
+  ResourceVector        declared_share              = 12;
+}
+
+message ResourceVector {
+  float cpu_cores    = 1;
+  float gpu_fraction = 2;
+  float memory_mb    = 3;
+  float network_mbps = 4;
+  float energy_watts = 5;
+}
+
+// ---- Failure ----------------------------------------------------
+
+message FailureSignature {
+  repeated FailureMode          modes       = 1;
+  HealthProbe                   probe       = 2;
+  RecoveryProcedure             recovery    = 3;
+  HealthEscalationPolicy        escalation  = 4;  // R-6
+}
+
+message FailureMode {
+  string             name                        = 1;
+  string             observable_signal           = 2;
+  DetectionMethod    detection                   = 3;
+  DegradationKind    expected_degradation        = 4;
+  float              detection_latency_budget_ms = 5;
+}
+
+enum DegradationKind {
+  DEGRADE_UNSPECIFIED              = 0;
+  DEGRADE_SILENT_ACCURACY_LOSS     = 1;
+  DEGRADE_SPIKE_SILENCE            = 2;
+  DEGRADE_ENERGY_DIVERGENCE        = 3;
+  DEGRADE_SYMBOL_GROUNDING_FAILURE = 4;
+  DEGRADE_CALIBRATION_DRIFT        = 5;
+  DEGRADE_TIMEOUT                  = 6;
+  DEGRADE_CRASH                    = 7;
+}
+
+// R-19: Detection method messages.
+message DetectionMethod {
+  oneof kind {
+    ThresholdDetection    threshold = 1;
+    StatisticalDetection  stats     = 2;
+    HeartbeatDetection    heartbeat = 3;
+    BehavioralDetection   behavior  = 4;
+  }
+}
+
+message ThresholdDetection {
+  string        signal_name = 1;
+  double        threshold   = 2;
+  ComparisonOp  op          = 3;
+  int32         window_ms   = 4;
+}
+
+message StatisticalDetection {
+  string   signal_name      = 1;
+  string   statistic        = 2;
+  double   threshold        = 3;
+  int32    window_ms        = 4;
+  bytes    reference_digest = 5;
+}
+
+message HeartbeatDetection {
+  int32 expected_period_ms      = 1;
+  int32 missing_count_threshold = 2;
+}
+
+message BehavioralDetection {
+  string   behavior_metric   = 1;
+  double   threshold         = 2;
+  int32    window_ms         = 3;
+  bytes    classifier_digest = 4;
+}
+
+message HealthProbe {
+  oneof kind {
+    HealthHttp    http    = 1;
+    HealthRpc     rpc     = 2;
+    HealthStream  stream  = 3;
+  }
+}
+
+message HealthHttp {
+  string url              = 1;
+  string expected_status  = 2;
+  int32  timeout_ms       = 3;
+}
+
+message HealthRpc {
+  string method_fqn = 1;
+  int32  timeout_ms = 2;
+}
+
+message HealthStream {
+  string topic               = 1;
+  int32  expected_period_ms  = 2;
+  int32  stall_timeout_ms    = 3;
+}
+
+message RecoveryProcedure {
+  RecoveryKind     kind                 = 1;
+  int32            max_attempts         = 2;
+  int32            backoff_ms_initial   = 3;
+  float            backoff_multiplier   = 4;
+  int32            backoff_ms_max       = 5;
+  repeated string  preconditions        = 6;
+}
+
+enum RecoveryKind {
+  RECOVERY_UNSPECIFIED         = 0;
+  RECOVERY_RESTART             = 1;
+  RECOVERY_RESTORE_SNAPSHOT    = 2;
+  RECOVERY_DEMOTE              = 3;
+  RECOVERY_HOT_SWAP            = 4;
+  RECOVERY_MANUAL              = 5;
+}
+
+// R-6 / A4: health escalation policy.
+message HealthEscalationPolicy {
+  EscalationKind kind                          = 1;
+  int32          consecutive_probe_failures    = 2;
+  int32          degraded_duration_ms          = 3;
+  bool           escalate_on_probe_timeout     = 4;
+  bool           escalate_on_probe_unreachable = 5;
+  int32          probe_interval_ms             = 6;
+}
+
+enum EscalationKind {
+  ESCALATION_UNSPECIFIED        = 0;
+  ESCALATION_NONE               = 1;
+  ESCALATION_PROBE_FAILURES     = 2;
+  ESCALATION_DURATION           = 3;
+  ESCALATION_PROBE_OR_DURATION  = 4;
+}
+
+// ---- Safety -----------------------------------------------------
+
+message SafetyDeclaration {
+  ReliabilityTier   reliability_tier             = 1;
+  bool              may_actuate                  = 2;
+  bool              requires_causal_certificate  = 3;
+  bool              requires_cross_check         = 4;
+  repeated ModuleRole cross_check_eligible_roles = 5;
+  MaxSafetyTier     max_safety_tier              = 6;
+}
+
+// ---- Capability scopes (with R-8 / A6.5 / E-7 fields) ----------
+
+message CapabilityScopes {
+  repeated string read_roles                       = 1;
+  repeated string write_roles                      = 2;
+  repeated string read_tags                        = 3;
+  repeated string write_tags                       = 4;
+  bool            can_emit_control_affecting       = 5;
+  repeated string allowed_channels                 = 6;
+  bool            can_override_trace_sink          = 7;  // T0/T1 only
+  bool            can_override_trace_sink_exploration = 8;  // T0/T1/T2
+  string          exploration_trace_sink_id        = 9;  // required iff field 8
+}
+
+// ---- Channels ---------------------------------------------------
+
+message Channel {
+  string           channel_id              = 1;
+  string           producer_module         = 2;
+  repeated string  consumer_modules        = 3;
+  Modality         payload_modality        = 4;
+  Shape            payload_shape           = 5;
+  Delivery         delivery                = 6;
+  bool             logged_for_trace        = 7;
+}
+
+enum Delivery {
+  DELIVERY_UNSPECIFIED   = 0;
+  DELIVERY_AT_MOST_ONCE  = 1;
+  DELIVERY_AT_LEAST_ONCE = 2;
+  DELIVERY_EXACTLY_ONCE  = 3;
+  DELIVERY_STREAMING     = 4;
+}
+
+// ---- Justification ----------------------------------------------
+
+message JustificationSpec {
+  JustificationKind kind             = 1;
+  string            format           = 2;
+  repeated string   required_fields  = 3;
+  repeated ModuleRole checkable_by   = 4;
+}
+
+enum JustificationKind {
+  JUSTIFICATION_UNSPECIFIED     = 0;
+  JUSTIFICATION_NONE            = 1;
+  JUSTIFICATION_CAUSAL_CERT     = 2;
+  JUSTIFICATION_KERNEL_BOUND    = 3;
+  JUSTIFICATION_RULE_TRACE      = 4;
+  JUSTIFICATION_ENERGY_CERT     = 5;
+  JUSTIFICATION_SYMBOLIC_PROOF  = 6;
+}
+
+// ---- Lifecycle --------------------------------------------------
+
+message Lifecycle {
+  bool                     hot_swap_supported          = 1;
+  bytes                    rollback_artifact_digest    = 2;
+  bool                     shadow_validation_required  = 3;
+  PromotionCriteria        promotion                   = 4;
+  repeated RuntimeId       disallowed_runtimes         = 5;
+}
+
+message PromotionCriteria {
+  int32            shadow_invocations_min    = 1;
+  float            max_incumbent_error_delta = 2;
+  repeated string  required_gates            = 3;
+  ModuleRole       approver_role             = 4;
+  bool             causal_review_required    = 5;
+}

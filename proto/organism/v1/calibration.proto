@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package organism.v1.calibration;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+
+option go_package = "github.com/organism/v1/calibration;calibration";
+
+// ============================================================
+// Conformal Calibration — A2.
+// ============================================================
+
+message CalibrationDeclaration {
+  string                    dataset_id             = 1;
+  bytes                     dataset_digest         = 2;
+  bytes                     training_dataset_digest = 3;
+  TimeWindow                sampling_window        = 4;
+  string                    sampling_distribution  = 5;
+  bytes                     provenance_attestation = 6;
+  Split                     split                  = 7;
+}
+
+message TimeWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end   = 2;
+}
+
+message Split {
+  float calibration_fraction = 1;
+  float validation_fraction  = 2;
+}
+
+message CalibrationCertificate {
+  string                    module_id                         = 1;
+  string                    module_version                    = 2;
+  bytes                     certificate_id                    = 3;
+  float                     alpha                             = 4;
+  bytes                     calibration_dataset_digest        = 5;
+  int32                     calibration_n                     = 6;
+  double                    q_hat                             = 7;
+  float                     offline_validation_coverage       = 8;
+  float                     offline_validation_tolerance      = 9;
+  double                    max_interval_width                = 10;
+  map<string, int32>        ground_truth_latency_ms_by_action = 11;
+  repeated string           ground_truth_available_action_classes = 12;
+  repeated string           exchangeability_assumptions       = 13;
+  google.protobuf.Timestamp certificate_issued_at             = 14;
+  google.protobuf.Timestamp certificate_expires_at            = 15;
+  string                    issuer_key_id                     = 16;
+  bytes                     signature                         = 17;
+}

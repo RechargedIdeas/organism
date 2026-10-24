@@ -1,0 +1,42 @@
+# Build artifacts
+target/
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Generated proto
+sdk/python/organism_sdk/_proto/
+sdk/rust/organism-proto/src/gen/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Rust
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts
+harness/scenarios/**/*.json
+harness/scenarios/**/*.trace
+*.trace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+.env

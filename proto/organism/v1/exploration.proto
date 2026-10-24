@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+package organism.v1.exploration;
+
+import "google/protobuf/timestamp.proto";
+import "organism/v1/common.proto";
+import "organism/v1/contract.proto";
+
+option go_package = "github.com/organism/v1/exploration;exploration";
+
+// ============================================================
+// ExplorationSinkRegistry — A6 with R-35 messages.
+// ============================================================
+
+service ExplorationSinkRegistry {
+  rpc Register         (RegisterSinkRequest)          returns (RegisterSinkResponse);
+  rpc Deregister       (DeregisterSinkRequest)        returns (DeregisterSinkResponse);
+  rpc GetContract      (SinkContractRequest)          returns (ExplorationSinkContract);
+  rpc List             (ListSinksRequest)             returns (ListSinksResponse);
+  rpc GetAccessLog     (AccessLogRequest)             returns (stream SinkAccessEntry);
+  rpc RequestPromotion (PromotionRequest)             returns (PromotionResponse);
+  rpc GetStatus        (SinkStatusRequest)            returns (SinkStatus);
+}
+
+enum SinkLifecycleState {
+  SINK_LIFECYCLE_UNSPECIFIED      = 0;
+  SINK_LIFECYCLE_PROPOSED         = 1;
+  SINK_LIFECYCLE_SANDBOXED        = 2;
+  SINK_LIFECYCLE_SHADOW_VALIDATED = 3;
+  SINK_LIFECYCLE_ACTIVE           = 4;
+  SINK_LIFECYCLE_DEPRECATED       = 5;
+  SINK_LIFECYCLE_SEALED           = 6;
+  SINK_LIFECYCLE_RETIRED          = 7;
+}
+
+message ExplorationSinkContract {
+  SinkIdentity             identity       = 1;
+  SinkStorage              storage        = 2;
+  SinkRetention            retention      = 3;
+  SinkAccess               access         = 4;
+  SinkPromotion            promotion      = 5;
+  SinkQuarantine           quarantine     = 6;
+}
+
+message SinkIdentity {
+  string          sink_id         = 1;
+  string          version         = 2;
+  string          author          = 3;
+  bytes           artifact_digest = 4;
+  repeated bytes  signatures      = 5;
+}
+
+message SinkStorage {
+  SinkBackend backend           = 1;
+  string      location          = 2;
+  bool        content_addressed = 3;
+}
+
+enum SinkBackend {
+  BACKEND_UNSPECIFIED = 0;
+  BACKEND_LOCAL_SQLITE = 1;
+  BACKEND_LOCAL_FILE   = 2;
+  BACKEND_OBJECT_STORE = 3;
+}
+
+message SinkRetention {
+  int32 retention_days_max            = 1;
+  bool  retention_extension_permitted = 2;  // MUST be false
+}
+
+message SinkAccess {
+  repeated string writer_module_ids = 1;
+  repeated string reader_role_ids   = 2;
+  string          access_log_target = 3;
+}
+
+message SinkPromotion {
+  string promotion_authority_key_id     = 1;
+  bool   promotion_requires_justification = 2;  // MUST be true
+}
+
+message SinkQuarantine {
+  SinkQuarantineKind on_corruption = 1;
+  string             seal_target   = 2;
+}
+
+enum SinkQuarantineKind {
+  QUARANTINE_UNSPECIFIED = 0;
+  QUARANTINE_SEAL        = 1;
+  QUARANTINE_PURGE       = 2;
+  QUARANTINE_ESCALATE    = 3;
+}
+
+message SinkOperation {
+  enum Op {
+    OP_UNSPECIFIED = 0;
+    OP_WRITE       = 1;
+    OP_READ        = 2;
+    OP_PROMOTE     = 3;
+    OP_REJECTION   = 4;
+  }
+}
+
+message SinkAccessEntry {
+  string                    entry_id                = 1;
+  google.protobuf.Timestamp at                      = 2;
+  string                    sink_id                 = 3;
+  SinkOperation.Op          operation               = 4;
+  string                    module_id               = 5;
+  bytes                     module_contract_digest  = 6;
+  repeated string           entry_ids               = 7;
+  bytes                     result_digest           = 8;
+  string                    rejection_reason_code   = 9;
+  string                    promotion_id            = 10;
+  string                    signed_by               = 11;
+  bytes                     sink_entry_ref          = 12;
+  bytes                     signature               = 13;
+}
+
+message SinkStatus {
+  string                    sink_id                    = 1;
+  bytes                     contract_digest            = 2;
+  SinkLifecycleState        state                      = 3;
+  google.protobuf.Timestamp state_since                = 4;
+  int64                     entry_count                = 5;
+  int64                     storage_bytes              = 6;
+  int32                     retention_days_max         = 7;
+  int32                     retention_remaining_days   = 8;
+  google.protobuf.Timestamp last_write_at              = 9;
+  google.protobuf.Timestamp last_read_at               = 10;
+  string                    seal_target                = 11;
+  string                    seal_reason                = 12;
+  repeated string           active_writers             = 13;
+  google.protobuf.Timestamp registered_at              = 14;
+}
+
+message ExplorationSinkTraceEntry {
+  string                    entry_id                = 1;
+  google.protobuf.Timestamp at                      = 2;
+  string                    sink_id                 = 3;
+  SinkOperation.Op          operation               = 4;
+  string                    module_id               = 5;
+  repeated string           entry_ids               = 6;
+  bytes                     result_digest           = 7;
+  string                    rejection_reason_code   = 8;
+  string                    promotion_id            = 9;
+  string                    signed_by               = 10;
+  bytes                     audit_log_ref           = 11;
+}
+
+// R-35 request/response messages.
+message RegisterSinkRequest {
+  ExplorationSinkContract contract            = 1;
+  bytes                   artifact_digest     = 2;
+  bytes                   author_signature    = 3;
+  SinkLifecycleState      test_bypass_promote = 4;
+}
+
+message RegisterSinkResponse {
+  string                          sink_id          = 1;
+  SinkLifecycleState              initial_state    = 2;
+  repeated ValidationIssue        validation_issues = 3;
+}
+
+message DeregisterSinkRequest {
+  string      sink_id          = 1;
+  DrainPolicy drain            = 2;
+  int32       drain_timeout_s  = 3;
+  bool        accept_chain_break = 4;
+}
+
+message DeregisterSinkResponse {
+  bool                     accepted          = 1;
+  repeated ValidationIssue validation_issues = 2;
+}
+
+message SinkContractRequest {
+  string sink_id = 1;
+}
+
+message ListSinksRequest {
+  SinkLifecycleState min_state = 1;
+  repeated string    writer_module_ids = 2;
+}
+
+message ListSinksResponse {
+  repeated SinkStatus sinks = 1;
+}
+
+message AccessLogRequest {
+  string                    sink_id       = 1;
+  google.protobuf.Timestamp since         = 2;
+  google.protobuf.Timestamp until         = 3;
+  SinkOperation.Op          operation_filter = 4;
+}
+
+message PromotionRequest {
+  string          sink_id                       = 1;
+  repeated string entry_ids                     = 2;
+  bytes           justification_digest          = 3;
+  bytes           promotion_authority_signature = 4;
+  string          promoted_to_audit_store_id    = 5;
+}
+
+message PromotionResponse {
+  string                    promotion_id       = 1;
+  bool                      accepted           = 2;
+  repeated ValidationIssue  validation_issues  = 3;
+  google.protobuf.Timestamp promoted_at        = 4;
+}
+
+message SinkStatusRequest {
+  string sink_id = 1;
+}
