@@ -1,12 +1,33 @@
 # Changelog
 
 All notable changes to Organism are documented here.  
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v0.4.md`.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md`.
+
+## [1.0.0] — 2026-10-24
+
+### Added
+- **Software Organism complete** — Phases A–H per `docs/v1.0/PLAN.md`.
+- Substrate ecology modules: `kernel_module`, `hdc_module`, `reservoir`, `energy_hopfield`, `spectral`, `neurosymbolic`.
+- Full RL-DCA `train_online_loop`; learned ISE **promote + revoke**; live tiny NAS search.
+- Multi-**process** cluster with oxytocin quorum (≥3), BFT-ish (f=1, N=4), clock skew injection.
+- `ORGANISM_NEURO_SIM=1` neuromorphic RESEARCH_SIM; `physical_research` exploration-only module.
+- Rust `organism-router` + `organism-degradation` parity with Python core paths.
+- API freeze `docs/API_FREEZE_v1.0.md`; hardening guide `docs/v1.0/HARDENING.md`.
+
+### Changed
+- Package / crate / SDK versions aligned to **1.0.0**.
+- README + STATUS declare software Organism **COMPLETE**.
+
+### Out of scope (true external deps)
+Real neuromorphic silicon, wet-lab/molecular physical substrates, production WAN BFT / TPM attestation.
+
+### Test baseline
+Default suite grows substantially beyond v0.4.0 (see STATUS.md).
 
 ## [0.4.0] — 2026-10-24
 
 ### Added
-- **API freeze** — `docs/API_FREEZE_v0.4.md` (stable Python SDK + `organism.v1` proto; experimental biology / multi-node / SNN called out).
+- **API freeze** — `docs/API_FREEZE_v1.0.md` (stable Python SDK + `organism.v1` proto; experimental biology / multi-node / SNN called out).
 - **v0.4 hardening (M0–M3)**
   - Soak harness (`harness/scenarios/v04_soak.py`) with GC pressure and reconstructible traces; full soak via `ORGANISM_SOAK_FULL=1`.
   - Perf budgets (`docs/v0.4/PERF.md`) + blocking `perf:router` / `perf:workspace` / `perf:hormone` / `perf:degradation` gates.
@@ -43,3 +64,5 @@ Biological extension (HormoneBus through morphogenesis + J–O matrix). Supersed
 Initial closed-corpus implementation (Batch 1 + M1–M7).
 
 [0.4.0]: https://github.com/RechargedIdeas/organism/releases/tag/v0.4.0
+
+[1.0.0]: https://github.com/RechargedIdeas/organism/releases/tag/v1.0.0

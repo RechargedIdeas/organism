@@ -202,3 +202,23 @@ category_bio:
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_security_fuzz.py"
 
+
+  - id: v10:substrates
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/kernel_module/tests modules/hdc_module/tests modules/reservoir/tests modules/energy_hopfield/tests modules/spectral/tests modules/neurosymbolic/tests modules/physical_research/tests"
+
+  - id: v10:learned_control
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v10_learned_control.py"
+
+  - id: v10:distributed
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v10_distributed.py"
+
+  - id: v10:rust
+    blocking: true
+    status: green
+    command: "cargo test --workspace --lib"
