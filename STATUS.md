@@ -14,11 +14,11 @@
 | **v0.2 G–J + F J–O** | **green** | Full biological matrix |
 | **v0.3-M0 Plan** | **green** | `docs/v0.3/PLAN.md` |
 | **v0.3-M1** Learned ISE + RL-DCA | **green** | Online predictor + allostatic/hormone signal; promotion gate |
-| **v0.3-M2** Metamodel synthesizer | pending | Exploration → sandbox → shadow → promote |
+| **v0.3-M2** Metamodel synthesizer | **green** | synthesize→sandbox→shadow→promote; MetamodelDisabled scoped |
 | **v0.3-M3** Multi-node + federated oxytocin | pending | In-process nodes; single-device default |
 | **v0.3-M4** SNN sentinel | pending | Hardware-gated; simulate wake only |
 
-**Full suite (default):** 85 passed (1 slow deselected) after M1.
+**Full suite (default):** 90 passed (1 slow deselected) after M2.
 
 **Plan:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md)
 
@@ -100,3 +100,8 @@ See `docs/v0.3/PLAN.md`. Order is fixed: M0 → M1 Learned ISE → M2 Metamodel 
 - `learned_ise.py`: online RL-DCA predictive head; `AllostaticSignal`; `shadow_compare`; hormone nudge without actuation
 - Tests: `test_v03_learned_ise.py`; stub gate model version → `0.3.0-learned-ise`
 - IMP-14: prediction error may drive HormoneBus inputs pre-promotion; `for_control` still PermissionError until promote
+
+### v0.3-M2 (landed)
+- `metamodel.py`: exploration synthesizer (hypernetwork stub); four-part contract; sandbox/shadow/promote; deliberation only after promote
+- `MetamodelDisabled` when `enabled=False` or not exploration (v0.2 stub test preserved)
+- IMP-15: new organ `may_actuate=False` until PROMOTED

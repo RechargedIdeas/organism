@@ -151,3 +151,13 @@ category_bio:
     status: green
   - id: METAMODEL_OOS
     status: green
+
+  - id: v03:learned_ise
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_learned_ise.py"
+
+  - id: v03:metamodel
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_metamodel.py"
