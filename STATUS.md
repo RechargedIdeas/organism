@@ -19,7 +19,7 @@
 | **v0.3-M4** SNN sentinel | **green** | Registers; hardware-gated; simulated spike wake escalates router |
 | **v0.4-M0 Plan** | **green** | `docs/v0.4/PLAN.md` — soak, perf budgets, security fuzz |
 | **v0.4-M1 Soak** | **green** | Multi-window harness; GC proxy; traces reconstructible |
-| **v0.4-M2 Perf budgets** | pending | Router/workspace/hormone/degradation SLOs |
+| **v0.4-M2 Perf budgets** | **green** | Budgets in PERF.md; blocking perf:* gates |
 | **v0.4-M3 Security fuzz** | pending | Trust-model / fault-matrix fuzz |
 
 **Full suite (default):** 103+ passed after v0.4-M1 (slow deselected).
@@ -136,6 +136,7 @@ See `docs/v0.4/PLAN.md`. Order is fixed: M0 → M1 Soak → M2 Perf → M3 Secur
 |---|---|---|
 | IMP-18 | v0.4 plan | Documented optimal order; neuromorphic/BFT/NAS/molecular stay OOS unless thin-gated |
 | IMP-19 | Workspace GC | `binding_count` + `gc_ephemeral`; protects hormone_state/immune_decision + affects_control |
+| IMP-20 | Perf budgets | Headroom budgets (~50–100× baseline); blocking on this box |
 
 ### Still OOS (carry from E.8)
 Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substrates — research-tier / hardware-gated only.
@@ -144,3 +145,8 @@ Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substr
 - `harness/scenarios/v04_soak.py`: register → route → hormone windows → degrade pulse → GC
 - Fast CI soak (24–40 simulated windows); `ORGANISM_SOAK_FULL=1` extended soak
 - Asserts: no flapping; hormone_state queryable; binding_count bounded; routing traces ≥ plans
+
+### v0.4-M2 (landed)
+- `docs/v0.4/PERF.md` + `harness/scenarios/v04_perf.py`
+- Gates: `perf:router`, `perf:workspace`, `perf:hormone`, `perf:degradation` (blocking)
+- Router p95 ≤5ms; workspace bind/query/unbind; hormone publish; virtual degrade confirm

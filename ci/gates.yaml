@@ -46,6 +46,26 @@ gates:
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_wall_clock_slo.py -m 'not slow'"
 
+  - id: perf:router
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_router_budgets"
+
+  - id: perf:workspace
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_workspace_budgets"
+
+  - id: perf:hormone
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_hormone_publish_budget"
+
+  - id: perf:degradation
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_degradation_confirm_budget"
+
   - id: v02:hormone
     blocking: true
     status: green
