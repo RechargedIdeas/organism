@@ -16,9 +16,9 @@
 | **v0.3-M1** Learned ISE + RL-DCA | **green** | Online predictor + allostatic/hormone signal; promotion gate |
 | **v0.3-M2** Metamodel synthesizer | **green** | synthesize→sandbox→shadow→promote; MetamodelDisabled scoped |
 | **v0.3-M3** Multi-node + federated oxytocin | **green** | In-process nodes; lag SLO; oxytocin quorum; single-device default |
-| **v0.3-M4** SNN sentinel | pending | Hardware-gated; simulate wake only |
+| **v0.3-M4** SNN sentinel | **green** | Registers; hardware-gated; simulated spike wake escalates router |
 
-**Full suite (default):** 96 passed (1 slow deselected) after M3.
+**Full suite (default):** 101 passed (1 slow deselected) after M4.
 
 **Plan:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md)
 
@@ -110,3 +110,13 @@ See `docs/v0.3/PLAN.md`. Order is fixed: M0 → M1 Learned ISE → M2 Metamodel 
 - `multinode.py`: OrganismNode, MirrorFabric, MultiNodeCluster; lag SLO; oxytocin quorum; partition → safe degrade
 - `federation.py`: `enable_multi_node` opt-in; default still FederationUnsupported (v0.2 tests)
 - IMP-16: multi-node is in-process simulation, not BFT cluster
+
+### v0.3-M4 (landed)
+- `modules/snn_sentinel`: SENTINEL + SPIKE_TRAIN + NEUROMORPHIC metabolic requirement
+- Router: `available_hardware` gate (`hardware_capability_missing`); `escalate_from_sentinel`
+- ModuleHandle: additive `hardware_requirement`
+- Docs: `docs/v0.3/HARDWARE.md` — physical/molecular research-tier only
+- IMP-17: no neuromorphic on box → register + simulate OK; no production control dispatch
+
+### v0.3 complete (M0–M4)
+All ordered milestones green on main. Remaining intentional gaps: real neuromorphic silicon, BFT cluster, live NAS training, molecular substrates (research-tier).

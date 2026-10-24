@@ -59,6 +59,7 @@ class ModuleHandle:
     tier: ReliabilityTier
     state: LifecycleState
     contract_digest: bytes
+    hardware_requirement: str = "NONE"  # IMP-17
 
 
 @dataclass
@@ -189,6 +190,8 @@ class RegistryClient:
                         return _PROMOTE_ORDER.index(s)
                     if _rank(e.state) < _rank(filter.min_lifecycle_state):
                         continue
+                hw = getattr(e.contract.metabolic, "requires_special_hardware", None)
+                hw_s = hw.value if hw is not None and hasattr(hw, "value") else (str(hw) if hw else "NONE")
                 out.append(
                     ModuleHandle(
                         module_id=mid,
@@ -197,6 +200,7 @@ class RegistryClient:
                         tier=e.contract.safety.reliability_tier,
                         state=e.state,
                         contract_digest=e.contract_digest,
+                        hardware_requirement=hw_s or "NONE",
                     )
                 )
         return out

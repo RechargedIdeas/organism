@@ -195,6 +195,7 @@ class Router:
         plan_id_factory: Any = None,
         hormone_bus: HormoneBus | None = None,
         autonomic_params: RouterExposedParams | None = None,
+        available_hardware: set[str] | None = None,
     ) -> None:
         self._registry = registry
         self._policy = policy or default_bootstrap_policy()
@@ -204,6 +205,9 @@ class Router:
         self._plan_id_factory = plan_id_factory or (lambda: str(uuid4()))
         self._hormone_bus = hormone_bus
         self._autonomic = autonomic_params or RouterExposedParams()
+        # IMP-17: no neuromorphic on this box by default
+        self._available_hardware = set(available_hardware or {"NONE"})
+        self._last_sentinel_escalation: dict | None = None
 
     def set_level(self, level: Level) -> None:
         self._level = level
@@ -213,6 +217,25 @@ class Router:
 
     def attach_hormone_bus(self, bus: HormoneBus) -> None:
         self._hormone_bus = bus
+
+    def set_available_hardware(self, caps: set[str]) -> None:
+        self._available_hardware = set(caps) | {"NONE"}
+
+    def escalate_from_sentinel(self, *, reason: str, spike_rate: float) -> None:
+        """SNN / sentinel wake: tighten autonomic; soft L0→L1 escalate."""
+        self._autonomic.cross_check_frequency = max(self._autonomic.cross_check_frequency, 2.0)
+        self._autonomic.exploration_budget = min(self._autonomic.exploration_budget, 0.1)
+        if self._level == "L0":
+            self._level = "L1"
+        self._last_sentinel_escalation = {
+            "reason": reason,
+            "spike_rate": spike_rate,
+            "level": self._level,
+        }
+
+    @property
+    def last_sentinel_escalation(self) -> dict | None:
+        return self._last_sentinel_escalation
 
     @property
     def autonomic_params(self) -> RouterExposedParams:
@@ -288,6 +311,19 @@ class Router:
             hs = self._health.get(h.module_id, "HEALTHY")
             if hs == "FAILED":
                 excluded.append(Excluded(h.module_id, "health_failed", {}))
+                continue
+            hw = getattr(h, "hardware_requirement", "NONE") or "NONE"
+            if hw != "NONE" and hw not in self._available_hardware:
+                excluded.append(
+                    Excluded(
+                        h.module_id,
+                        "hardware_capability_missing",
+                        {
+                            "required": hw,
+                            "available": ",".join(sorted(self._available_hardware)),
+                        },
+                    )
+                )
                 continue
             # interpretability: require T0/T1 if requested (correction 1.3)
             if task.requires_interpretability and tier in (
