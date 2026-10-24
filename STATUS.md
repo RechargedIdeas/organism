@@ -12,7 +12,7 @@ See [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md). Order: A → H; do not skip.
 | Phase | Status | Notes |
 |---|---|---|
 | **A** Plan | **green** | `docs/v1.0/PLAN.md` — closes E.8/OOS via software + RESEARCH_SIM |
-| **B** Substrate ecology | **in progress** | kernel, hdc, reservoir, energy_hopfield, spectral, neurosymbolic |
+| **B** Substrate ecology | **green** | kernel, hdc, reservoir, energy_hopfield, spectral, neurosymbolic — 8 new tests |
 | **C** Learned control maturity | pending | RL-DCA loop, ISE promote/revoke, live NAS |
 | **D** Distributed (multi-process) | pending | oxytocin ≥3, BFT-ish f=1, clock skew |
 | **E** Hardware simulators | pending | `ORGANISM_NEURO_SIM=1`; physical research module |
