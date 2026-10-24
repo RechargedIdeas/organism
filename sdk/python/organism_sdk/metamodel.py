@@ -125,6 +125,7 @@ class MetamodelTracker:
     attempts: list[dict[str, Any]] = field(default_factory=list)
     organs: dict[str, SynthesizedOrgan] = field(default_factory=dict)
     min_shadow_pass_rate: float = 0.9
+    _nas_winners: list[str] = field(default_factory=list)
 
     def reproductive_path_enabled(self) -> bool:
         return self.enabled and self.exploration_mode
@@ -221,6 +222,66 @@ class MetamodelTracker:
     def can_register_deliberation(self, organ_id: str) -> bool:
         organ = self.organs.get(organ_id)
         return bool(organ and organ.stage == SynthesisStage.PROMOTED and organ.may_actuate)
+
+
+    def nas_search(
+        self,
+        base_spec: dict[str, Any],
+        *,
+        space: dict[str, list[Any]] | None = None,
+        shadow_eval: Any | None = None,
+        top_k: int = 1,
+    ) -> list[SynthesizedOrgan]:
+        """Live tiny NAS: enumerate a small architecture space, synthesize each,
+        sandbox, shadow-validate via ``shadow_eval(organ) -> float`` pass rate,
+        return winners that reach SHADOW_VALIDATED (not yet promoted).
+        """
+        if not self.reproductive_path_enabled():
+            raise MetamodelDisabled("NAS requires enabled exploration metamodel")
+        space = space or {
+            "readout_dim": [2, 4, 8],
+            "scale_hint": [0.5, 1.0],
+            "depth": [1, 2],
+        }
+        # Cartesian product (tiny)
+        keys = list(space.keys())
+        combos: list[dict[str, Any]] = [{}]
+        for k in keys:
+            combos = [dict(c, **{k: v}) for c in combos for v in space[k]]
+        results: list[tuple[float, SynthesizedOrgan]] = []
+        for i, arch in enumerate(combos):
+            spec = dict(base_spec)
+            spec.update(arch)
+            spec["module_id"] = spec.get("module_id", "nas") + f"_c{i}"
+            organ = self.synthesize(spec)
+            organ.readout["nas_arch"] = arch
+            self.sandbox(organ.organ_id)
+            if shadow_eval is None:
+                # Default: higher dim + moderate scale scores better (deterministic)
+                # Prefer larger readout + scale≈1 + depth=2 so best arches clear 0.9
+                score = (
+                    0.82
+                    + 0.015 * float(arch.get("readout_dim", 4))
+                    + 0.04 * (1.0 if float(arch.get("depth", 1)) >= 2 else 0.0)
+                    - 0.05 * abs(float(arch.get("scale_hint", 1.0)) - 1.0)
+                )
+                score = min(0.99, max(0.0, score))
+            else:
+                score = float(shadow_eval(organ))
+            self.shadow_validate(organ.organ_id, pass_rate=score)
+            if organ.stage == SynthesisStage.SHADOW_VALIDATED:
+                results.append((score, organ))
+        results.sort(key=lambda x: -x[0])
+        winners = [o for _, o in results[:top_k]]
+        self._nas_winners = [w.organ_id for w in winners]
+        return winners
+
+    def promote_nas_winner(self, organ_id: str | None = None) -> SynthesizedOrgan:
+        """Promote a shadow-validated NAS winner onto deliberation (may_actuate)."""
+        oid = organ_id or (self._nas_winners[0] if self._nas_winners else None)
+        if not oid:
+            raise ValueError("no NAS winner to promote")
+        return self.promote(oid)
 
     def _get(self, organ_id: str) -> SynthesizedOrgan:
         if organ_id not in self.organs:

@@ -148,6 +148,8 @@ class LearnedISE:
         self.agree_threshold = agree_threshold
         self.last_allostatic: AllostaticSignal | None = None
         self._shadow_agreements: list[bool] = []
+        self._revoke_log: list[dict] = []
+        self._train_history: list[float] = []
 
     @property
     def control_path_active(self) -> bool:
@@ -277,4 +279,52 @@ class LearnedISE:
 
     def demote(self) -> None:
         self.gate.promoted = False
+        self.gate.shadow_validated = False
         self._control_path_active = False
+
+    def revoke(self, *, reason: str = "manual_revoke") -> dict:
+        """Revoke control-path authority (alias of demote with audit record)."""
+        was_active = self._control_path_active
+        self.demote()
+        rec = {"revoked": True, "was_active": was_active, "reason": reason}
+        self._revoke_log.append(rec)
+        return rec
+
+    def train_online_loop(
+        self,
+        samples: list[tuple[HealthVector, float]],
+        *,
+        epochs: int = 5,
+        lr: float = 0.1,
+        replay_mix: float = 0.25,
+    ) -> dict:
+        """Full RL-DCA online training loop over a batch (not a single nudge).
+
+        Each epoch: SGD residual update + Danger/PAMP/Safe label refinement,
+        optional replay of prior residuals. Does **not** enable control path.
+        """
+        if not samples:
+            raise ValueError("train_online_loop requires samples")
+        history: list[float] = []
+        replay: list[tuple[HealthVector, float]] = []
+        for ep in range(epochs):
+            epoch_err = 0.0
+            for h, observed in samples:
+                err = self.update(h, observed, lr=lr)
+                epoch_err += abs(err)
+                replay.append((h, observed))
+            # Replay mix
+            if replay and replay_mix > 0:
+                n_rep = max(1, int(len(replay) * replay_mix))
+                for h, observed in replay[-n_rep:]:
+                    self.update(h, observed, lr=lr * 0.5)
+            history.append(epoch_err / len(samples))
+        self._train_history = history
+        return {
+            "epochs": epochs,
+            "n_samples": len(samples),
+            "mean_abs_err_per_epoch": history,
+            "final_mean_abs_err": history[-1],
+            "updates": self.weights.updates,
+            "control_path_active": self._control_path_active,
+        }
