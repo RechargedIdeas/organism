@@ -1,4 +1,4 @@
-# E.5 CI gate definitions — Organism v0.1 (+ wall-clock perf:slo)
+# E.5 CI gate definitions — Organism v0.1 + v0.2 biological extension
 
 gates:
   - id: proto:lint
@@ -44,21 +44,51 @@ gates:
   - id: perf:slo
     blocking: false
     status: green
-    notes: >
-      Fast wall-clock hysteresis suite (T_DOWN_FAST/T_UP_FAST, time.monotonic).
-      Proves L0→L1→L2→L1→L0 physiology + no-flapping under real time.
-      Default pytest excludes @pytest.mark.slow full-480s path.
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_wall_clock_slo.py -m 'not slow'"
+
+  - id: v02:hormone
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_hormone_g.py"
+
+  - id: v02:immune
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_immune_h.py"
+
+  - id: v02:autonomic_apoptosis
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_autonomic_apoptosis_i.py"
+
+  - id: v02:morphogenesis_circadian
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_morphogenesis_j.py"
+
+  - id: v02:harness_jo
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_harness_scenarios.py"
 
 category_i:
   - id: e5_1b_wall_clock_fast
     status: green
-    notes: >
-      Scaled E-5 1b under wall clock (T_up on order 2–3s, T_up ≥ 5·T_down).
-      Covered by perf:slo / test_wall_clock_e5_1b_fast_physiology.
   - id: e5_1b_wall_clock_480s
     status: green-pending-opt-in
-    notes: >
-      Full B.4 hysteresis (~455–480s). Opt-in:
-      ORGANISM_WALL_CLOCK_FULL=1 pytest -m slow sdk/python/tests/test_wall_clock_slo.py::test_e5_1b_wall_clock_480s
-      Gate exists and is runnable; default CI stays fast.
+
+category_bio:
+  - id: J1
+    status: green
+  - id: K1
+    status: green
+  - id: L1
+    status: green
+  - id: M1
+    status: green
+  - id: N2
+    status: green
+  - id: O1
+    status: green
+  - id: O4
+    status: green

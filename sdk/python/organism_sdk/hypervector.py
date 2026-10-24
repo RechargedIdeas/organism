@@ -1,6 +1,7 @@
 """Binary Hypervector — A3.2 / D.1. DIM=10000 packed as [u64;157] (10048 bits, top 48 unused)."""
 from __future__ import annotations
 
+import random
 import secrets
 import struct
 from dataclasses import dataclass
@@ -32,8 +33,18 @@ class Hypervector:
         return cls(tuple(0 for _ in range(WORD_COUNT)))
 
     @classmethod
-    def random(cls, *, rng: secrets.SystemRandom | None = None) -> Hypervector:
-        r = rng or secrets.SystemRandom()
+    def random(
+        cls,
+        *,
+        rng: secrets.SystemRandom | random.Random | None = None,
+        seed: int | None = None,
+    ) -> Hypervector:
+        if rng is not None:
+            r = rng
+        elif seed is not None:
+            r = random.Random(seed)
+        else:
+            r = secrets.SystemRandom()
         words = [r.getrandbits(64) for _ in range(WORD_COUNT)]
         # Clear unused top 48 bits of last word (bits 10000..10047)
         unused = WORD_COUNT * 64 - DIM

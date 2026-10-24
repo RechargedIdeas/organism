@@ -403,6 +403,10 @@ class Lifecycle:
     shadow_validation_required: bool = False
     promotion: PromotionCriteria = field(default_factory=PromotionCriteria)
     disallowed_runtimes: tuple[str, ...] = ()
+    # IMP-9 (v0.2): apoptosis gate; T0 must keep False
+    self_termination_permitted: bool = False
+    replaceable: bool = False
+    max_idle_time_s: float | None = None
 
 
 @dataclass(frozen=True)

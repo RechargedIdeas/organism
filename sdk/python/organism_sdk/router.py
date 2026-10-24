@@ -14,6 +14,8 @@ from uuid import uuid4
 
 from organism_sdk.contract import ModuleRole, ReliabilityTier
 from organism_sdk.registry import ModuleHandle, RegistryClient
+from organism_sdk.autonomic import RouterExposedParams
+from organism_sdk.hormone import HormoneBus, HormoneReading
 from organism_sdk.trace import RoutingTraceEntry, TraceEmitter
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
@@ -191,6 +193,8 @@ class Router:
         health: dict[str, str] | None = None,
         trace: TraceEmitter | None = None,
         plan_id_factory: Any = None,
+        hormone_bus: HormoneBus | None = None,
+        autonomic_params: RouterExposedParams | None = None,
     ) -> None:
         self._registry = registry
         self._policy = policy or default_bootstrap_policy()
@@ -198,9 +202,21 @@ class Router:
         self._health = health or {}
         self._trace = trace or TraceEmitter()
         self._plan_id_factory = plan_id_factory or (lambda: str(uuid4()))
+        self._hormone_bus = hormone_bus
+        self._autonomic = autonomic_params or RouterExposedParams()
 
     def set_level(self, level: Level) -> None:
         self._level = level
+
+    def set_autonomic_params(self, params: RouterExposedParams) -> None:
+        self._autonomic = params
+
+    def attach_hormone_bus(self, bus: HormoneBus) -> None:
+        self._hormone_bus = bus
+
+    @property
+    def autonomic_params(self) -> RouterExposedParams:
+        return self._autonomic
 
     def current_policy_id(self) -> str:
         return self._policy.policy_id
@@ -218,6 +234,10 @@ class Router:
 
         if self._policy.lifecycle_state != "DELIBERATION":
             return self._hold(task, "policy_not_deliberation", [])
+
+        hormone_reading: HormoneReading | None = None
+        if self._hormone_bus is not None:
+            hormone_reading = self._hormone_bus.read_mirror(consumer="router")
 
         # Step 1
         roles = list(self._policy.form_to_roles.get(task.form, ()))
@@ -291,6 +311,14 @@ class Router:
         ranking_trace.append(f"order={[c.module_id for c in candidates]}")
 
         cross_check_required = task.form == "control_actuation" or self._level in ("L2", "L3", "L4")
+        if self._autonomic.cross_check_frequency > 1.0:
+            cross_check_required = True
+        if hormone_reading is not None and hormone_reading.levels.cortisol >= 0.5:
+            cross_check_required = True
+        if self._autonomic.exploration_budget <= 0.0 and task.safety_tier == "research":
+            return self._hold(task, "exploration_budget_exhausted", [])
+        if self._autonomic.preemption_class == "PREEMPT_RESEARCH" and task.safety_tier == "research":
+            return self._hold(task, "preempt_research", [])
         # T0 proposer does not require cross-check for control (E.4)
         cross_mod = None
         if candidates:
@@ -353,13 +381,28 @@ class Router:
             disposition="DISPATCH",
             candidate_roles=roles,
         )
+        rationale: dict[str, Any] = {
+            "ranking_trace": ranking_trace,
+            "excluded": [e.reason_code for e in excluded],
+            "autonomic": self._autonomic.as_dict(),
+        }
+        if hormone_reading is not None:
+            rationale["hormone"] = {
+                "cortisol": hormone_reading.levels.cortisol,
+                "dopamine": hormone_reading.levels.dopamine,
+                "oxytocin": hormone_reading.levels.oxytocin,
+                "melatonin": hormone_reading.levels.melatonin,
+                "staleness_ms": hormone_reading.staleness_ms,
+                "digest": hormone_reading.digest,
+                "source": hormone_reading.source,
+            }
         self._trace.emit_routing(
             RoutingTraceEntry(
                 task_id=task.task_id,
                 form=task.form,
                 plan_type=plan_type,
                 primary_module_id=primary.module_id,
-                rationale={"ranking_trace": ranking_trace, "excluded": [e.reason_code for e in excluded]},
+                rationale=rationale,
             )
         )
         return plan

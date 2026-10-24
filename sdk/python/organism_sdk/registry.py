@@ -24,11 +24,16 @@ LifecycleState = Literal[
     "SANDBOXED",
     "SHADOW_VALIDATED",
     "EXPLORATION",
+    "DEVELOPMENT",
     "DELIBERATION",
+    "SELF_TERMINATING",
+    "SUCCEEDED",
+    "DEGRADED",
     "DEPRECATED",
     "RETIRED",
 ]
 
+# Linear promotion ladder (v0.1). DEVELOPMENT is EXPLORATION-subset.
 _PROMOTE_ORDER = [
     "PROPOSED",
     "SANDBOXED",
@@ -38,6 +43,7 @@ _PROMOTE_ORDER = [
     "DEPRECATED",
     "RETIRED",
 ]
+_EXTENDED_STATES = frozenset({"DEVELOPMENT", "SELF_TERMINATING", "SUCCEEDED", "DEGRADED"})
 
 
 class _Healthable(Protocol):
@@ -175,7 +181,13 @@ class RegistryClient:
                     if _TIER_RANK[e.contract.safety.reliability_tier] > _TIER_RANK[filter.min_reliability]:
                         continue
                 if filter.min_lifecycle_state is not None:
-                    if _PROMOTE_ORDER.index(e.state) < _PROMOTE_ORDER.index(filter.min_lifecycle_state):
+                    def _rank(s: str) -> int:
+                        if s == "DEVELOPMENT":
+                            return _PROMOTE_ORDER.index("EXPLORATION")
+                        if s in _EXTENDED_STATES:
+                            return -1
+                        return _PROMOTE_ORDER.index(s)
+                    if _rank(e.state) < _rank(filter.min_lifecycle_state):
                         continue
                 out.append(
                     ModuleHandle(

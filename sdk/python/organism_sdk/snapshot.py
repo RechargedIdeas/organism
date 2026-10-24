@@ -100,6 +100,9 @@ def _binding_payload(b: BindingRecord) -> bytes:
             "tags": list(b.tags),
             "module_id": b.module_id,
             "salience": b.salience,
+            "fidelity": b.fidelity,
+            "affects_control": b.affects_control,
+            "payload": b.payload,
             "checksum": b.checksum.hex() if b.checksum else "",
         },
         sort_keys=True,
@@ -117,6 +120,9 @@ def _binding_from_payload(data: bytes) -> BindingRecord:
         tags=tuple(obj["tags"]),
         module_id=obj["module_id"],
         salience=float(obj["salience"]),
+        fidelity=obj.get("fidelity", "FULL"),
+        affects_control=bool(obj.get("affects_control", False)),
+        payload=obj.get("payload"),
         checksum=bytes.fromhex(obj["checksum"]) if obj["checksum"] else b"",
     )
 

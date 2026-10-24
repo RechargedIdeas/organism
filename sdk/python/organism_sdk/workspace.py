@@ -26,6 +26,9 @@ class BindingRecord:
     fidelity: str = "FULL"
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     checksum: bytes = b""
+    # IMP-8 (v0.2): optional semantic payload for hormone_state / immune_decision / etc.
+    payload: dict[str, Any] | None = None
+    affects_control: bool = False
 
     def with_checksum(self) -> BindingRecord:
         h = hashlib.sha256()
@@ -33,6 +36,11 @@ class BindingRecord:
         h.update(self.role.to_bytes_be())
         h.update(self.filler.to_bytes_be())
         h.update(str(self.binding_id).encode())
+        if self.payload is not None:
+            import json as _json
+            h.update(_json.dumps(self.payload, sort_keys=True, separators=(",", ":")).encode())
+        h.update(b"1" if self.affects_control else b"0")
+        h.update(self.fidelity.encode())
         return BindingRecord(
             binding_id=self.binding_id,
             hypervector=self.hypervector,
@@ -44,6 +52,8 @@ class BindingRecord:
             fidelity=self.fidelity,
             created_at=self.created_at,
             checksum=h.digest(),
+            payload=self.payload,
+            affects_control=self.affects_control,
         )
 
 
@@ -142,6 +152,8 @@ class WorkspaceClient:
                         fidelity=stored.fidelity,
                         created_at=stored.created_at,
                         checksum=b"",
+                        payload=stored.payload,
+                        affects_control=stored.affects_control,
                     ).with_checksum()
                 self._bindings[stored.binding_id] = stored
                 self._seq += 1
@@ -209,7 +221,18 @@ class WorkspaceClient:
                     out.append(b)
         return out
 
-    def bind_exact(self, role: Hypervector, filler: Hypervector, *, tags: tuple[str, ...] = (), module_id: str = "") -> BindingRecord:
+    def bind_exact(
+        self,
+        role: Hypervector,
+        filler: Hypervector,
+        *,
+        tags: tuple[str, ...] = (),
+        module_id: str = "",
+        payload: dict[str, Any] | None = None,
+        affects_control: bool = False,
+        fidelity: str = "FULL",
+        salience: float = 1.0,
+    ) -> BindingRecord:
         """Helper: create binding with hypervector = role.bind(filler)."""
         hv = role.bind(filler)
         rec = BindingRecord(
@@ -219,6 +242,10 @@ class WorkspaceClient:
             filler=filler,
             tags=tags,
             module_id=module_id,
+            payload=payload,
+            affects_control=affects_control,
+            fidelity=fidelity,
+            salience=salience,
         )
         result = self.write(rec)
         assert result.status == "ACCEPTED"

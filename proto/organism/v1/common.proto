@@ -100,6 +100,11 @@ enum ModuleLifecycleState {
   LIFECYCLE_DELIBERATION     = 5;
   LIFECYCLE_DEPRECATED       = 6;
   LIFECYCLE_RETIRED          = 7;
+  // v0.2 Artifact I (additive)
+  LIFECYCLE_SELF_TERMINATING = 8;
+  LIFECYCLE_SUCCEEDED        = 9;
+  LIFECYCLE_DEVELOPMENT      = 10;  // subset of EXPLORATION
+  LIFECYCLE_DEGRADED         = 11;
 }
 
 // Degradation level enum (B + A0).

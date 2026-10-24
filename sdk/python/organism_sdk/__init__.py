@@ -5,7 +5,7 @@ from organism_sdk._proto_path import ensure_proto_path
 
 ensure_proto_path()
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from organism_sdk.contract import (
     CapabilityScopes,
@@ -88,7 +88,30 @@ __all__ = [
     "VerificationResult",
     "WorkspaceClient",
     "run_handle",
+    "HormoneBus",
+    "HormoneLevels",
+    "InteroceptiveStateEstimator",
+    "HealthVector",
+    "ImmuneLayer",
+    "AutonomicController",
+    "RouterExposedParams",
+    "ApoptosisService",
+    "MemoryExport",
+    "CircadianClock",
+    "kleiber_declared_share",
+    "MorphogenesisTracker",
+    "DevelopmentalGenome",
+    "DevelopmentalStage",
     "__version__",
 ]
 
 from organism_sdk.degradation import DegradationMachine, FaultInjector, HealthSignals  # noqa: E402
+
+from organism_sdk.hormone import HormoneBus, HormoneLevels, HormoneCoefficients  # noqa: E402
+from organism_sdk.interoceptive import InteroceptiveStateEstimator, HealthVector  # noqa: E402
+from organism_sdk.immune import ImmuneLayer  # noqa: E402
+from organism_sdk.autonomic import AutonomicController, RouterExposedParams  # noqa: E402
+from organism_sdk.apoptosis import ApoptosisService, MemoryExport  # noqa: E402
+from organism_sdk.circadian import CircadianClock, kleiber_declared_share  # noqa: E402
+from organism_sdk.morphogenesis import MorphogenesisTracker, DevelopmentalGenome, DevelopmentalStage  # noqa: E402
+
