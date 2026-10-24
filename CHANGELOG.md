@@ -1,7 +1,25 @@
 # Changelog
 
 All notable changes to Organism are documented here.  
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md`.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md` (additive integrations in 1.x).
+
+## [1.1.0] — 2026-10-24
+
+### Added
+- **Bio-Digital Hybrid Cluster integration** — mapping doc `docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md`.
+- RESEARCH_TIER modules: `bio_digital.slime_mold` (*Physarum*), `bio_digital.mycelium` (*Pleurotus*).
+- HAL facade (`RESEARCH_SIM`), bus adapter (declared Channels + VSA workspace results), twin bridge (`bio_twin` → workspace / optional hormone feed), hypervisor `DrainPolicy` + hot-swap/apoptosis map.
+- Vendor note `modules/bio_digital/VENDOR.md` (no GUI copy; optional `BIO_DIGITAL_HYBRID_ROOT`).
+- Invariant tests: exploration-only, contract validate, twin→workspace, no control dispatch.
+
+### Changed
+- Package / SDK versions **1.1.0**; Cargo workspace **1.1.0**.
+
+### Security / safety
+- Bio-digital modules: `may_actuate=False`, hard-refuse `control_actuation`, `MaxSafetyTier.RESEARCH`, `HardwareRequirement.PHYSICAL_SUBSTRATE`.
+
+### Test baseline
+Default suite: **150 passed** (2 slow deselected).
 
 ## [1.0.0] — 2026-10-24
 
@@ -64,5 +82,7 @@ Biological extension (HormoneBus through morphogenesis + J–O matrix). Supersed
 Initial closed-corpus implementation (Batch 1 + M1–M7).
 
 [0.4.0]: https://github.com/RechargedIdeas/organism/releases/tag/v0.4.0
+
+[1.1.0]: https://github.com/RechargedIdeas/organism/releases/tag/v1.1.0
 
 [1.0.0]: https://github.com/RechargedIdeas/organism/releases/tag/v1.0.0

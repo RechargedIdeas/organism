@@ -53,3 +53,7 @@ Documented in [docs/v1.0/HARDENING.md](v1.0/HARDENING.md):
 ## Compatibility with v0.4
 
 v1.0 is a **compatible major** for frozen 0.4 symbols (additive). Experimental 0.4 biology APIs remain available; multi-process and substrate modules are additive.
+
+## Additive 1.1 integration (non-breaking)
+
+`modules/bio_digital/*` is **experimental RESEARCH_SIM** — same class as `physical_research`. Not part of the frozen control-path surface. See `docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md` and tag `v1.1.0`.

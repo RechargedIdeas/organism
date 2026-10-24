@@ -1,56 +1,54 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v1.0.0 — software Organism COMPLETE**  
-**Corpus:** closed v0.1–v0.4 + v1.0 completion (Phases A–H)  
+**Release:** **v1.1.0 — Bio-Digital Hybrid Cluster integration**  
+**Corpus:** closed v0.1–v1.0 + bio-digital mapping (I1–I8)  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.0.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.0.0)
+**Tag:** [v1.1.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.1.0)
 
 ## Verdict
 
-**COMPLETE** for the software Organism. Remaining gaps require **real silicon / wet lab / WAN-BFT infrastructure** (external). Faithful simulators ship as `RESEARCH_SIM`.
+Software Organism remains complete (v1.0). **v1.1** adds a proper mapping of [Bio-Digital_Hybrid_Cluster](https://github.com/Recharged-Ideas/Bio-Digital_Hybrid_Cluster) as RESEARCH_TIER / exploration-only adapters under `modules/bio_digital/`. Wet-lab GPIO and PySide6 studio stay external.
 
-## v1.0 phase table
+## v1.1 phase table
 
-| Phase | Status | SHA / notes |
+| Phase | Status | Notes |
 |---|---|---|
-| **A** Plan | **green** | `docs/v1.0/PLAN.md` |
-| **B** Substrate ecology | **green** | kernel, hdc, reservoir, energy_hopfield, spectral, neurosymbolic |
-| **C** Learned control | **green** | RL-DCA loop; ISE promote+revoke; live NAS |
-| **D** Distributed | **green** | multi-process; oxytocin ≥3; BFT f=1 N=4; clock skew |
-| **E** Hardware sims | **green** | `ORGANISM_NEURO_SIM=1`; physical_research non-actuation |
-| **F** Rust parity | **green** | router + degradation; cargo test --workspace |
-| **G** Hardening docs | **green** | API_FREEZE_v1.0, HARDENING, CHANGELOG, gates, versions 1.0.0 |
-| **H** Release | **green** | annotated tag `v1.0.0` + GitHub Release |
+| **I1** Mapping doc | **green** | `docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md` |
+| **I2** HAL / RESEARCH_SIM | **green** | `BioDigitalHAL`, `ORGANISM_BIO_DIGITAL_SIM` |
+| **I3** Species modules | **green** | `slime_mold`, `mycelium` — `may_actuate=False` |
+| **I4** Bus → Channel+workspace | **green** | heartbeat channel-only; spike/spatial → bindings |
+| **I5** Twin bridge | **green** | `bio_twin` + optional `hormone_state` stress feed |
+| **I6** Hypervisor map | **green** | `DrainPolicy` + hot_swap / apoptosis successor |
+| **I7** Router invariants | **green** | never control primary; HW gate |
+| **I8** Release | **green** | tag `v1.1.0` |
 
-**Default pytest:** 135 passed (2 slow deselected).  
-**Rust:** `cargo test --workspace` green.
+**Default pytest:** 150 passed (2 slow deselected).
 
 ## True external deps left
 
 | Dep | Why external |
 |---|---|
-| Real neuromorphic silicon (Loihi-class) | No HW on box; RESEARCH_SIM via env |
-| Wet-lab / molecular physical substrates | Exploration module only; never control path |
-| Production WAN BFT + TPM attestation | In-process/multi-process software BFT-ish only |
+| Real neuromorphic silicon | RESEARCH_SIM via `ORGANISM_NEURO_SIM` |
+| Wet-lab / molecular / bioreactor GPIO | bio_digital + physical_research exploration only |
+| Production WAN BFT + TPM | multi-process software only |
+| Hybrid PySide6 studio / OpenGL twin UI | external tooling (VENDOR.md) |
 
 ## Amendments (IMP-*)
 
 | ID | Topic | Resolution |
 |---|---|---|
-| IMP-22 | contract_factory | Shared helper for reference substrates |
-| IMP-23 | neuro_sim | `ORGANISM_NEURO_SIM` merges NEUROMORPHIC caps |
-| IMP-24 | ProcessCluster | OS processes + lag SLO; not WAN |
-| IMP-25 | Rust router/degradation | Core path parity; Python remains primary authoring surface |
+| IMP-22–25 | (v1.0) | unchanged |
+| IMP-26 | bio_digital adapters | Hybrid domain re-implemented as Organism modules; optional `BIO_DIGITAL_HYBRID_ROOT` |
 
 ## Tooling
 
 ```bash
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q -m 'not slow'
-cargo test --workspace
 # Opt-in: ORGANISM_WALL_CLOCK_FULL=1 | ORGANISM_SOAK_FULL=1 | ORGANISM_NEURO_SIM=1
+# Bio-digital RESEARCH_SIM default on; set ORGANISM_BIO_DIGITAL_SIM=0 to mark physical-unavailable
 ```
 
-## Prior lines (summary)
+## Prior lines
 
-v0.1 M1–M7, v0.2 G–J + F J–O, v0.3 M0–M4, v0.4 soak/perf/security + freeze — all remain green under the v1.0 suite. See git history and `docs/v0.*/`.
+v1.0.0 software-complete (Phases A–H). See git history and `docs/v0.*/` / `docs/v1.0/`.

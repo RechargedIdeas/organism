@@ -8,7 +8,7 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.0.0** — software Organism **COMPLETE** |
+| **Release** | **v1.1.0** — software Organism **COMPLETE** |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
@@ -60,3 +60,8 @@ ORGANISM_NEURO_SIM=1 ...         # neuromorphic RESEARCH_SIM
 ## License
 
 Apache-2.0. See `LICENSE`.
+
+
+## Bio-Digital Hybrid Cluster
+
+See [docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md](docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md) for the mapping of Physarum/Mycelium RESEARCH_TIER adapters (`modules/bio_digital/`).
