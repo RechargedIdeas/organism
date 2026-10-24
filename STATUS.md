@@ -1,7 +1,7 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Corpus:** closed v0.1 + v0.2 biological + **v0.3 plan opening**  
+**Corpus:** closed v0.1 + v0.2 biological + v0.3 + **v0.4 hardening opening**  
 **Repo:** https://github.com/RechargedIdeas/organism (private)
 
 ## Milestone summary
@@ -17,10 +17,14 @@
 | **v0.3-M2** Metamodel synthesizer | **green** | synthesize→sandbox→shadow→promote; MetamodelDisabled scoped |
 | **v0.3-M3** Multi-node + federated oxytocin | **green** | In-process nodes; lag SLO; oxytocin quorum; single-device default |
 | **v0.3-M4** SNN sentinel | **green** | Registers; hardware-gated; simulated spike wake escalates router |
+| **v0.4-M0 Plan** | **green** | `docs/v0.4/PLAN.md` — soak, perf budgets, security fuzz |
+| **v0.4-M1 Soak** | pending | Multi-window stability harness |
+| **v0.4-M2 Perf budgets** | pending | Router/workspace/hormone/degradation SLOs |
+| **v0.4-M3 Security fuzz** | pending | Trust-model / fault-matrix fuzz |
 
-**Full suite (default):** 101 passed (1 slow deselected) after M4.
+**Full suite (default):** 101 passed (1 slow deselected) after v0.3-M4; v0.4 opening.
 
-**Plan:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md)
+**Plans:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md) · [docs/v0.4/PLAN.md](docs/v0.4/PLAN.md)
 
 ---
 
@@ -120,3 +124,17 @@ See `docs/v0.3/PLAN.md`. Order is fixed: M0 → M1 Learned ISE → M2 Metamodel 
 
 ### v0.3 complete (M0–M4)
 All ordered milestones green on main. Remaining intentional gaps: real neuromorphic silicon, BFT cluster, live NAS training, molecular substrates (research-tier).
+
+---
+
+## v0.4 — Hardening (soak / perf / security)
+
+See `docs/v0.4/PLAN.md`. Order is fixed: M0 → M1 Soak → M2 Perf → M3 Security fuzz.
+
+### Amendments (IMP-*)
+| ID | Topic | Resolution |
+|---|---|---|
+| IMP-18 | v0.4 plan | Documented optimal order; neuromorphic/BFT/NAS/molecular stay OOS unless thin-gated |
+
+### Still OOS (carry from E.8)
+Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substrates — research-tier / hardware-gated only.
