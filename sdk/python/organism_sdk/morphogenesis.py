@@ -61,3 +61,14 @@ class MorphogenesisTracker:
     def exploration_restrictions_apply(self, module_id: str) -> bool:
         g = self._genomes.get(module_id)
         return g is not None and g.developmental and not g.all_passed
+
+
+    def offer_control_actuation(self, module_id: str) -> dict[str, object]:
+        """O2: DEVELOPMENT modules cannot take control_actuation (EXPLORATION restrictions)."""
+        if self.exploration_restrictions_apply(module_id):
+            return {"accepted": False, "reason": "DEVELOPMENT_EXPLORATION_RESTRICTION", "held": True}
+        return {"accepted": True, "reason": "ok", "held": False}
+
+    def leave_development(self, module_id: str) -> bool:
+        """O3: all stages valid → leave DEVELOPMENT (same gates as EXPLORATION promotion)."""
+        return self.may_enter_deliberation(module_id)

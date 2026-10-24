@@ -110,7 +110,20 @@ class InteroceptiveStateEstimator:
     def set_offline(self, offline: bool) -> None:
         self._offline = offline
 
-    def estimate(self, h: HealthVector, *, stress_load: float | None = None) -> InteroceptiveState:
+    def estimate(
+        self,
+        h: HealthVector,
+        *,
+        stress_load: float | None = None,
+        probe_ok: bool = True,
+        cross_check_hm: float | None = None,
+    ) -> InteroceptiveState:
+        """Estimate interoceptive state.
+
+        J2: offline → NaN viability + offline model_version.
+        J4: failing probe / low independent h_m under false-high reported
+            components forces crisis_precursor (autonomic must leave PARASYMPATHETIC).
+        """
         if self._offline:
             return InteroceptiveState(
                 viability_score=float("nan"),
@@ -119,6 +132,9 @@ class InteroceptiveStateEstimator:
                 model_version="0.2.0-offline",
             )
         v = viability_f(h)
+        # Independent module-health cross-check (Category J4)
+        hm = h.module_health_min if cross_check_hm is None else float(cross_check_hm)
+        false_high = (not probe_ok) or (hm < self.viability_floor and v >= 0.7)
         self._history.append(v)
         self._history = self._history[-64:]
         if len(self._history) >= 2:
@@ -136,20 +152,24 @@ class InteroceptiveStateEstimator:
                 calibration_target=min(1.0, self._setpoints.calibration_target + 0.02),
                 energy_target_j=max(1.0, self._setpoints.energy_target_j * 0.9),
             )
+        crisis = (v < self.viability_floor) or (v_h < self.viability_floor) or false_high
+        if false_high:
+            stress = max(stress, 1.0 - hm)
+            recovery = min(recovery, hm)
         return InteroceptiveState(
-            viability_score=v,
+            viability_score=v if not false_high else min(v, hm),
             allostatic_setpoints=self._setpoints,
             predicted_trajectory=PredictedTrajectory(
                 horizon_s=self.horizon_s,
-                viability_at_horizon=v_h,
+                viability_at_horizon=v_h if not false_high else min(v_h, hm),
                 confidence_interval=(max(0.0, v_h - 0.1), min(1.0, v_h + 0.05)),
             ),
             heart_rate_analog=0.4 + 0.6 * stress,
             stress_load=stress,
             recovery_capacity=recovery,
-            crisis_precursor=(v < self.viability_floor) or (v_h < self.viability_floor),
-            request_setpoint_adaptation=request_adapt,
-            chronic_stress=recovery < self.recovery_floor,
+            crisis_precursor=crisis,
+            request_setpoint_adaptation=request_adapt or false_high,
+            chronic_stress=recovery < self.recovery_floor or false_high,
         )
 
     def write_state(self, state: InteroceptiveState) -> BindingRecord:

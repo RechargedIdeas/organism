@@ -68,6 +68,8 @@ class LifecycleTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
+    on_drain_outcome: str | None = None  # started|completed|abandoned|killed
+    on_drain_synthetic: bool = False
     emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 

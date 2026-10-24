@@ -173,6 +173,7 @@ class HormoneBus:
         self._filler_base = Hypervector.random(seed=role_seed ^ 0xFFFF)
         self._alive = True
         self._window_seq = 0
+        self._last_diagnosis: dict[str, Any] | None = None
 
     @property
     def alive(self) -> bool:
@@ -182,6 +183,15 @@ class HormoneBus:
         """Category K5: kill bus mirror; consumers fall back to workspace."""
         with self._lock:
             self._alive = False
+            self._last_diagnosis = {
+                "code": "hormone_bus_mirror_killed",
+                "fallback": "workspace_hormone_state",
+                "at": datetime.now(timezone.utc).isoformat(),
+            }
+
+    @property
+    def last_diagnosis(self) -> dict[str, Any] | None:
+        return getattr(self, "_last_diagnosis", None)
 
     def restore_mirror(self) -> None:
         with self._lock:
@@ -292,6 +302,12 @@ class HormoneBus:
                 levels = self.read_workspace_hormone_state() or HormoneLevels()
                 written = levels.released_at
                 source = "workspace_fallback"
+                if self._last_diagnosis is None:
+                    self._last_diagnosis = {
+                        "code": "hormone_bus_mirror_unavailable",
+                        "fallback": "workspace_hormone_state",
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    }
         staleness_ms = max(0.0, (now - written).total_seconds() * 1000.0)
         reading = HormoneReading(
             levels=levels,
