@@ -1,7 +1,7 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Corpus:** closed v0.1 + biological extension (Artifacts G–J / F J–O)  
+**Corpus:** closed v0.1 + v0.2 biological + **v0.3 plan opening**  
 **Repo:** https://github.com/RechargedIdeas/organism (private)
 
 ## Milestone summary
@@ -11,17 +11,16 @@
 | Batch 1 / Proto | **green** | Additive v0.2 lifecycle enums in `common.proto` |
 | **M1–M7** (v0.1) | **green** | Unchanged; suite still green |
 | Wall-clock fast / `perf:slo` | **green** | Opt-in full 480s unchanged |
-| **v0.2 G** HormoneBus + ISE | **green** | Workspace SoT; bus mirror; `emit_hormone` real |
-| **v0.2 H** ImmuneLayer | **green** | FULL/affects_control bindings only; `emit_immune` |
-| **v0.2 I** Autonomic + Apoptosis | **green** | Param modulation; SELF_TERMINATING/SUCCEEDED/DEVELOPMENT; N4/N5 |
-| **v0.2 J** Circadian / morphogenesis / metabolism | **green** | Stubs + rest-cycle exploration gate |
-| **F J–O full matrix** | **green** | J1–J4, K1–K6, L1–L6, M1–M4, N1–N5, O1–O5 runnable |
-| Learned ISE / RL-DCA stub | **green** | Updateable + promotion gate; control path blocked until promote |
-| Federated oxytocin | **green** | Fail-closed single-node stub (E.8) |
-| Multi-node mirror lag | **green** | OOS gate test; no cluster |
-| Metamodel reproductive | **green** | Disabled; synthesizer raises `MetamodelDisabled` |
+| **v0.2 G–J + F J–O** | **green** | Full biological matrix |
+| **v0.3-M0 Plan** | **green** | `docs/v0.3/PLAN.md` |
+| **v0.3-M1** Learned ISE + RL-DCA | **in progress** | Extends v0.2 stub |
+| **v0.3-M2** Metamodel synthesizer | pending | Exploration → sandbox → shadow → promote |
+| **v0.3-M3** Multi-node + federated oxytocin | pending | In-process nodes; single-device default |
+| **v0.3-M4** SNN sentinel | pending | Hardware-gated; simulate wake only |
 
-**Full suite (default):** `PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/contract sdk/python/tests modules/*/tests tests/integration -m 'not slow'` → **81 passed** (1 slow deselected).
+**Full suite (default):** see latest count below after each milestone push.
+
+**Plan:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md)
 
 ---
 
@@ -85,3 +84,14 @@ PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q \
   tests/contract sdk/python/tests modules/deterministic_engine/tests \
   modules/learned_module/tests tests/integration -m 'not slow'
 ```
+
+---
+
+## v0.3 — Opening (E.8 lifts, ordered)
+
+See `docs/v0.3/PLAN.md`. Order is fixed: M0 → M1 Learned ISE → M2 Metamodel → M3 Multi-node → M4 SNN.
+
+### Amendments (IMP-*)
+| ID | Topic | Resolution |
+|---|---|---|
+| IMP-13 | v0.3 plan | Documented optimal order + hardware gates; physical/molecular stay research-tier |
