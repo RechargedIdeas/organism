@@ -13,12 +13,12 @@
 | Wall-clock fast / `perf:slo` | **green** | Opt-in full 480s unchanged |
 | **v0.2 G–J + F J–O** | **green** | Full biological matrix |
 | **v0.3-M0 Plan** | **green** | `docs/v0.3/PLAN.md` |
-| **v0.3-M1** Learned ISE + RL-DCA | **in progress** | Extends v0.2 stub |
+| **v0.3-M1** Learned ISE + RL-DCA | **green** | Online predictor + allostatic/hormone signal; promotion gate |
 | **v0.3-M2** Metamodel synthesizer | pending | Exploration → sandbox → shadow → promote |
 | **v0.3-M3** Multi-node + federated oxytocin | pending | In-process nodes; single-device default |
 | **v0.3-M4** SNN sentinel | pending | Hardware-gated; simulate wake only |
 
-**Full suite (default):** see latest count below after each milestone push.
+**Full suite (default):** 85 passed (1 slow deselected) after M1.
 
 **Plan:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md)
 
@@ -95,3 +95,8 @@ See `docs/v0.3/PLAN.md`. Order is fixed: M0 → M1 Learned ISE → M2 Metamodel 
 | ID | Topic | Resolution |
 |---|---|---|
 | IMP-13 | v0.3 plan | Documented optimal order + hardware gates; physical/molecular stay research-tier |
+
+### v0.3-M1 (landed)
+- `learned_ise.py`: online RL-DCA predictive head; `AllostaticSignal`; `shadow_compare`; hormone nudge without actuation
+- Tests: `test_v03_learned_ise.py`; stub gate model version → `0.3.0-learned-ise`
+- IMP-14: prediction error may drive HormoneBus inputs pre-promotion; `for_control` still PermissionError until promote

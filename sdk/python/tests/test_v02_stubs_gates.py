@@ -19,7 +19,7 @@ def test_learned_ise_blocked_until_promotion():
         ise.estimate(h, for_control=True)
     ise.record_shadow_validate(pass_rate=0.99, ece_ok=True)
     assert ise.promote()
-    assert ise.estimate(h, for_control=True).model_version.startswith("0.2.0-learned")
+    assert ise.estimate(h, for_control=True).model_version.startswith("0.3.0-learned")
 
 
 def test_federated_oxytocin_fail_closed_records_event():
