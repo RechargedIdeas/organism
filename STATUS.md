@@ -1,9 +1,31 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v0.4.0** (API freeze — see `docs/API_FREEZE_v0.4.md`, `CHANGELOG.md`)  
-**Corpus:** closed v0.1 + v0.2 biological + v0.3 + **v0.4 hardening complete**  
+**Release:** **v0.4.0 → v1.0.0 in progress**  
+**Corpus:** closed v0.1–v0.4 + **v1.0 completion plan**  
 **Repo:** https://github.com/RechargedIdeas/organism (private)
+
+## v1.0 — Completion (software Organism)
+
+See [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md). Order: A → H; do not skip.
+
+| Phase | Status | Notes |
+|---|---|---|
+| **A** Plan | **green** | `docs/v1.0/PLAN.md` — closes E.8/OOS via software + RESEARCH_SIM |
+| **B** Substrate ecology | **in progress** | kernel, hdc, reservoir, energy_hopfield, spectral, neurosymbolic |
+| **C** Learned control maturity | pending | RL-DCA loop, ISE promote/revoke, live NAS |
+| **D** Distributed (multi-process) | pending | oxytocin ≥3, BFT-ish f=1, clock skew |
+| **E** Hardware simulators | pending | `ORGANISM_NEURO_SIM=1`; physical research module |
+| **F** Rust runtime parity | pending | router + degradation beyond stubs |
+| **G** Hardening completion | pending | freeze docs, CHANGELOG, versions 1.0.0 |
+| **H** Release v1.0.0 | pending | tag + gh release; STATUS COMPLETE |
+
+### Amendments (IMP-*)
+| ID | Topic | Resolution |
+|---|---|---|
+| IMP-22 | contract_factory | Shared `modules/_common/contract_factory.py` for reference substrates |
+
+---
 
 ## Milestone summary
 
