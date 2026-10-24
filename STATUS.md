@@ -20,9 +20,9 @@
 | **v0.4-M0 Plan** | **green** | `docs/v0.4/PLAN.md` — soak, perf budgets, security fuzz |
 | **v0.4-M1 Soak** | **green** | Multi-window harness; GC proxy; traces reconstructible |
 | **v0.4-M2 Perf budgets** | **green** | Budgets in PERF.md; blocking perf:* gates |
-| **v0.4-M3 Security fuzz** | pending | Trust-model / fault-matrix fuzz |
+| **v0.4-M3 Security fuzz** | **green** | Malformed/forge/byzantine/capability/justification |
 
-**Full suite (default):** 103+ passed after v0.4-M1 (slow deselected).
+**Full suite (default):** 115 passed (2 slow deselected) after v0.4-M3.
 
 **Plans:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md) · [docs/v0.4/PLAN.md](docs/v0.4/PLAN.md)
 
@@ -137,6 +137,7 @@ See `docs/v0.4/PLAN.md`. Order is fixed: M0 → M1 Soak → M2 Perf → M3 Secur
 | IMP-18 | v0.4 plan | Documented optimal order; neuromorphic/BFT/NAS/molecular stay OOS unless thin-gated |
 | IMP-19 | Workspace GC | `binding_count` + `gc_ephemeral`; protects hormone_state/immune_decision + affects_control |
 | IMP-20 | Perf budgets | Headroom budgets (~50–100× baseline); blocking on this box |
+| IMP-21 | Security harden | Immune forgery reject; out-of-scope read raise; validate_control_binding |
 
 ### Still OOS (carry from E.8)
 Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substrates — research-tier / hardware-gated only.
@@ -150,3 +151,14 @@ Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substr
 - `docs/v0.4/PERF.md` + `harness/scenarios/v04_perf.py`
 - Gates: `perf:router`, `perf:workspace`, `perf:hormone`, `perf:degradation` (blocking)
 - Router p95 ≤5ms; workspace bind/query/unbind; hormone publish; virtual degrade confirm
+
+### v0.4-M3 (landed)
+- Malformed contracts → ERROR / RegistrationRejected
+- Untrusted control_actuation without justification → JustificationMissing
+- Byzantine strikes → L4 + DegradedDispatchPlan (T0 only)
+- Capability-scope write reject + read raise on foreign tags
+- Immune quarantine forgery rejected without FULL/affects_control/immune_layer
+- Fixed-seed fuzz: `fuzz_malformed_contracts`, `fuzz_immune_forgeries`
+
+### v0.4 complete (M0–M3)
+Hardening path green. Still OOS: real neuromorphic silicon, full BFT cluster, live NAS, molecular substrates.

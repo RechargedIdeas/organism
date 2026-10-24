@@ -189,3 +189,19 @@ class ImmuneLayer:
     def deregister(self, *_a: Any, **_k: Any) -> None:
         self._direct_lifecycle_calls += 1
         raise PermissionError("IM-2: ImmuneLayer must not call registry lifecycle APIs")
+
+
+def validate_control_binding(rec: BindingRecord) -> bool:
+    """Return True iff binding is a trustworthy immune control decision (IMP-21)."""
+    if "immune_decision" not in rec.tags and not any(
+        t.startswith("immune_decision/") for t in rec.tags
+    ):
+        return False
+    return (
+        rec.module_id == IMMUNE_MODULE_ID
+        and rec.fidelity == "FULL"
+        and rec.affects_control
+        and rec.salience >= 1.0
+        and isinstance(rec.payload, dict)
+        and rec.payload.get("safety", {}).get("affects_control") is True
+    )

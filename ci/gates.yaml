@@ -197,3 +197,8 @@ category_bio:
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_soak.py -m 'not slow'"
 
+  - id: v04:security_fuzz
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_security_fuzz.py"
+
