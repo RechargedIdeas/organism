@@ -18,11 +18,11 @@
 | **v0.3-M3** Multi-node + federated oxytocin | **green** | In-process nodes; lag SLO; oxytocin quorum; single-device default |
 | **v0.3-M4** SNN sentinel | **green** | Registers; hardware-gated; simulated spike wake escalates router |
 | **v0.4-M0 Plan** | **green** | `docs/v0.4/PLAN.md` — soak, perf budgets, security fuzz |
-| **v0.4-M1 Soak** | pending | Multi-window stability harness |
+| **v0.4-M1 Soak** | **green** | Multi-window harness; GC proxy; traces reconstructible |
 | **v0.4-M2 Perf budgets** | pending | Router/workspace/hormone/degradation SLOs |
 | **v0.4-M3 Security fuzz** | pending | Trust-model / fault-matrix fuzz |
 
-**Full suite (default):** 101 passed (1 slow deselected) after v0.3-M4; v0.4 opening.
+**Full suite (default):** 103+ passed after v0.4-M1 (slow deselected).
 
 **Plans:** [docs/v0.3/PLAN.md](docs/v0.3/PLAN.md) · [docs/v0.4/PLAN.md](docs/v0.4/PLAN.md)
 
@@ -135,6 +135,12 @@ See `docs/v0.4/PLAN.md`. Order is fixed: M0 → M1 Soak → M2 Perf → M3 Secur
 | ID | Topic | Resolution |
 |---|---|---|
 | IMP-18 | v0.4 plan | Documented optimal order; neuromorphic/BFT/NAS/molecular stay OOS unless thin-gated |
+| IMP-19 | Workspace GC | `binding_count` + `gc_ephemeral`; protects hormone_state/immune_decision + affects_control |
 
 ### Still OOS (carry from E.8)
 Real neuromorphic silicon, full BFT cluster, live NAS, molecular/physical substrates — research-tier / hardware-gated only.
+
+### v0.4-M1 (landed)
+- `harness/scenarios/v04_soak.py`: register → route → hormone windows → degrade pulse → GC
+- Fast CI soak (24–40 simulated windows); `ORGANISM_SOAK_FULL=1` extended soak
+- Asserts: no flapping; hormone_state queryable; binding_count bounded; routing traces ≥ plans

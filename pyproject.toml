@@ -47,6 +47,6 @@ asyncio_mode = "auto"
 testpaths = ["tests", "modules", "harness", "sdk/python/tests"]
 pythonpath = ["sdk/python", "modules"]
 markers = [
-    "slow: full wall-clock SLO (~480s); opt-in via ORGANISM_WALL_CLOCK_FULL=1",
+    "slow: full wall-clock SLO or extended soak; opt-in via ORGANISM_WALL_CLOCK_FULL=1 / ORGANISM_SOAK_FULL=1",
 ]
 

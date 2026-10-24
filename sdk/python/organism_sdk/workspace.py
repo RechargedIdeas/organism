@@ -169,7 +169,54 @@ class WorkspaceClient:
         )
         return results
 
+    @property
+    def binding_count(self) -> int:
+        """Memory-growth proxy for soak / GC pressure (IMP-19)."""
+        with self._lock:
+            return len(self._bindings)
+
+    def gc_ephemeral(
+        self,
+        *,
+        max_bindings: int,
+        protect_tags: tuple[str, ...] = ("hormone_state", "immune_decision"),
+    ) -> int:
+        """Unbind oldest non-affects_control bindings until at/under max_bindings.
+
+        Never drops FULL/affects_control control bindings or protected tags.
+        Returns number of bindings removed.
+        """
+        protect = set(protect_tags)
+        removed = 0
+        with self._lock:
+            if len(self._bindings) <= max_bindings:
+                return 0
+            candidates = sorted(
+                (
+                    b
+                    for b in self._bindings.values()
+                    if not b.affects_control and not (set(b.tags) & protect)
+                ),
+                key=lambda b: b.created_at,
+            )
+            for b in candidates:
+                if len(self._bindings) <= max_bindings:
+                    break
+                self._bindings.pop(b.binding_id, None)
+                removed += 1
+                self._seq += 1
+        if removed:
+            self._trace.emit_workspace(
+                WorkspaceTraceEntry(
+                    operation="gc_ephemeral",
+                    batch_id=f"gc-{removed}",
+                    accepted=removed,
+                )
+            )
+        return removed
+
     def unbind(self, binding_id: UUID) -> BindingRecord | None:
+
         """Remove binding; return prior record. Exact inverse of write for that id."""
         with self._lock:
             prior = self._bindings.pop(binding_id, None)
