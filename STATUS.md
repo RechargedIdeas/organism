@@ -15,7 +15,7 @@ See [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md). Order: A → H; do not skip.
 | **B** Substrate ecology | **green** | kernel, hdc, reservoir, energy_hopfield, spectral, neurosymbolic — 8 new tests |
 | **C** Learned control maturity | **green** | RL-DCA train_online_loop; promote+revoke; live NAS search |
 | **D** Distributed (multi-process) | **green** | ProcessCluster; oxytocin ≥3; BFT f=1 N=4; clock skew |
-| **E** Hardware simulators | pending | `ORGANISM_NEURO_SIM=1`; physical research module |
+| **E** Hardware simulators | **green** | NEURO_SIM gate; physical_research exploration-only RESEARCH_SIM |
 | **F** Rust runtime parity | pending | router + degradation beyond stubs |
 | **G** Hardening completion | pending | freeze docs, CHANGELOG, versions 1.0.0 |
 | **H** Release v1.0.0 | pending | tag + gh release; STATUS COMPLETE |

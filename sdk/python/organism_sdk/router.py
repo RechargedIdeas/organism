@@ -206,7 +206,8 @@ class Router:
         self._hormone_bus = hormone_bus
         self._autonomic = autonomic_params or RouterExposedParams()
         # IMP-17: no neuromorphic on this box by default
-        self._available_hardware = set(available_hardware or {"NONE"})
+        from organism_sdk.neuro_sim import hardware_caps_with_sim
+        self._available_hardware = hardware_caps_with_sim(available_hardware or {"NONE"})
         self._last_sentinel_escalation: dict | None = None
 
     def set_level(self, level: Level) -> None:
@@ -219,7 +220,8 @@ class Router:
         self._hormone_bus = bus
 
     def set_available_hardware(self, caps: set[str]) -> None:
-        self._available_hardware = set(caps) | {"NONE"}
+        from organism_sdk.neuro_sim import hardware_caps_with_sim
+        self._available_hardware = hardware_caps_with_sim(caps)
 
     def escalate_from_sentinel(self, *, reason: str, spike_rate: float) -> None:
         """SNN / sentinel wake: tighten autonomic; soft L0→L1 escalate."""

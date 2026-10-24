@@ -52,6 +52,7 @@ from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
+from organism_sdk.neuro_sim import neuro_sim_enabled
 
 MODULE_ID = "snn_sentinel"
 MODULE_VERSION = "0.3.0"
@@ -74,11 +75,15 @@ class SNNSentinel(OrganismModule):
         *,
         workspace: WorkspaceClient | None = None,
         spike_threshold_hz: float = 100.0,
-        hardware_present: bool = False,
+        hardware_present: bool | None = None,
     ) -> None:
         self._ws = workspace
         self._spikes = SpikeState(threshold_hz=spike_threshold_hz)
-        self.hardware_present = hardware_present
+        # ORGANISM_NEURO_SIM=1 => treat as present (RESEARCH_SIM); explicit False wins
+        if hardware_present is None:
+            hardware_present = neuro_sim_enabled()
+        self.hardware_present = bool(hardware_present)
+        self.research_sim = neuro_sim_enabled()
         self._status = "HEALTHY"
 
     def declare_contract(self) -> SubstrateContract:
@@ -197,6 +202,7 @@ class SNNSentinel(OrganismModule):
                 "at": datetime.now(timezone.utc).isoformat(),
                 "simulated": True,
                 "hardware_present": self.hardware_present,
+                "research_sim": self.research_sim,
             },
             affects_control=False,  # wake is advisory until router escalates
         )
