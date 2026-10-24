@@ -59,7 +59,7 @@ gates:
   - id: v02:autonomic_apoptosis
     blocking: true
     status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_autonomic_apoptosis_i.py"
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_autonomic_apoptosis_i.py sdk/python/tests/test_v02_apoptosis_n45.py"
 
   - id: v02:morphogenesis_circadian
     blocking: true
@@ -71,6 +71,11 @@ gates:
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_harness_scenarios.py"
 
+  - id: v02:stubs_gates
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_stubs_gates.py"
+
 category_i:
   - id: e5_1b_wall_clock_fast
     status: green
@@ -80,15 +85,69 @@ category_i:
 category_bio:
   - id: J1
     status: green
+  - id: J2
+    status: green
+  - id: J3
+    status: green
+  - id: J4
+    status: green
   - id: K1
+    status: green
+  - id: K2
+    status: green
+  - id: K3
+    status: green
+  - id: K4
+    status: green
+  - id: K5
+    status: green
+  - id: K6
     status: green
   - id: L1
     status: green
+  - id: L2
+    status: green
+  - id: L3
+    status: green
+  - id: L4
+    status: green
+  - id: L5
+    status: green
+  - id: L6
+    status: green
   - id: M1
+    status: green
+  - id: M2
+    status: green
+  - id: M3
+    status: green
+  - id: M4
+    status: green
+  - id: N1
     status: green
   - id: N2
     status: green
+  - id: N3
+    status: green
+  - id: N4
+    status: green
+  - id: N5
+    status: green
   - id: O1
     status: green
+  - id: O2
+    status: green
+  - id: O3
+    status: green
   - id: O4
+    status: green
+  - id: O5
+    status: green
+  - id: LEARNED_ISE
+    status: green
+  - id: FED_OXYTOCIN
+    status: green
+  - id: MIRROR_LAG_OOS
+    status: green
+  - id: METAMODEL_OOS
     status: green

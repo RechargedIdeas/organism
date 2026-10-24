@@ -13,11 +13,15 @@
 | Wall-clock fast / `perf:slo` | **green** | Opt-in full 480s unchanged |
 | **v0.2 G** HormoneBus + ISE | **green** | Workspace SoT; bus mirror; `emit_hormone` real |
 | **v0.2 H** ImmuneLayer | **green** | FULL/affects_control bindings only; `emit_immune` |
-| **v0.2 I** Autonomic + Apoptosis | **green** | Param modulation; SELF_TERMINATING/SUCCEEDED/DEVELOPMENT |
+| **v0.2 I** Autonomic + Apoptosis | **green** | Param modulation; SELF_TERMINATING/SUCCEEDED/DEVELOPMENT; N4/N5 |
 | **v0.2 J** Circadian / morphogenesis / metabolism | **green** | Stubs + rest-cycle exploration gate |
-| **F J–O subset** | **green** | J1,K1,L1,M1,N2,O1,O4 runnable |
+| **F J–O full matrix** | **green** | J1–J4, K1–K6, L1–L6, M1–M4, N1–N5, O1–O5 runnable |
+| Learned ISE / RL-DCA stub | **green** | Updateable + promotion gate; control path blocked until promote |
+| Federated oxytocin | **green** | Fail-closed single-node stub (E.8) |
+| Multi-node mirror lag | **green** | OOS gate test; no cluster |
+| Metamodel reproductive | **green** | Disabled; synthesizer raises `MetamodelDisabled` |
 
-**Full suite (default):** `PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/contract sdk/python/tests modules/*/tests tests/integration -m 'not slow'` → **73 passed** (1 slow deselected).
+**Full suite (default):** `PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/contract sdk/python/tests modules/*/tests tests/integration -m 'not slow'` → **81 passed** (1 slow deselected).
 
 ---
 
@@ -29,21 +33,25 @@ Structural answers from `docs/v0.2/STRUCTURAL_ANSWERS.md` adopted exactly.
 |---|---|---|
 | HormoneBus | `organism_sdk/hormone.py` | `emit_hormone` + Decision Trace `rationale.hormone` |
 | ISE | `organism_sdk/interoceptive.py` | workspace `interoceptive_state` |
+| Learned ISE | `organism_sdk/learned_ise.py` | promotion gate; not control-path until promote |
 | ImmuneLayer | `organism_sdk/immune.py` | `emit_immune` + `immune_decision` bindings |
 | AutonomicController | `organism_sdk/autonomic.py` | `emit_autonomic`; router `set_autonomic_params` |
-| Apoptosis | `organism_sdk/apoptosis.py` | DeathCertificate bindings; AP-1..5 |
+| Apoptosis | `organism_sdk/apoptosis.py` | DeathCertificate; N4 synthetic drain; N5 shadow-validate |
 | CircadianClock | `organism_sdk/circadian.py` | exploration_budget gate |
-| Morphogenesis | `organism_sdk/morphogenesis.py` | DEVELOPMENT ⊂ EXPLORATION |
+| Morphogenesis | `organism_sdk/morphogenesis.py` | DEVELOPMENT ⊂ EXPLORATION; O2/O3 helpers |
+| FederationGate | `organism_sdk/federation.py` | Fail-closed FED_OXYTOCIN / MIRROR_LAG |
+| MetamodelTracker | `organism_sdk/metamodel.py` | Reproductive path disabled (E.8) |
 | Kleiber share | `kleiber_declared_share` | O5 inefficiency flag |
 
 ### Invariants enforced in tests
-- G/K: SoT write → mirror consistency; staleness_ms; workspace fallback; shield non-override
-- H/L: FULL + affects_control; no `deregister`; memory hit; cortisol → quarantine
-- I/M/N: router sole dispatcher; T0 never self-terminates; control-affecting needs successor
-- J/O: stage fail retains prior; rest suppressed in crisis; circadian scales exploration
+- G/K: SoT write → mirror consistency; staleness_ms; workspace fallback + diagnosis; shield non-override
+- H/L: FULL + affects_control; no `deregister`; memory hit; cortisol → quarantine; replay
+- I/M/N: router sole dispatcher; T0 never self-terminates; control-affecting needs successor; drain-killed → synthetic lifecycle (no silent SUCCEEDED); shadow-validate fail blocks promotion
+- J/O: stage fail retains prior; DEVELOPMENT holds control_actuation; rest suppressed in crisis; Kleiber inefficiency flag
+- Stubs: learned ISE blocked pre-promotion; federated oxytocin / multi-node lag raise `FederationUnsupported`; metamodel `synthesize` raises `MetamodelDisabled`
 
 ### Proto (additive)
-`ModuleLifecycleState` += `SELF_TERMINATING`, `SUCCEEDED`, `DEVELOPMENT`, `DEGRADED` (values 8–11). Proto regen green (`grpc_tools.protoc` + `cargo build -p organism-proto`; `make` optional when available).
+`ModuleLifecycleState` += `SELF_TERMINATING`, `SUCCEEDED`, `DEVELOPMENT`, `DEGRADED` (values 8–11). Proto regen green.
 
 ### Amendments (IMP-*)
 | ID | Topic | Resolution |
@@ -52,18 +60,22 @@ Structural answers from `docs/v0.2/STRUCTURAL_ANSWERS.md` adopted exactly.
 | IMP-8 | BindingRecord payload / affects_control | Additive fields for hormone/immune/death cert payloads; snapshot serialize |
 | IMP-9 | `Lifecycle.self_termination_permitted` | Python contract field; proto Lifecycle message unchanged this cut |
 | IMP-10 | `Hypervector.random(seed=)` | Deterministic HV for organs/tests |
+| IMP-11 | `LifecycleTraceEntry.on_drain_*` | Additive drain outcome + synthetic flag for N4 |
+| IMP-12 | Apoptosis N4/N5 | Drain-killed mid-export; `shadow_validate_successor` + `promote_successor` |
 
 ### Gates
-`ci/gates.yaml`: `v02:hormone`, `v02:immune`, `v02:autonomic_apoptosis`, `v02:morphogenesis_circadian`, `v02:harness_jo` — **blocking: true**, status green. `category_bio` J1/K1/L1/M1/N2/O1/O4 green.
+`ci/gates.yaml`: `v02:hormone`, `v02:immune`, `v02:autonomic_apoptosis`, `v02:morphogenesis_circadian`, `v02:harness_jo`, `v02:stubs_gates` — **blocking: true**, status green.
 
-### Remaining gaps (clean boundaries)
-- Full Category K3–K6 / L3–L6 / M2–M4 / N1/N4/N5 / O2–O5 beyond subset (partially covered in unit tests; not all harness IDs)
-- Hormone consensus / federated oxytocin
-- Learned ISE / RL-DCA
-- Full HormoneBus multi-node mirror lag simulation
-- DeathCertificate successor shadow-validate promotion path (API present; limited scenarios)
-- Metamodel developmental synthesizer (tracker only)
-- Distributed / SNN hardware paths still E.8 out of scope
+`category_bio`: **J1–J4, K1–K6, L1–L6, M1–M4, N1–N5, O1–O5**, LEARNED_ISE, FED_OXYTOCIN, MIRROR_LAG_OOS, METAMODEL_OOS — all **green**.
+
+### Remaining deferred (clean E.8 / docs boundaries)
+- **Distributed Organism** (cluster, BFT, state replication, clock sync) — E.8; federation stubs fail closed
+- **Full federated oxytocin consensus** — requires Distributed; stub only
+- **Real multi-node HormoneBus mirror lag cluster** — OOS gate only
+- **Learned ISE replacing T0 `f(H)` in production** — stub + promotion hooks only; not deployed on control path by default
+- **RL-DCA online training loop** — thin weight nudge stub; full DCA training deferred (H.out-of-scope)
+- **Metamodel reproductive synthesizer** — disabled; E.8 until corpus opens it
+- **SNN hardware paths / physical substrates** — E.8
 
 ### Tooling
 ```bash
