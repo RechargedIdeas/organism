@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "organism"
-version = "1.2.0"
+version = "1.3.0"
 description = "Organism — homeostatic computational ecology substrate"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -48,5 +48,6 @@ testpaths = ["tests", "modules", "harness", "sdk/python/tests"]
 pythonpath = ["sdk/python", "modules"]
 markers = [
     "slow: full wall-clock SLO or extended soak; opt-in via ORGANISM_WALL_CLOCK_FULL=1 / ORGANISM_SOAK_FULL=1",
+    "cpu_everywhere: CPU fallback / no-accelerator product guarantee",
 ]
 

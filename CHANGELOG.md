@@ -3,6 +3,32 @@
 All notable changes to Organism are documented here.  
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md` (additive integrations in 1.x).
 
+## [1.3.0] — 2026-10-24
+
+### Added
+- **CPU Everywhere** product guarantee — every RESEARCH_SIM / GPU-labelled workload
+  runs on `CPU_GENERAL` when accelerators are absent (`docs/CPU_EVERYWHERE.md`).
+- `organism_sdk.device` — `RuntimeId`, `select_compute_backend`, `resolve_requires_gpu`,
+  `CPU_HOSTABLE_HARDWARE`; never hard-fails on missing GPU/CUDA/torch.
+- Bio wave twin **NumPy** backend (`numpy_cpu`) — same diffusion math as torch path.
+- Blocking CI gate **`cpu:everywhere`**.
+- `neuromorphic_cpu_backend()` on `neuro_sim`.
+
+### Changed
+- Package / SDK / bio module versions **1.3.0**.
+- Default wave twin backend is `numpy_cpu` (not HAL stub).
+- `ORGANISM_BIO_GPU_TWIN=1` without torch/CUDA runs NumPy wave (no pytest skip).
+
+### Removed
+- Torch-missing **skip** in default GPU twin tests (converted to CPU assertions).
+
+### Security / safety
+- Bio modules remain `may_actuate=False`.
+- Twin / telemetry still `affects_control=False`.
+
+### Test baseline
+Default suite: _(filled after run)_.
+
 ## [1.2.0] — 2026-10-24
 
 ### Added

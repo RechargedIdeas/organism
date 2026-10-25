@@ -1,9 +1,10 @@
 """snn_sentinel — T1 SENTINEL with NEUROMORPHIC hardware requirement (v0.3-M4).
 
 Corpus rule: on boxes without neuromorphic silicon the module may register
-but must not be dispatched on the production control path. Simulated
-spike-rate crossing threshold emits an event-driven wake into the workspace
-and can escalate the router (cross-check / soft level).
+but must not be dispatched on the production control path unless
+NEUROMORPHIC is available (or ORGANISM_NEURO_SIM=1). The spike-rate simulator
+itself always runs on CPU (v1.3 CPU Everywhere). Crossing threshold emits an
+event-driven wake into the workspace and can escalate the router.
 """
 from __future__ import annotations
 

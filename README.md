@@ -8,11 +8,12 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.2.0** — Live Hybrid import, telemetry bridge, hypervisor drill, optional GPU twin |
+| **Release** | **v1.3.0** — CPU Everywhere (GPU workloads fall back to CPU) |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
 | **Hardening** | [docs/v1.0/HARDENING.md](docs/v1.0/HARDENING.md) |
+| **CPU Everywhere** | [docs/CPU_EVERYWHERE.md](docs/CPU_EVERYWHERE.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Implementation** | [STATUS.md](STATUS.md) |
 
@@ -35,6 +36,7 @@ Opt-in longer / sim runs:
 ORGANISM_WALL_CLOCK_FULL=1 ...   # Category I ~480s
 ORGANISM_SOAK_FULL=1 ...         # extended soak
 ORGANISM_NEURO_SIM=1 ...         # neuromorphic RESEARCH_SIM
+ORGANISM_BIO_GPU_TWIN=1 ...      # prefer GPU twin; CPU fallback automatic
 ```
 
 ## Repository structure

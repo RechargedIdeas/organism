@@ -34,7 +34,7 @@ from bio_digital.limits import PHYSARUM_LIMITS, PHYSARUM_LOGIC_VOLTAGE, SPECIES_
 from bio_digital.vendor_loader import load_hybrid
 
 MODULE_ID = "bio_digital.slime_mold"
-MODULE_VERSION = "1.2.0"
+MODULE_VERSION = "1.3.0"
 FMT = "typed-json:bio-slime/v1"
 
 BackendKind = Literal["stub", "live"]

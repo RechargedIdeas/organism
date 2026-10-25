@@ -228,3 +228,8 @@ category_bio:
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/bio_digital/tests/test_hypervisor_drill.py harness/scenarios/v12_hypervisor_drill.py"
 
+  - id: cpu:everywhere
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_cpu_everywhere.py modules/bio_digital/tests/test_gpu_twin.py"
+

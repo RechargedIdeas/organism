@@ -11,3 +11,9 @@
 ## Physical / molecular
 
 Physical, molecular, and wetware substrates remain **research-tier documentation only**. They must not appear on the control or actuation path in v0.3.
+
+## v1.3 — CPU Everywhere
+
+All RESEARCH_SIM and software-sim workloads (including GPU-labelled bio wave twin
+and neuromorphic spike sim) run on `CPU_GENERAL` when accelerators are absent.
+See `docs/CPU_EVERYWHERE.md`. Preferring GPU never hard-fails the process.

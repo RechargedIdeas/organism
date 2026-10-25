@@ -1,4 +1,4 @@
-"""Bio-Digital Hybrid Cluster adapters for Organism (v1.2).
+"""Bio-Digital Hybrid Cluster adapters for Organism (v1.3).
 
 Maps Physarum / Mycelium RESEARCH_TIER substrates from
 https://github.com/Recharged-Ideas/Bio-Digital_Hybrid_Cluster
@@ -17,7 +17,7 @@ from bio_digital.twin_bridge import TwinBridge
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
 from bio_digital.vendor_loader import load_hybrid, resolve_hybrid_root, hybrid_root_present
 from bio_digital.telemetry_bridge import TelemetryBridge, NodeStatusView, EnvironmentStateView
-from bio_digital.gpu_twin import GpuTwinSimulator, torch_available, gpu_twin_enabled
+from bio_digital.gpu_twin import GpuTwinSimulator, torch_available, gpu_twin_enabled, run_numpy_wave
 
 __all__ = [
     "SlimeMoldModule",
@@ -41,4 +41,5 @@ __all__ = [
     "GpuTwinSimulator",
     "torch_available",
     "gpu_twin_enabled",
+    "run_numpy_wave",
 ]
