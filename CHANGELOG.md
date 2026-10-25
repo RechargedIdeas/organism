@@ -1,3 +1,31 @@
+## [1.7.1] — 2026-10-24
+
+### Added / Hardened
+- **Generative code production**: richer template library; `GeneratorBackend`
+  protocol; replayable drafts (`DraftReplayLog`); expanded AST forbid list;
+  shadow scoring metrics; `rollback_last_promote`; concurrent-safe
+  `ArtifactStore` (atomic writes + content-hash verify).
+- **Asset pipeline**: multi-asset packs (avatar + theme + icon); content-hash
+  integrity; Desktop preview bytes/text; reject oversized/malformed; theme
+  contrast checks (≥ 3.0).
+- **Skills**: pack versioning + history; dependency DAG with cycle refusal;
+  `improve_from_trace` via evolution_log; promote requires shadow threshold.
+- **Desktop Evolution panel**: pipeline stage progress, rollback button, asset
+  preview, skill DAG view, Improve from trace, looks **pack** kind.
+- **Gates**: `v17:generative` covers fuzz of unsafe code drafts (must refuse).
+- Docs: production ops notes in `ORGANISM_GENERATIVE_EVOLUTION.md`.
+
+### Safety
+- Bio `may_actuate=False` unchanged; sandbox/promote refusals hardened.
+- Naming remains **Organism** only (not Sophont).
+- No Hybrid Studio; CPU Everywhere.
+
+### Changed
+- Package / SDK / Desktop / generative module versions **1.7.1**.
+
+### Test baseline
+Default suite: **313 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.7.0] — 2026-10-24
 
 ### Added

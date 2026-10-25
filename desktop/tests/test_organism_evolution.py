@@ -1,4 +1,4 @@
-"""v1.7 Organism Evolution Desktop surfaces."""
+"""v1.7 / v1.7.1 Organism Evolution Desktop surfaces."""
 from __future__ import annotations
 
 import os
@@ -28,7 +28,7 @@ def test_nav_includes_organism():
 
 
 def test_service_evolution_roundtrip():
-    assert DESKTOP_VERSION == "1.7.0"
+    assert DESKTOP_VERSION == "1.7.1"
     svc = DesktopService.create()
     snap = svc.organism_snapshot()
     assert snap["organism_id"]
@@ -52,6 +52,30 @@ def test_service_evolution_roundtrip():
     assert "sophont" not in snap["organism_id"].lower()
 
 
+def test_service_rollback_pack_dag_preview():
+    svc = DesktopService.create()
+    a = svc.evolve_organism_code("rollback A", auto_promote=True)
+    b = svc.evolve_organism_code("rollback B", auto_promote=True)
+    assert b["bundle"]["may_control"] is True
+    rb = svc.rollback_organism_code()
+    assert rb["bundle"]["stage"] == "ROLLBACK"
+    assert rb["bundle"]["may_control"] is False
+    prog = svc.code_stage_progress(a["bundle"]["bundle_id"])
+    assert prog["stage"] == "PROMOTED"
+    pack = svc.evolve_organism_looks_pack("desktop pack Organism")
+    assert pack["ok"]
+    assert pack["appearance"]["pack_id"]
+    aid = pack["appearance"]["avatar_id"]
+    prev = svc.organism_asset_preview(aid)
+    assert prev["preview_text"]
+    skill = svc.evolve_organism_skill("dag_base", intent="base", auto_promote=False)
+    svc.promote_organism_skill(skill["skill"]["skill_id"])
+    improved = svc.improve_organism_skill_from_trace(skill["skill"]["skill_id"])
+    assert improved["ok"]
+    dag = svc.organism_skill_dag()
+    assert "nodes" in dag and "edges" in dag
+
+
 def test_organism_panel_qt(qapp):
     svc = DesktopService.create()
     win = MainWindow(svc)
@@ -68,9 +92,19 @@ def test_organism_panel_qt(qapp):
     panel._code_draft()
     qapp.processEvents()
     assert svc.list_code_bundles()
+    # promote then rollback via panel
+    bundles = svc.list_code_bundles()
+    ready = [b for b in bundles if (b.get("gate") or {}).get("ready")]
+    if ready:
+        # select first row by promoting via service then panel rollback
+        svc.promote_organism_code(ready[0]["bundle_id"])
+    panel._code_rollback()
+    qapp.processEvents()
     panel.refresh()
     assert panel.skills_table.rowCount() >= 1
     assert panel.log_table.rowCount() >= 1
+    assert panel.stage_bar.value() >= 0
+    assert panel.skill_dag.toPlainText()
 
 
 def test_catalog_generative_register():

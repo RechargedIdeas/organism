@@ -1,7 +1,7 @@
-# Organism Desktop — v1.7
+# Organism Desktop — v1.7 / v1.7.1
 
-**Release:** v1.7.0 · **Panels:** 13  
-**New:** Organism Evolution (skills / looks / code promotions / evolution log)
+**Release:** v1.7.1 · **Panels:** 13  
+**Organism Evolution:** skills (DAG + from-trace) / looks (pack + preview) / code (stage progress + rollback) / evolution log
 
 See [ORGANISM_GENERATIVE_EVOLUTION.md](ORGANISM_GENERATIVE_EVOLUTION.md).
 

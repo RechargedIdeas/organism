@@ -17,11 +17,13 @@ EvolutionKind = Literal[
     "code_draft",
     "code_promote",
     "code_demote",
+    "code_rollback",
     "skill_generate",
     "skill_improve",
     "skill_promote",
     "looks_generate",
     "looks_apply",
+    "looks_pack",
     "metamodel_attach",
     "note",
 ]
@@ -165,7 +167,9 @@ class OrganismStore:
                     "stage": bundle.get("stage"),
                     "may_control": bundle.get("may_control"),
                     "shadow_score": bundle.get("shadow_score"),
+                    "shadow_metrics": bundle.get("shadow_metrics"),
                     "backend": bundle.get("backend"),
+                    "stage_progress": bundle.get("stage_progress"),
                     "at": datetime.now(timezone.utc).isoformat(),
                 }
             )

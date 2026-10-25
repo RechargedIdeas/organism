@@ -259,3 +259,9 @@ category_bio:
     blocking: true
     status: green
     command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_organism_evolution.py desktop/tests/test_nav.py desktop/tests/test_v15_gate.py"
+
+
+  - id: v17:generative_fuzz
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v17_generative.py -k fuzz_unsafe"

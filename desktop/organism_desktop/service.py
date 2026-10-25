@@ -29,11 +29,13 @@ from organism_sdk.generative import (
     ArtifactStore,
     AssetPipeline,
     CodePipeline,
+    DraftReplayLog,
     LLMStubBackend,
     OrganismStore,
     PromoteRefused,
     SkillRegistry,
     TemplateDraftBackend,
+    resolve_backend,
 )
 from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
@@ -48,7 +50,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.7.0"
+DESKTOP_VERSION = "1.7.1"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -184,7 +186,8 @@ class DesktopService:
         root = self._repo_root / "organism_data"
         art = ArtifactStore(root / "artifacts")
         self.artifact_store = art
-        self.code_pipeline = CodePipeline(art)
+        replay = DraftReplayLog(root / "artifacts" / "draft_replay.json")
+        self.code_pipeline = CodePipeline(art, replay_log=replay)
         self.asset_pipeline = AssetPipeline(art, assets_root=root / "assets")
         self.skill_registry = SkillRegistry(art)
         self.organism_store = OrganismStore(root / "organisms")
@@ -1810,7 +1813,7 @@ class DesktopService:
         self._require_generative()
         assert self.code_pipeline and self.organism_store
         profile = self.organism_store.ensure_default()
-        be = LLMStubBackend() if backend == "llm_stub" else TemplateDraftBackend()
+        be = resolve_backend(backend)
         bundle = self.code_pipeline.evolve(
             intent,
             spec={"skill_name": "organism_code", "may_actuate": False},
@@ -1866,6 +1869,86 @@ class DesktopService:
         out = {"ok": True, "bundle": bundle.as_dict()}
         self._last_organism_action = out
         return out
+
+
+    def rollback_organism_code(self, *, reason: str = "desktop_rollback") -> dict:
+        self._require_generative()
+        assert self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        try:
+            bundle = self.code_pipeline.rollback_last_promote(reason=reason)
+        except PromoteRefused as e:
+            raise ActuationRefused(f"REFUSE rollback: {e}") from e
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "code_rollback",
+            f"Rolled back code bundle {bundle.bundle_id}",
+            payload={"bundle_id": bundle.bundle_id, "reason": reason},
+        )
+        out = {"ok": True, "bundle": bundle.as_dict()}
+        self._last_organism_action = out
+        return out
+
+    def code_stage_progress(self, bundle_id: str) -> dict:
+        self._require_generative()
+        assert self.code_pipeline is not None
+        return self.code_pipeline.stage_progress_summary(bundle_id)
+
+    def organism_skill_dag(self) -> dict:
+        self._require_generative()
+        assert self.skill_registry is not None
+        return self.skill_registry.dependency_dag()
+
+    def improve_organism_skill_from_trace(self, skill_id: str, *, auto_promote: bool = False) -> dict:
+        self._require_generative()
+        assert self.skill_registry and self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        # refresh profile for latest log
+        profile = self.organism_store.get(profile.organism_id) or profile
+        skill, bundle = self.skill_registry.improve_from_trace(
+            skill_id,
+            evolution_log=list(profile.evolution_log),
+            code_pipeline=self.code_pipeline,
+            auto_promote=auto_promote,
+        )
+        self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "skill_improve",
+            f"Improved skill {skill_id} from evolution_log → {bundle.stage.value}",
+            payload={"skill_id": skill.skill_id, "bundle_id": bundle.bundle_id, "version": skill.version},
+        )
+        out = {
+            "ok": bundle.stage.value != "REJECTED",
+            "skill": skill.as_dict(),
+            "bundle": bundle.as_dict(),
+            "gate_ready": bundle.gate.ready() or bundle.may_control,
+        }
+        self._last_organism_action = out
+        return out
+
+    def evolve_organism_looks_pack(self, brief: str) -> dict:
+        self._require_generative()
+        assert self.asset_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        result = self.asset_pipeline.evolve_pack(brief)
+        if result.get("ok"):
+            self.organism_store.sync_appearance(profile.organism_id, self.asset_pipeline.appearance)
+            self.organism_store.log(
+                profile.organism_id,
+                "looks_pack",
+                "Applied multi-asset looks pack",
+                payload=result.get("appearance") or {},
+            )
+        self._last_organism_action = result
+        return result
+
+    def organism_asset_preview(self, asset_id: str) -> dict:
+        self._require_generative()
+        assert self.asset_pipeline is not None
+        return self.asset_pipeline.preview_for_desktop(asset_id)
 
     def docs_links(self) -> list[dict[str, str]]:
         root = self._repo_root / "docs"

@@ -21,13 +21,29 @@ _ALLOWED_NODES = (
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
     ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn,
-    ast.comprehension, ast.keyword,
+    ast.comprehension, ast.keyword, ast.IfExp, ast.JoinedStr, ast.FormattedValue,
 )
 
+# Expanded AST forbid list (v1.7.1) — names that must never appear in drafts.
 _FORBIDDEN_NAMES = {
     "os", "sys", "subprocess", "socket", "pathlib", "shutil", "ctypes",
     "importlib", "builtins", "eval", "exec", "open", "compile", "__import__",
     "input", "breakpoint", "memoryview", "globals", "locals", "vars",
+    "getattr", "setattr", "delattr", "hasattr",
+    "classmethod", "staticmethod", "property",
+    "type", "object", "super",
+    "pickle", "marshal", "shelve", "tempfile", "io", "codecs",
+    "asyncio", "threading", "multiprocessing", "concurrent",
+    "requests", "urllib", "http", "ftplib", "smtplib",
+    "pty", "fcntl", "resource", "signal", "ctypes",
+    "code", "codeop", "inspect", "gc", "sysconfig",
+    "may_actuate",  # never bind bio actuation flag in sandbox body
+}
+
+_FORBIDDEN_ATTRS = {
+    "__class__", "__mro__", "__subclasses__", "__bases__", "__globals__",
+    "__code__", "__builtins__", "__dict__", "__reduce__", "__reduce_ex__",
+    "system", "popen", "Popen", "call", "check_output", "run",
 }
 
 
@@ -53,12 +69,19 @@ def _jsonable(v: Any) -> bool:
 
 def _validate_ast(tree: ast.AST) -> None:
     for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            raise SandboxRefused(f"disallowed AST node: {type(node).__name__}")
+        if isinstance(node, (ast.AsyncFunctionDef, ast.Await, ast.AsyncFor, ast.AsyncWith)):
+            raise SandboxRefused(f"disallowed async node: {type(node).__name__}")
+        if isinstance(node, (ast.With, ast.Raise, ast.Try, ast.Assert, ast.Delete, ast.Global, ast.Nonlocal, ast.Lambda, ast.Yield, ast.YieldFrom, ast.ClassDef)):
+            raise SandboxRefused(f"disallowed AST node: {type(node).__name__}")
         if not isinstance(node, _ALLOWED_NODES):
             raise SandboxRefused(f"disallowed AST node: {type(node).__name__}")
         if isinstance(node, ast.Name) and node.id in _FORBIDDEN_NAMES:
             raise SandboxRefused(f"forbidden name: {node.id}")
-        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
-            raise SandboxRefused(f"forbidden attribute: {node.attr}")
+        if isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") or node.attr in _FORBIDDEN_ATTRS:
+                raise SandboxRefused(f"forbidden attribute: {node.attr}")
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id in _FORBIDDEN_NAMES:
                 raise SandboxRefused(f"forbidden call: {node.func.id}")
@@ -77,7 +100,8 @@ _SAFE_BUILTINS: dict[str, Any] = {
 class SafeSandbox:
     """Execute generative drafts under a restricted AST + builtins whitelist.
 
-    Refuses arbitrary shell, imports, file I/O, and dunder introspection.
+    Refuses arbitrary shell, imports, file I/O, dunder introspection, and
+    bio-adjacent ``may_actuate`` bindings.
     """
 
     def run(

@@ -1,13 +1,34 @@
-"""Pluggable draft backends for generative code (template + LLM stub). CPU-only."""
+"""Pluggable draft backends for generative code (template library + LLM stub). CPU-only.
+
+GeneratorBackend is the production protocol; DraftBackend remains the ABC alias
+for backwards compatibility. Drafts are replayable via DraftReplayLog.
+"""
 from __future__ import annotations
 
 import hashlib
-import textwrap
+import json
+import threading
 from abc import ABC, abstractmethod
-from typing import Any
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class GeneratorBackend(Protocol):
+    """Pluggable production protocol for generative code drafts."""
+
+    name: str
+
+    def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
+        """Return Python source for a sandboxed ``main(**kwargs)`` entrypoint."""
+        ...
 
 
 class DraftBackend(ABC):
+    """ABC form of GeneratorBackend (existing callers keep working)."""
+
     name: str = "base"
 
     @abstractmethod
@@ -15,8 +36,87 @@ class DraftBackend(ABC):
         """Return Python source for a sandboxed ``main(**kwargs)`` entrypoint."""
 
 
+# ---------------------------------------------------------------------------
+# Template library — richer, named, deterministic Organism skill stubs
+# ---------------------------------------------------------------------------
+
+_TEMPLATE_LIBRARY: dict[str, str] = {
+    "adder": """\
+# Organism generative draft — template=adder digest={digest}
+# intent: {safe_intent}
+def main(x=0.0, y=0.0, **kwargs):
+    \"\"\"Organism adder skill.\"\"\"
+    score = float(x) + float(y)
+    return {{'ok': True, 'skill': {skill!r}, 'score': score, 'digest': {digest!r}, 'template': 'adder'}}
+""",
+    "scorer": """\
+# Organism generative draft — template=scorer digest={digest}
+# intent: {safe_intent}
+def main(x=0.0, y=0.0, **kwargs):
+    \"\"\"Organism weighted scorer.\"\"\"
+    a = abs(float(x)) + abs(float(y))
+    b = a * 0.5 + len({skill!r}) * 0.01
+    return {{'ok': True, 'skill': {skill!r}, 'score': b, 'digest': {digest!r}, 'template': 'scorer'}}
+""",
+    "navigator": """\
+# Organism generative draft — template=navigator digest={digest}
+# intent: {safe_intent}
+def main(features=None, **kwargs):
+    \"\"\"Organism navigator over a feature list.\"\"\"
+    features = list(features or [0.1, 0.2, 0.3])
+    acc = 0.0
+    for i, v in enumerate(features):
+        acc = acc + float(v) * (0.05 + (i % 5) * 0.01)
+    return {{'ok': True, 'skill': {skill!r}, 'prediction': acc, 'digest': {digest!r}, 'template': 'navigator'}}
+""",
+    "filter": """\
+# Organism generative draft — template=filter digest={digest}
+# intent: {safe_intent}
+def main(values=None, threshold=0.5, **kwargs):
+    \"\"\"Organism threshold filter.\"\"\"
+    values = list(values or [0.1, 0.6, 0.9])
+    kept = [float(v) for v in values if float(v) >= float(threshold)]
+    return {{'ok': True, 'skill': {skill!r}, 'score': len(kept), 'kept': kept, 'digest': {digest!r}, 'template': 'filter'}}
+""",
+    "aggregator": """\
+# Organism generative draft — template=aggregator digest={digest}
+# intent: {safe_intent}
+def main(values=None, **kwargs):
+    \"\"\"Organism mean aggregator.\"\"\"
+    values = list(values or [1.0, 2.0, 3.0])
+    nums = [float(v) for v in values]
+    mean = sum(nums) / max(1, len(nums))
+    return {{'ok': True, 'skill': {skill!r}, 'score': mean, 'n': len(nums), 'digest': {digest!r}, 'template': 'aggregator'}}
+""",
+    "classifier": """\
+# Organism generative draft — template=classifier digest={digest}
+# intent: {safe_intent}
+def main(x=0.0, **kwargs):
+    \"\"\"Organism binary classifier stub.\"\"\"
+    score = 1.0 / (1.0 + abs(float(x)))
+    label = 'pos' if score >= 0.5 else 'neg'
+    return {{'ok': True, 'skill': {skill!r}, 'score': score, 'label': label, 'digest': {digest!r}, 'template': 'classifier'}}
+""",
+}
+
+
+def list_templates() -> list[str]:
+    return sorted(_TEMPLATE_LIBRARY)
+
+
+def _pick_template(intent: str, spec: dict[str, Any]) -> str:
+    explicit = str(spec.get("template") or "").strip().lower()
+    if explicit in _TEMPLATE_LIBRARY:
+        return explicit
+    intent_l = intent.lower()
+    for name in ("navigator", "filter", "aggregator", "classifier", "adder", "scorer"):
+        if name in intent_l or name in str(spec.get("skill_name") or "").lower():
+            return name
+    return "scorer"
+
+
 class TemplateDraftBackend(DraftBackend):
-    """Deterministic template backend — production-grade default, no network."""
+    """Deterministic template-library backend — production-grade default, no network."""
 
     name = "template"
 
@@ -25,17 +125,9 @@ class TemplateDraftBackend(DraftBackend):
         skill = str(spec.get("skill_name") or "skill")
         digest = hashlib.sha256(intent.encode()).hexdigest()[:12]
         safe_intent = intent[:200].replace("\n", " ").replace('"', "'")
-        lines = [
-            f"# Organism generative draft — backend=template digest={digest}",
-            f"# intent: {safe_intent}",
-            f"def main(x=0.0, y=0.0, **kwargs):",
-            f'    """Generated Organism skill stub for {skill}."""',
-            f"    a = float(x) + float(y)",
-            f"    b = abs(a) * 0.5 + len({skill!r}) * 0.01",
-            f"    return {{'ok': True, 'skill': {skill!r}, 'score': b, 'digest': {digest!r}}}",
-            "",
-        ]
-        return "\n".join(lines)
+        tmpl_name = _pick_template(intent, spec)
+        tmpl = _TEMPLATE_LIBRARY[tmpl_name]
+        return tmpl.format(digest=digest, safe_intent=safe_intent, skill=skill)
 
 
 class LLMStubBackend(DraftBackend):
@@ -63,3 +155,109 @@ class LLMStubBackend(DraftBackend):
             "",
         ]
         return "\n".join(lines)
+
+
+@dataclass
+class DraftReplayEntry:
+    entry_id: str
+    backend: str
+    intent: str
+    spec: dict[str, Any]
+    source: str
+    source_digest: str
+    at: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "entry_id": self.entry_id,
+            "backend": self.backend,
+            "intent": self.intent,
+            "spec": self.spec,
+            "source_digest": self.source_digest,
+            "source_lines": len(self.source.splitlines()),
+            "at": self.at,
+        }
+
+
+class DraftReplayLog:
+    """Replayable draft journal — re-emit identical source from recorded intent/spec."""
+
+    def __init__(self, path: Path | str | None = None) -> None:
+        self.path = Path(path) if path else None
+        self._entries: list[DraftReplayEntry] = []
+        self._lock = threading.RLock()
+        if self.path and self.path.is_file():
+            self._load()
+
+    def _load(self) -> None:
+        assert self.path is not None
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            for row in raw:
+                self._entries.append(
+                    DraftReplayEntry(
+                        entry_id=row["entry_id"],
+                        backend=row["backend"],
+                        intent=row["intent"],
+                        spec=row.get("spec") or {},
+                        source=row.get("source") or "",
+                        source_digest=row["source_digest"],
+                        at=row["at"],
+                    )
+                )
+        except Exception:
+            self._entries = []
+
+    def _save(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = []
+        for e in self._entries:
+            d = e.as_dict()
+            d["source"] = e.source
+            payload.append(d)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        tmp.replace(self.path)
+
+    def record(
+        self,
+        *,
+        backend: str,
+        intent: str,
+        source: str,
+        spec: dict[str, Any] | None = None,
+    ) -> DraftReplayEntry:
+        with self._lock:
+            digest = hashlib.sha256(source.encode()).hexdigest()
+            entry = DraftReplayEntry(
+                entry_id=digest[:16],
+                backend=backend,
+                intent=intent,
+                spec=dict(spec or {}),
+                source=source,
+                source_digest=digest,
+                at=datetime.now(timezone.utc).isoformat(),
+            )
+            self._entries.append(entry)
+            self._save()
+            return entry
+
+    def replay(self, entry_id: str) -> DraftReplayEntry:
+        with self._lock:
+            for e in self._entries:
+                if e.entry_id == entry_id or e.source_digest.startswith(entry_id):
+                    return e
+            raise KeyError(f"unknown draft replay entry_id={entry_id}")
+
+    def list_entries(self) -> list[dict[str, Any]]:
+        return [e.as_dict() for e in self._entries]
+
+
+def resolve_backend(name: str | None = None) -> DraftBackend:
+    """Factory for named backends (template | llm_stub)."""
+    key = (name or "template").strip().lower()
+    if key in ("llm_stub", "llm"):
+        return LLMStubBackend()
+    return TemplateDraftBackend()
