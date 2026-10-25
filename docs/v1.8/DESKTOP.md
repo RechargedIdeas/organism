@@ -3,6 +3,17 @@
 **Naming:** Organism only.  
 **Safety:** bio `may_actuate=False`; promote gates mandatory; CPU Everywhere; no Hybrid Studio.
 
+
+## New in v1.8.1
+
+1. **Bundle path feedback** — `organism_bundle_path` (editable) +
+   `organism_bundle_feedback` label; export writes the chosen path (or default
+   under `organism_data/bundles/`); import prefers the path field.
+2. **Active Organism badge** — shell header `shell_organism_badge` shows the
+   live profile display name; tinted with Organism theme accent.
+3. **Generative soak** — CI covers N evolve/promote/rollback cycles without
+   ModuleRegistry leak (offscreen-safe).
+
 ## New in v1.8.0
 
 1. **Looks → Desktop theme apply** — evolving a `theme` or `pack` updates shell accents
@@ -26,6 +37,8 @@
 | `organism_profile_combo` | Active Organism selector |
 | `organism_create` / `organism_switch` | Multi-Organism actions |
 | `organism_export_bundle` / `organism_import_bundle` | Bundle IO |
+| `organism_bundle_path` / `organism_bundle_feedback` | Bundle path + status |
+| `shell_organism_badge` | Active Organism in shell header |
 
 ## Service APIs
 

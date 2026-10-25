@@ -55,7 +55,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.8.0"
+DESKTOP_VERSION = "1.8.1"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -117,6 +117,7 @@ class DesktopService:
     organism_store: OrganismStore | None = None
     evolution_runtime: EvolutionRuntime | None = None
     _last_organism_action: dict | None = None
+    _last_bundle_path: str | None = None
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     _last_plan: DispatchPlan | None = None
@@ -2242,6 +2243,8 @@ class DesktopService:
             f"Exported Organism bundle to {result['path']}",
             payload=result.get("manifest") or {},
         )
+        self._last_bundle_path = result.get("path")
+        result["last_bundle_path"] = self._last_bundle_path
         self._last_organism_action = result
         return result
 
@@ -2257,6 +2260,8 @@ class DesktopService:
         )
         theme = self.apply_organism_theme() if result.get("ok") else None
         result["theme"] = theme
+        self._last_bundle_path = str(path)
+        result["last_bundle_path"] = self._last_bundle_path
         self._last_organism_action = result
         return result
 

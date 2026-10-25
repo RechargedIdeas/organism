@@ -20,3 +20,10 @@ payload with normalized palette and `shell_accent_qss`. Looks promote of
 
 Zip entries: `manifest.json`, `organism_profile.json`, `skills.json`,
 `appearance.json`, `assets/index.json`, `assets/<id>.body`.
+
+## v1.8.1 polish
+
+- Desktop bundle path edit/feedback round-trip.
+- `MainWindow.update_organism_badge` / `shell_organism_badge`.
+- Generative soak: evolve → promote → rollback must leave no hot-registered
+  generative modules beyond the pre-soak registry baseline.

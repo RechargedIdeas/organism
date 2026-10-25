@@ -1,3 +1,29 @@
+## [1.8.1] — 2026-10-24
+
+### Added
+- **Bundle path feedback** — Evolution panel `organism_bundle_path` +
+  `organism_bundle_feedback` show export/import path and ok/error status;
+  import reads the path field (falls back to last export / newest zip).
+- **Active Organism shell badge** — `shell_organism_badge` in the Desktop header;
+  updates on create/switch/import/refresh/theme apply (`MainWindow.update_organism_badge`).
+- **Generative soak** — N evolve → promote → rollback cycles with registry leak
+  check (service + offscreen UI); theme evolve interleaved.
+- Service tracks `_last_bundle_path` on export/import.
+
+### Fixed
+- Weak Desktop v1.8 panel assertion on `organism_profile_combo` (was always-true).
+
+### Safety
+- Bio `may_actuate=False` unchanged; promote gates remain mandatory.
+- Naming remains **Organism** only. No Hybrid Studio; CPU Everywhere.
+- NiceGUI status page not added (out of STATUS scope).
+
+### Changed
+- Package / SDK / Desktop / generative module versions **1.8.1**.
+
+### Test baseline
+Default suite: **334 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.8.0] — 2026-10-24
 
 ### Added

@@ -15,6 +15,9 @@ immune quarantine demote, wall-clock budgets.
 
 v1.8.0: Desktop theme apply from looks, rollback deregisters GeneratedSkillModule,
 multi-Organism store switch, export/import Organism bundles.
+
+v1.8.1: Desktop bundle path feedback, Active Organism shell badge,
+generative evolve/promote/rollback soak.
 """
 from __future__ import annotations
 

@@ -58,6 +58,15 @@ class MainWindow(QMainWindow):
         )
         left.addWidget(self.cpu_badge)
 
+        self.organism_badge = QLabel("Active: —")
+        self.organism_badge.setObjectName("shell_organism_badge")
+        self.organism_badge.setStyleSheet(
+            "background:#245; color:white; font-weight:bold; padding:4px 8px; border-radius:4px;"
+        )
+        self.organism_badge.setToolTip("Active Organism profile (Evolution panel)")
+        self.organism_badge.setWordWrap(True)
+        left.addWidget(self.organism_badge)
+
         self.nav = QListWidget()
         self.nav.setObjectName("nav_list")
         self.nav.setFixedWidth(220)
@@ -86,6 +95,7 @@ class MainWindow(QMainWindow):
         self._status.showMessage("Ready · Ctrl+R refresh · Ctrl+Shift+R refresh-all · Ctrl+1–0 / Ctrl+Alt+N panels")
 
         self._install_shortcuts()
+        self.update_organism_badge()
 
     def _install_shortcuts(self) -> None:
         # Refresh current panel
@@ -118,6 +128,24 @@ class MainWindow(QMainWindow):
         self.addAction(act)
 
 
+
+    def update_organism_badge(self) -> None:
+        """Refresh the shell Active Organism badge from the live profile."""
+        badge = getattr(self, "organism_badge", None)
+        if badge is None:
+            return
+        try:
+            snap = self.service.organism_snapshot()
+            name = snap.get("display_name") or "Organism"
+            oid = snap.get("active_organism_id") or snap.get("organism_id") or "?"
+            badge.setText(f"Active: {name}")
+            badge.setToolTip(f"Active Organism · {name} · {oid}")
+            badge.setProperty("organism_id", oid)
+            badge.setProperty("display_name", name)
+        except Exception as exc:
+            badge.setText("Active: —")
+            badge.setToolTip(f"Organism snapshot unavailable: {exc}")
+
     def apply_organism_theme(self, palette: dict | None = None, *, qss: str | None = None) -> None:
         """Apply Organism appearance accents to the Desktop shell (offscreen-safe)."""
         from organism_sdk.generative.theme import normalize_palette, shell_accent_qss
@@ -143,6 +171,12 @@ class MainWindow(QMainWindow):
                 f"background:{p['primary']}; color:{p['foreground']}; "
                 f"font-weight:bold; padding:4px 8px; border-radius:4px;"
             )
+        if hasattr(self, "organism_badge") and self.organism_badge is not None:
+            self.organism_badge.setStyleSheet(
+                f"background:{p['accent']}; color:{p['background']}; "
+                f"font-weight:bold; padding:4px 8px; border-radius:4px;"
+            )
+            self.update_organism_badge()
         self.nav.setStyleSheet(
             f"QListWidget#nav_list::item:selected {{ background:{p['primary']}; color:{p['foreground']}; }}"
             f"QListWidget#nav_list::item:hover {{ background:{p['accent']}; color:{p['background']}; }}"
@@ -185,6 +219,7 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.processEvents()
+        self.update_organism_badge()
         if errors:
             self.toast(f"Refresh-all errors: {'; '.join(errors)}", error=True)
         else:

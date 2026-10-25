@@ -19,7 +19,7 @@ from organism_sdk.generative.skills import SkillDescriptor, SkillRegistry
 
 
 BUNDLE_FORMAT = "organism_bundle_v1"
-BUNDLE_VERSION = "1.8.0"
+BUNDLE_VERSION = "1.8.1"
 
 
 @dataclass

@@ -69,6 +69,19 @@ class OrganismPanel(BasePanel):
         b_import.clicked.connect(self._import_last_bundle)
         org_row.addWidget(b_import)
         self._root.addLayout(org_row)
+
+        path_row = QHBoxLayout()
+        path_row.addWidget(QLabel("Bundle path"))
+        self.bundle_path_edit = QLineEdit()
+        self.bundle_path_edit.setObjectName("organism_bundle_path")
+        self.bundle_path_edit.setPlaceholderText("Export writes here · import reads this path")
+        path_row.addWidget(self.bundle_path_edit, stretch=1)
+        self._root.addLayout(path_row)
+        self.bundle_path_feedback = QLabel("Bundle: (none yet)")
+        self.bundle_path_feedback.setObjectName("organism_bundle_feedback")
+        self.bundle_path_feedback.setWordWrap(True)
+        self.bundle_path_feedback.setStyleSheet("color:#456;")
+        self._root.addWidget(self.bundle_path_feedback)
         self._last_bundle_path: str | None = None
         self._combo_guard = False
 
@@ -280,6 +293,7 @@ class OrganismPanel(BasePanel):
         if bundles:
             last = bundles[-1]
             self._update_stage_progress(last.get("bundle_id"))
+        self._sync_shell_organism_badge()
 
     def _update_stage_progress(self, bundle_id: str | None) -> None:
         if not bundle_id:
@@ -301,6 +315,28 @@ class OrganismPanel(BasePanel):
         bid = self._selected_bundle_id()
         if bid:
             self._update_stage_progress(bid)
+
+
+    def _sync_shell_organism_badge(self) -> None:
+        win = self.window()
+        if hasattr(win, "update_organism_badge"):
+            try:
+                win.update_organism_badge()
+            except Exception:
+                pass
+
+    def _set_bundle_feedback(self, path: str | None, *, action: str, ok: bool = True, extra: str = "") -> None:
+        if path:
+            self._last_bundle_path = path
+            self.bundle_path_edit.setText(path)
+        status = "ok" if ok else "error"
+        msg = f"Bundle {action} [{status}]: {path or '(no path)'}"
+        if extra:
+            msg += f" · {extra}"
+        self.bundle_path_feedback.setText(msg)
+        self.bundle_path_feedback.setStyleSheet(
+            "color:#a40; font-weight:bold;" if not ok else "color:#065; font-weight:bold;"
+        )
 
     def _toast(self, msg: str, *, error: bool = False) -> None:
         win = self.window()
@@ -479,6 +515,7 @@ class OrganismPanel(BasePanel):
         try:
             result = self.service.create_organism(name, make_active=True)
             set_json(self.view, result)
+            self._sync_shell_organism_badge()
             self.refresh()
             self._toast(f"Created {result.get('organism', {}).get('display_name')}")
         except Exception as e:
@@ -496,6 +533,7 @@ class OrganismPanel(BasePanel):
             win = self.window()
             if hasattr(win, "apply_organism_theme") and theme:
                 win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+            self._sync_shell_organism_badge()
             self.refresh()
             self._toast(f"Switched to {oid}")
         except Exception as e:
@@ -503,19 +541,27 @@ class OrganismPanel(BasePanel):
 
     def _export_bundle(self) -> None:
         try:
-            result = self.service.export_organism_bundle()
-            self._last_bundle_path = result.get("path")
+            dest = self.bundle_path_edit.text().strip() or None
+            result = self.service.export_organism_bundle(dest)
+            path = result.get("path")
             set_json(self.view, result)
+            self._set_bundle_feedback(
+                path,
+                action="export",
+                ok=bool(result.get("ok")),
+                extra=f"bytes={result.get('bytes')}",
+            )
             self.refresh()
-            self._toast(f"Exported {result.get('path')}")
+            self._toast(f"Exported {path}")
         except Exception as e:
+            self._set_bundle_feedback(self.bundle_path_edit.text().strip() or None, action="export", ok=False, extra=str(e))
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _import_last_bundle(self) -> None:
-        path = self._last_bundle_path
-        if not path:
-            from pathlib import Path
+        from pathlib import Path
 
+        path = self.bundle_path_edit.text().strip() or self._last_bundle_path
+        if not path:
             root = Path(self.service._repo_root) / "organism_data" / "bundles"
             zips = (
                 sorted(root.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -523,6 +569,7 @@ class OrganismPanel(BasePanel):
                 else []
             )
             if not zips:
+                self._set_bundle_feedback(None, action="import", ok=False, extra="export first")
                 self._toast("No bundle to import — export first", error=True)
                 return
             path = str(zips[0])
@@ -533,7 +580,15 @@ class OrganismPanel(BasePanel):
             win = self.window()
             if hasattr(win, "apply_organism_theme") and theme:
                 win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+            self._set_bundle_feedback(
+                path,
+                action="import",
+                ok=bool(result.get("ok")),
+                extra=f"organism={result.get('organism_id')} skills={len(result.get('skills_imported') or [])}",
+            )
+            self._sync_shell_organism_badge()
             self.refresh()
             self._toast(f"Imported {result.get('organism_id')}", error=not result.get("ok"))
         except Exception as e:
+            self._set_bundle_feedback(path, action="import", ok=False, extra=str(e))
             self._toast(f"{type(e).__name__}: {e}", error=True)

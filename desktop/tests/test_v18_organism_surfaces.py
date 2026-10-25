@@ -57,7 +57,7 @@ def svc(tmp_path: Path) -> DesktopService:
 
 
 def test_desktop_version_v18():
-    assert DESKTOP_VERSION == "1.8.0"
+    assert DESKTOP_VERSION == "1.8.1"
 
 
 def test_looks_theme_apply_payload(svc: DesktopService):
@@ -152,7 +152,10 @@ def test_panel_multi_organism_and_theme(qapp):
     qapp.processEvents()
     panel = win._panels["organism"]
     assert panel.organism_combo is not None
-    assert panel.findChild(type(panel.organism_combo).__mro__[0], "organism_profile_combo") is not None or True
+    from PySide6.QtWidgets import QComboBox, QLabel
+
+    assert panel.findChild(QComboBox, "organism_profile_combo") is not None
+    # v1.8.1 shell badge present when hosted in MainWindow
     panel.looks_kind.setCurrentText("theme")
     panel.looks_brief.setText("ember Organism theme")
     panel._evolve_looks()

@@ -1,29 +1,31 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v1.8.0 — Organism generative surfaces**  
-**Corpus:** closed v0.1–v1.7.2 + v1.8.0 theme/multi/bundle/rollback  
+**Release:** **v1.8.1 — Organism generative polish**  
+**Corpus:** closed v0.1–v1.8.0 + v1.8.1 badge/path/soak  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.8.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.8.0)
+**Tag:** [v1.8.1](https://github.com/RechargedIdeas/organism/releases/tag/v1.8.1)
 
 ## Verdict
 
-**v1.8.0** adds production Organism self-evolution surfaces on top of the v1.7
-generative stack: Desktop theme apply from looks, ModuleRegistry deregister on
-code rollback, multi-Organism create/switch, and export/import bundles
-(JSON+assets zip). Bio/wet-lab actuation remains hard-refused. CPU Everywhere
-holds. Hybrid Studio still not imported. Naming is **Organism** only.
+**v1.8.1** polishes the Organism generative Desktop surfaces: visible bundle
+export/import path feedback, Active Organism badge in the shell header, and a
+generative evolve→promote→rollback soak (no registry leak). Bio/wet-lab
+actuation remains hard-refused. CPU Everywhere holds. Hybrid Studio still not
+imported. Naming is **Organism** only.
 
-## v1.8.0 phase table
+Meaningful *software* gaps from the generative/Desktop wave are closed. Remaining
+items are true external deps (silicon / wet-lab HW / production WAN).
+
+## v1.8.1 phase table
 
 | Phase | Status | Notes |
 |---|---|---|
-| **S0** Looks promote → Desktop theme apply | **green** | shell accents via QSS; offscreen CI safe |
-| **S1** Rollback deregisters GeneratedSkillModule | **green** | after_rollback → ModuleRegistry.deregister |
-| **S2** Multi-Organism store + Evolution panel | **green** | create/switch + `_active.json` |
-| **S3** Export/import Organism bundle | **green** | organism_bundle_v1 zip |
-| **S4** Tests + docs | **green** | SDK + Desktop suites |
-| **S5** Release | **green** | tag **v1.8.0** |
+| **P0** Bundle round-trip Desktop path feedback | **green** | path edit + feedback label |
+| **P1** Active Organism shell badge | **green** | `shell_organism_badge` |
+| **P2** Generative soak (evolve/promote/rollback) | **green** | offscreen + service |
+| **P3** Tests + docs | **green** | SDK + Desktop suites |
+| **P4** Release | **green** | tag **v1.8.1** |
 
 ## True external deps left
 
@@ -35,7 +37,7 @@ holds. Hybrid Studio still not imported. Naming is **Organism** only.
 | Hybrid PySide6 studio / OpenGL twin UI | external tooling — **not** imported |
 | Hosted LLM provider | optional; default backends are offline stubs |
 
-**Default pytest:** **329 passed**, 0 skipped, 2 slow deselected.
+**Default pytest:** **334 passed**, 0 skipped, 2 slow deselected.
 
 ## Tooling
 
