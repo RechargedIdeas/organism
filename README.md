@@ -39,6 +39,24 @@ ORGANISM_NEURO_SIM=1 ...         # neuromorphic RESEARCH_SIM
 ORGANISM_BIO_GPU_TWIN=1 ...      # prefer GPU twin; CPU fallback automatic
 ```
 
+
+## Run on any hardware (CPU-only, N steps)
+
+No GPU and no Hybrid checkout required. See [deploy/README.md](deploy/README.md).
+
+```bash
+python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
+  validate-config -c deploy/config/cpu_only.yaml
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
+  serve -c deploy/config/cpu_only.yaml --dry-run
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
+  serve -c deploy/config/cpu_only.yaml
+# health: http://127.0.0.1:8787/health   status: /status
+```
+
+Docker: `docker build -f deploy/Dockerfile -t organism:cpu .`
+
 ## Repository structure
 
 | Directory | Contents |
