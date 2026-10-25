@@ -16,6 +16,7 @@ from bio_digital.bus_adapter import BioDigitalBusAdapter, ClusterMessageView
 from bio_digital.twin_bridge import TwinBridge
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
 from bio_digital.vendor_loader import load_hybrid, resolve_hybrid_root, hybrid_root_present
+from bio_digital.telemetry_bridge import TelemetryBridge, NodeStatusView, EnvironmentStateView
 
 __all__ = [
     "SlimeMoldModule",
@@ -33,4 +34,7 @@ __all__ = [
     "load_hybrid",
     "resolve_hybrid_root",
     "hybrid_root_present",
+    "TelemetryBridge",
+    "NodeStatusView",
+    "EnvironmentStateView",
 ]
