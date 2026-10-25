@@ -9,12 +9,14 @@ v1.7.2: wall-clock evolve/promote budgets recorded on last_timings.
 from __future__ import annotations
 
 import ast
+import json
 import hashlib
 import re
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from enum import Enum
 from typing import Any
 
@@ -405,13 +407,13 @@ class CodePipeline:
             b.stage_progress.append(CodeStage.PROMOTED.value)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             self._last_timings["promote_ms"] = elapsed_ms
+            self._promote_stack.append(bundle_id)
+            self._last_promoted = bundle_id
             self._persist(
                 b,
                 CodeStage.PROMOTED.value,
                 metadata={"promoted": True, "prior": prior, "promote_ms": elapsed_ms},
             )
-            self._promote_stack.append(bundle_id)
-            self._last_promoted = bundle_id
             return b
 
     def demote(self, bundle_id: str, *, reason: str = "manual_demote") -> CodeBundle:
@@ -423,16 +425,18 @@ class CodePipeline:
             b.research_tier = True
             b.stage = CodeStage.DEMOTION
             b.stage_progress.append(CodeStage.DEMOTION.value)
-            self._persist(b, CodeStage.DEMOTION.value, metadata={"reason": reason})
             if self._last_promoted == bundle_id:
                 self._last_promoted = None
             if bundle_id in self._promote_stack:
                 self._promote_stack = [x for x in self._promote_stack if x != bundle_id]
+            self._persist(b, CodeStage.DEMOTION.value, metadata={"reason": reason})
             return b
 
     def rollback_last_promote(self, *, reason: str = "rollback_last") -> CodeBundle:
         """Roll back the most recently promoted bundle to RESEARCH_TIER."""
         with self._lock:
+            if not self._promote_stack:
+                self._reload_promote_stack()
             if not self._promote_stack:
                 raise PromoteRefused("no promoted bundle to roll back")
             bundle_id = self._promote_stack.pop()
@@ -443,8 +447,8 @@ class CodePipeline:
             b.research_tier = True
             b.stage = CodeStage.ROLLBACK
             b.stage_progress.append(CodeStage.ROLLBACK.value)
-            self._persist(b, CodeStage.ROLLBACK.value, metadata={"reason": reason})
             self._last_promoted = self._promote_stack[-1] if self._promote_stack else None
+            self._persist(b, CodeStage.ROLLBACK.value, metadata={"reason": reason})
             return b
 
     def evolve(
@@ -494,6 +498,34 @@ class CodePipeline:
             "gate": b.gate.as_dict(),
         }
 
+
+    def _reload_promote_stack(self) -> None:
+        from pathlib import Path
+
+        idx = Path(self.store.root) / "code" / "bundles_index.json"
+        if not idx.is_file():
+            return
+        try:
+            known = json.loads(idx.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        for bid in known:
+            path = self._bundle_state_path(bid)
+            if not path.is_file():
+                continue
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if raw.get("promote_stack"):
+                self._promote_stack = list(raw["promote_stack"])
+                self._last_promoted = raw.get("last_promoted")
+
+    def _bundle_state_path(self, bundle_id: str) -> Path:
+        from pathlib import Path
+
+        return Path(self.store.root) / "code" / f"{bundle_id}_state.json"
+
     def _persist(
         self, b: CodeBundle, stage: str, *, metadata: dict[str, Any] | None = None
     ) -> ProvenanceRecord:
@@ -514,11 +546,88 @@ class CodePipeline:
             suffix=".py",
         )
         b.provenance.append(rec.as_dict())
+        # Full bundle state for CLI / cross-process promote + rollback
+        state = b.as_dict()
+        state["source"] = b.source
+        state["promote_stack"] = list(self._promote_stack)
+        state["last_promoted"] = self._last_promoted
+        path = self._bundle_state_path(b.bundle_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+        # Index of known bundles
+        idx = Path(self.store.root) / "code" / "bundles_index.json"
+        try:
+            known = json.loads(idx.read_text(encoding="utf-8")) if idx.is_file() else []
+        except Exception:
+            known = []
+        if b.bundle_id not in known:
+            known.append(b.bundle_id)
+            idx.write_text(json.dumps(known, indent=2), encoding="utf-8")
         return rec
+
+    def _hydrate_bundle(self, bundle_id: str) -> CodeBundle | None:
+        from pathlib import Path
+
+        path = self._bundle_state_path(bundle_id)
+        if not path.is_file():
+            return None
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        gate_raw = raw.get("gate") or {}
+        gate = PromoteGate(
+            static_ok=bool(gate_raw.get("static_ok")),
+            contract_ok=bool(gate_raw.get("contract_ok")),
+            sandbox_ok=bool(gate_raw.get("sandbox_ok")),
+            shadow_validated=bool(gate_raw.get("shadow_validated")),
+            shadow_score=float(gate_raw.get("shadow_score") or 0.0),
+            min_shadow_score=float(gate_raw.get("min_shadow_score") or 0.9),
+            promoted=bool(gate_raw.get("promoted")),
+        )
+        try:
+            stage = CodeStage(raw.get("stage") or "DRAFT")
+        except Exception:
+            stage = CodeStage.DRAFT
+        b = CodeBundle(
+            bundle_id=bundle_id,
+            intent=str(raw.get("intent") or ""),
+            source=str(raw.get("source") or ""),
+            backend=str(raw.get("backend") or "template"),
+            stage=stage,
+            gate=gate,
+            static_errors=list(raw.get("static_errors") or []),
+            contract_errors=list(raw.get("contract_errors") or []),
+            sandbox=raw.get("sandbox"),
+            shadow_score=float(raw.get("shadow_score") or 0.0),
+            shadow_metrics=dict(raw.get("shadow_metrics") or {}),
+            provenance=list(raw.get("provenance") or []),
+            may_control=bool(raw.get("may_control")),
+            created_at=str(raw.get("created_at") or ""),
+            research_tier=bool(raw.get("research_tier", True)),
+            replay_id=raw.get("replay_id"),
+            stage_progress=list(raw.get("stage_progress") or []),
+            prior_promoted_id=raw.get("prior_promoted_id"),
+        )
+        if not b.source:
+            # fall back to latest artifact body
+            rec = self.store.latest(bundle_id)
+            if rec is not None:
+                b.source = self.store.read_body(rec).decode("utf-8")
+        self.bundles[bundle_id] = b
+        stack = raw.get("promote_stack") or []
+        if stack:
+            self._promote_stack = list(stack)
+        if raw.get("last_promoted"):
+            self._last_promoted = raw.get("last_promoted")
+        return b
 
     def _get(self, bundle_id: str) -> CodeBundle:
         if bundle_id not in self.bundles:
-            raise KeyError(f"unknown bundle_id={bundle_id}")
+            hydrated = self._hydrate_bundle(bundle_id)
+            if hydrated is None:
+                raise KeyError(f"unknown bundle_id={bundle_id}")
+            return hydrated
         return self.bundles[bundle_id]
 
     def list_bundles(self) -> list[dict[str, Any]]:

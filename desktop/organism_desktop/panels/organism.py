@@ -197,6 +197,26 @@ class OrganismPanel(BasePanel):
         log_w = QWidget()
         log_l = QVBoxLayout(log_w)
         self.log_table = QTableWidget()
+        # --- Draft replay (v1.9) ---
+        replay_w = QWidget()
+        replay_l = QVBoxLayout(replay_w)
+        self.replay_table = QTableWidget()
+        self.replay_table.setObjectName("organism_replay_table")
+        self.replay_table.setToolTip("DraftReplayLog entries — re-emit identical source")
+        replay_l.addWidget(self.replay_table)
+        rrow = QHBoxLayout()
+        b_rref = QPushButton("Refresh drafts")
+        b_rref.setObjectName("organism_replay_refresh")
+        b_rref.clicked.connect(self._refresh_replays)
+        b_rplay = QPushButton("Replay selected")
+        b_rplay.setObjectName("organism_replay_selected")
+        b_rplay.clicked.connect(self._replay_selected)
+        rrow.addWidget(b_rref)
+        rrow.addWidget(b_rplay)
+        rrow.addStretch(1)
+        replay_l.addLayout(rrow)
+        tabs.addTab(replay_w, "Draft Replay")
+
         self.log_table.setObjectName("organism_log_table")
         log_l.addWidget(self.log_table)
         b_ref = QPushButton("Refresh")
@@ -294,6 +314,7 @@ class OrganismPanel(BasePanel):
             last = bundles[-1]
             self._update_stage_progress(last.get("bundle_id"))
         self._sync_shell_organism_badge()
+        self._refresh_replays()
 
     def _update_stage_progress(self, bundle_id: str | None) -> None:
         if not bundle_id:
@@ -591,4 +612,41 @@ class OrganismPanel(BasePanel):
             self._toast(f"Imported {result.get('organism_id')}", error=not result.get("ok"))
         except Exception as e:
             self._set_bundle_feedback(path, action="import", ok=False, extra=str(e))
+            self._toast(f"{type(e).__name__}: {e}", error=True)
+
+    def _refresh_replays(self) -> None:
+        try:
+            entries = self.service.list_draft_replays()
+        except Exception as e:
+            fill_table(self.replay_table, ["error"], [[str(e)]])
+            return
+        fill_table(
+            self.replay_table,
+            ["entry_id", "backend", "intent", "source_digest", "source_lines", "at"],
+            [
+                [
+                    e.get("entry_id"),
+                    e.get("backend"),
+                    (e.get("intent") or "")[:60],
+                    (e.get("source_digest") or "")[:16],
+                    e.get("source_lines"),
+                    e.get("at"),
+                ]
+                for e in entries
+            ],
+        )
+
+    def _replay_selected(self) -> None:
+        row = self.replay_table.currentRow()
+        if row < 0:
+            self._toast("Select a draft replay entry", error=True)
+            return
+        item = self.replay_table.item(row, 0)
+        if item is None:
+            return
+        try:
+            result = self.service.replay_organism_draft(item.text())
+            set_json(self.view, result)
+            self._toast(f"Replayed {item.text()}")
+        except Exception as e:
             self._toast(f"{type(e).__name__}: {e}", error=True)

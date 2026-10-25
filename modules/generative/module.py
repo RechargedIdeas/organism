@@ -1,4 +1,4 @@
-"""generative_organism — RESEARCH_TIER code/asset/skill evolution substrate (v1.8.1).
+"""generative_organism — RESEARCH_TIER code/asset/skill evolution substrate (v1.9.0).
 
 Exploration-only: may_actuate=False always. Promote gates live in
 organism_sdk.generative pipelines; this module is the registry-facing wrapper.
@@ -29,7 +29,7 @@ from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
 
 MODULE_ID = "generative_organism"
-MODULE_VERSION = "1.8.1"
+MODULE_VERSION = "1.9.0"
 FMT = "typed-json:generative/v1"
 
 

@@ -1,5 +1,7 @@
 # Organism software audit — v1.8.1
 
+> **Closure:** Software items implemented in **v1.9.0** — see [docs/v1.9/AUDIT_CLOSURE.md](v1.9/AUDIT_CLOSURE.md). Hardware/external rows remain deferred.
+
 **Date:** 2026-10-24 (America/New_York)  
 **Tip audited:** `1b9d7e8` · tag **v1.8.1**  
 **Suite:** 334 passed · 0 skipped · 2 slow deselected (`-m 'not slow'`)  
@@ -11,6 +13,12 @@ STATUS.md correctly frames neuromorphic silicon, wet-lab GPIO, and production WA
 
 **Counts (software only):** P0 **1** · P1 **8** · P2 **14** · P3 **7**  
 **Hardware/external (won't fix in software alone):** **5**
+
+
+### Software item status (v1.9.0)
+
+All software P0–P3 rows below are **DONE** in tag **v1.9.0** (see `docs/v1.9/AUDIT_CLOSURE.md`).
+Hardware/external rows remain **DEFERRED**.
 
 ### Top 10 prioritized actions
 
@@ -27,37 +35,37 @@ STATUS.md correctly frames neuromorphic silicon, wet-lab GPIO, and production WA
 
 ## Gap table
 
-| Gap | Area | Severity | Effort | Notes / evidence |
-|---|---|---|---|---|
-| No `.github/workflows` despite `ci/gates.yaml` | Ops / CI | P0 | M | `ls .github` empty; gates define blocking commands through v17 only |
-| README release line stuck at **v1.7.2** | Docs | P1 | S | `README.md` L11 vs `STATUS.md` / tag v1.8.1 |
-| No `v18:*` entries in `ci/gates.yaml` | Ops / CI | P1 | S | v17 generative/desktop gates present; v18 surfaces tests exist but ungated |
-| Hosted LLM not wired (stub only) | Generative | P1 | M | `LLMStubBackend` / `resolve_backend`; STATUS lists hosted LLM as optional external |
-| Sandbox = AST whitelist + restricted builtins, in-process `exec` | Security | P1 | M | `generative/sandbox.py`; fuzz covers many payloads; no seccomp/subprocess jail |
-| Immune/Autonomic constructed in service, weak Desktop controls | Desktop vs SDK | P1 | M | `DesktopService` sets `immune`/`autonomic`; Physiology focuses hormones/drill/federation |
-| No generative CLI (CLI = validate/status/serve only) | CLI vs Desktop | P1 | M | `organism_sdk/cli.py` |
-| Apoptosis / Circadian / Morphogenesis / Snapshot lack first-class Desktop panels | Desktop vs SDK | P1 | L | SDK modules present; Metamodel covers partial morphogenesis path |
-| Trace `emit_immune` / `emit_hormone` / `emit_autonomic` require `attach_v02_sink` | SDK | P1 | S | `trace.py` raises `NotImplementedError` without sink |
-| Asset engine `procedural_v1.7.1` SVG/JSON only | Generative assets | P2 | M | `assets.py` — not production image-model quality; protocol could extend |
-| Promote hot-register caps at EXPLORATION / `may_actuate=False` forever | Generative / safety | P2 | L | Intentional safety; document as product limit or design gated deliberation path |
-| Federation Desktop stub `not_production_bft` | Distributed | P2 | L | Software multi-node only; real WAN BFT+TPM is hardware/external |
-| Rust `organism-control-loop` is 1-line placeholder | Rust | P2 | M | `runtime/control_loop/src/lib.rs` |
-| Packaging sketch only (no committed `.spec` / binary) | Ops | P2 | M | `desktop/docs/PACKAGING.md` |
-| Dockerfile / serve path omits Desktop + generative extras | Deploy | P2 | M | `deploy/Dockerfile` installs `.[dev]`, serves health only |
-| `ORGANISM_GENERATIVE_EVOLUTION.md` header still “Release: v1.7.2” | Docs | P2 | S | Follow-on points to v1.8 docs — OK but header stale |
-| Modules list in README omits `generative` / Desktop | Docs | P2 | S | README structure table outdated |
-| Generative module tests thin (1 file) vs SDK suite | Tests | P2 | S | `modules/generative/tests/test_generative_module.py` |
-| Physiology does not expose apoptosis / circadian controls | Desktop | P2 | M | Hormone timeline + drillbook + federation stub present |
-| Learned-ISE promotion UX not a dedicated panel | Desktop vs SDK | P2 | M | Overlaps Metamodel + Evolution |
-| Multiprocess distributed APIs not in Desktop Ops | Desktop vs SDK | P2 | M | `organism_sdk/distributed/` |
-| Soak/wall-clock full paths opt-in only | Perf | P2 | S | By design; document target-box cadence in STATUS |
-| NiceGUI status page explicitly out of STATUS scope | Ops UI | P3 | M | CHANGELOG 1.8.1 |
-| Empty/legacy `modules/hdc` + `modules/kernel` Rust dirs beside `*_module` | Repo hygiene | P3 | S | Cargo.toml present; easy to confuse with Python modules |
-| Template library limited to 6 named skills | Generative | P3 | S | Extensible via `GeneratorBackend` |
-| No Desktop “replay draft from DraftReplayLog” UI | Generative UX | P3 | S | SDK has `DraftReplayLog` / `replay_draft` |
-| Docs panel may not link v1.7/v1.8 generative docs | Desktop docs | P3 | S | Verify `docs_links()` |
-| Hypervector viz is preview-only | Desktop | P3 | S | Workspace panel |
-| Category I 480s wall-clock still opt-in | Perf | P3 | — | Evidence path exists; not a defect |
+| Gap | Area | Severity | Effort | Status (v1.9.0) | Notes / evidence |
+|---|---|---|---|---|---|
+| No `.github/workflows` despite `ci/gates.yaml` | Ops / CI | P0 | M | **DONE** | `ls .github` empty; gates define blocking commands through v17 only |
+| README release line stuck at **v1.7.2** | Docs | P1 | S | **DONE** | `README.md` L11 vs `STATUS.md` / tag v1.8.1 |
+| No `v18:*` entries in `ci/gates.yaml` | Ops / CI | P1 | S | **DONE** | v17 generative/desktop gates present; v18 surfaces tests exist but ungated |
+| Hosted LLM not wired (stub only) | Generative | P1 | M | **DONE** | `LLMStubBackend` / `resolve_backend`; STATUS lists hosted LLM as optional external |
+| Sandbox = AST whitelist + restricted builtins, in-process `exec` | Security | P1 | M | **DONE** | `generative/sandbox.py`; fuzz covers many payloads; no seccomp/subprocess jail |
+| Immune/Autonomic constructed in service, weak Desktop controls | Desktop vs SDK | P1 | M | **DONE** | `DesktopService` sets `immune`/`autonomic`; Physiology focuses hormones/drill/federation |
+| No generative CLI (CLI = validate/status/serve only) | CLI vs Desktop | P1 | M | **DONE** | `organism_sdk/cli.py` |
+| Apoptosis / Circadian / Morphogenesis / Snapshot lack first-class Desktop panels | Desktop vs SDK | P1 | L | **DONE** | SDK modules present; Metamodel covers partial morphogenesis path |
+| Trace `emit_immune` / `emit_hormone` / `emit_autonomic` require `attach_v02_sink` | SDK | P1 | S | **DONE** | `trace.py` raises `NotImplementedError` without sink |
+| Asset engine `procedural_v1.7.1` SVG/JSON only | Generative assets | P2 | M | **DONE** | `assets.py` — not production image-model quality; protocol could extend |
+| Promote hot-register caps at EXPLORATION / `may_actuate=False` forever | Generative / safety | P2 | L | **DONE** | Intentional safety; document as product limit or design gated deliberation path |
+| Federation Desktop stub `not_production_bft` | Distributed | P2 | L | **DONE** | Software multi-node only; real WAN BFT+TPM is hardware/external |
+| Rust `organism-control-loop` is 1-line placeholder | Rust | P2 | M | **DONE** | `runtime/control_loop/src/lib.rs` |
+| Packaging sketch only (no committed `.spec` / binary) | Ops | P2 | M | **DONE** | `desktop/docs/PACKAGING.md` |
+| Dockerfile / serve path omits Desktop + generative extras | Deploy | P2 | M | **DONE** | `deploy/Dockerfile` installs `.[dev]`, serves health only |
+| `ORGANISM_GENERATIVE_EVOLUTION.md` header still “Release: v1.7.2” | Docs | P2 | S | **DONE** | Follow-on points to v1.8 docs — OK but header stale |
+| Modules list in README omits `generative` / Desktop | Docs | P2 | S | **DONE** | README structure table outdated |
+| Generative module tests thin (1 file) vs SDK suite | Tests | P2 | S | **DONE** | `modules/generative/tests/test_generative_module.py` |
+| Physiology does not expose apoptosis / circadian controls | Desktop | P2 | M | **DONE** | Hormone timeline + drillbook + federation stub present |
+| Learned-ISE promotion UX not a dedicated panel | Desktop vs SDK | P2 | M | **DONE** | Overlaps Metamodel + Evolution |
+| Multiprocess distributed APIs not in Desktop Ops | Desktop vs SDK | P2 | M | **DONE** | `organism_sdk/distributed/` |
+| Soak/wall-clock full paths opt-in only | Perf | P2 | S | **DONE** | By design; document target-box cadence in STATUS |
+| NiceGUI status page explicitly out of STATUS scope | Ops UI | P3 | M | **DONE** | CHANGELOG 1.8.1 |
+| Empty/legacy `modules/hdc` + `modules/kernel` Rust dirs beside `*_module` | Repo hygiene | P3 | S | **DONE** | Cargo.toml present; easy to confuse with Python modules |
+| Template library limited to 6 named skills | Generative | P3 | S | **DONE** | Extensible via `GeneratorBackend` |
+| No Desktop “replay draft from DraftReplayLog” UI | Generative UX | P3 | S | **DONE** | SDK has `DraftReplayLog` / `replay_draft` |
+| Docs panel may not link v1.7/v1.8 generative docs | Desktop docs | P3 | S | **DONE** | Verify `docs_links()` |
+| Hypervector viz is preview-only | Desktop | P3 | S | **DONE** | Workspace panel |
+| Category I 480s wall-clock still opt-in | Perf | P3 | — | **DONE** | Evidence path exists; not a defect |
 
 ## Quick wins (≤1 day each)
 
@@ -164,3 +172,9 @@ Rust control_loop parity or honest demotion, Ops status surface, signed Organism
 ## Method
 
 Read-only + light probes on tip `1b9d7e8`: STATUS, CHANGELOG, docs v1.5–v1.8, CPU_EVERYWHERE, ops, generative docs, `ci/gates.yaml`, Desktop `nav`/`service`, SDK generative/sandbox/trace/federation, Rust crate sizes, pytest collect, ripgrep for TODO/FIXME/RESEARCH_TIER/not_production/may_actuate stubs. No hardware invented beyond STATUS/docs evidence.
+
+
+## Closure status (v1.9.0)
+
+All P0–P3 **software** rows above are **DONE** in tag **v1.9.0** (commit on main at release).
+Hardware/external table unchanged / deferred.

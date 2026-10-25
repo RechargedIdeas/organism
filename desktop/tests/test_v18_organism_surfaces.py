@@ -57,7 +57,7 @@ def svc(tmp_path: Path) -> DesktopService:
 
 
 def test_desktop_version_v18():
-    assert DESKTOP_VERSION == "1.8.1"
+    assert DESKTOP_VERSION == "1.9.0"
 
 
 def test_looks_theme_apply_payload(svc: DesktopService):

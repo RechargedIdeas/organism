@@ -11,6 +11,13 @@ from uuid import UUID, uuid4
 
 from organism_sdk import __version__ as sdk_version
 from organism_sdk.autonomic import AutonomicController
+
+from organism_sdk.apoptosis import ApoptosisService
+from organism_sdk.circadian import CircadianClock
+from organism_sdk.learned_ise import LearnedISE
+from organism_sdk.interoceptive import HealthVector
+from organism_sdk.morphogenesis import MorphogenesisTracker
+from organism_sdk.distributed import run_multiprocess_oxytocin
 from organism_sdk.degradation import (
     T_DOWN_FAST,
     T_UP_FAST,
@@ -55,7 +62,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.8.1"
+DESKTOP_VERSION = "1.9.0"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -107,6 +114,10 @@ class DesktopService:
     hormone: HormoneBus | None = None
     immune: ImmuneLayer | None = None
     autonomic: AutonomicController | None = None
+    circadian: CircadianClock | None = None
+    apoptosis: ApoptosisService | None = None
+    learned_ise: LearnedISE | None = None
+    morphogenesis: MorphogenesisTracker | None = None
     metamodel: MetamodelTracker = field(
         default_factory=lambda: MetamodelTracker(enabled=True, exploration_mode=True)
     )
@@ -174,9 +185,35 @@ class DesktopService:
             except Exception:
                 svc.immune = None
         try:
-            svc.autonomic = AutonomicController()
+            svc.autonomic = AutonomicController(trace=stack.trace)
+        except TypeError:
+            try:
+                svc.autonomic = AutonomicController()
+            except Exception:
+                svc.autonomic = None
         except Exception:
             svc.autonomic = None
+        try:
+            svc.circadian = CircadianClock()
+        except Exception:
+            svc.circadian = None
+        try:
+            svc.apoptosis = ApoptosisService(workspace=stack.workspace, trace=stack.trace)
+        except TypeError:
+            try:
+                svc.apoptosis = ApoptosisService(workspace=stack.workspace)
+            except Exception:
+                svc.apoptosis = None
+        except Exception:
+            svc.apoptosis = None
+        try:
+            svc.learned_ise = LearnedISE()
+        except Exception:
+            svc.learned_ise = None
+        try:
+            svc.morphogenesis = MorphogenesisTracker()
+        except Exception:
+            svc.morphogenesis = None
         if svc.hormone is not None:
             try:
                 stack.router.attach_hormone_bus(svc.hormone)
@@ -461,13 +498,31 @@ class DesktopService:
             else len(self._all_bindings()),
         }
 
-    def hypervector_preview(self, seed: int = 0) -> dict[str, Any]:
-        hv = Hypervector.random(seed=seed)
-        sample = [int(w) for w in hv.words[:16]]
-        digest = hv.to_bytes_be()[:16].hex()
-        return {"dim": Hypervector.dim(), "sample_words": sample, "digest_prefix": digest}
+    def hypervector_preview(self, seed: int = 42) -> dict[str, Any]:
+        """Richer HV preview for Workspace panel (v1.9)."""
+        import hashlib
 
-    # ----- Pipelines -----
+        try:
+            hv = Hypervector.random(seed=seed)  # type: ignore[call-arg]
+        except TypeError:
+            hv = Hypervector.random()
+        raw = getattr(hv, "bits", None) or getattr(hv, "data", None) or getattr(hv, "_data", None)
+        summary: dict[str, Any] = {"seed": seed, "type": type(hv).__name__}
+        if raw is not None:
+            try:
+                as_list = list(raw)[:16]
+                summary["prefix16"] = as_list
+                summary["dim"] = len(list(raw))
+                summary["popcount_prefix"] = sum(bin(int(x)).count("1") for x in as_list[:8])
+            except Exception as e:
+                summary["raw_error"] = str(e)
+        digest = hashlib.sha256(str(summary.get("prefix16") or seed).encode()).digest()
+        bars = "▁▂▃▄▅▆▇█"
+        summary["sparkline"] = "".join(bars[b % len(bars)] for b in digest[:32])
+        summary["cosine_self"] = 1.0
+        summary["note"] = "Preview only — not a full HV lab."
+        return summary
+
 
     def run_pipeline(
         self,
@@ -551,9 +606,43 @@ class DesktopService:
         if self.immune is not None:
             dlc = getattr(self.immune, "direct_lifecycle_calls", 0)
             immune["direct_lifecycle_calls"] = dlc() if callable(dlc) else dlc
+            mem = getattr(self.immune, "_memory", None) or getattr(self.immune, "memory_cells", None)
+            if mem is not None:
+                try:
+                    immune["memory_cells"] = len(mem)
+                except Exception:
+                    immune["memory_cells"] = None
+            immune["quarantine_hint"] = "Use Immune demo to ingress antigen → QUARANTINE/SURVEIL"
         auto: dict[str, Any] = {"available": self.autonomic is not None}
         if self.autonomic is not None:
             auto["has_force_mode"] = hasattr(self.autonomic, "force_mode")
+            auto["mode"] = getattr(self.autonomic, "mode", None)
+            params = getattr(self.autonomic, "params", None)
+            auto["params"] = params.as_dict() if params is not None and hasattr(params, "as_dict") else None
+            auto["transitions"] = list(getattr(self.autonomic, "transitions", []) or [])[-8:]
+        circ: dict[str, Any] = {"available": self.circadian is not None}
+        if self.circadian is not None:
+            st = getattr(self.circadian, "state", None)
+            if st is None and hasattr(self.circadian, "advance"):
+                # peek without advancing much
+                circ["phase_api"] = "advance(dt_phase)"
+            else:
+                circ["state"] = st.as_dict() if st is not None and hasattr(st, "as_dict") else st
+            circ["_last"] = getattr(self, "_last_circadian", None)
+        apo: dict[str, Any] = {"available": self.apoptosis is not None}
+        if self.apoptosis is not None:
+            apo["synthetic_records"] = len(self.apoptosis.synthetic_lifecycle_records)
+            apo["_last"] = getattr(self, "_last_apoptosis", None)
+        ise: dict[str, Any] = {"available": self.learned_ise is not None}
+        if self.learned_ise is not None:
+            ise["control_path_active"] = self.learned_ise.control_path_active
+            gate = getattr(self.learned_ise, "promotion_gate", None) or getattr(self.learned_ise, "_gate", None)
+            if gate is not None and hasattr(gate, "as_dict"):
+                ise["gate"] = gate.as_dict()
+            ise["_last"] = getattr(self, "_last_ise", None)
+        morph: dict[str, Any] = {"available": self.morphogenesis is not None}
+        if self.morphogenesis is not None:
+            morph["_last"] = getattr(self, "_last_morphogenesis", None)
         return {
             "degradation_level": str(self.degrade.level),
             "router_level": self.stack.router.current_level(),
@@ -569,6 +658,16 @@ class DesktopService:
             "hormones": hormones,
             "immune": immune,
             "autonomic": auto,
+            "circadian": circ,
+            "apoptosis": apo,
+            "learned_ise": ise,
+            "morphogenesis": morph,
+            "product_limits": {
+                "generative_promote_cap": "EXPLORATION / may_actuate=False",
+                "federation": "not_production_bft",
+                "bio_actuation": False,
+            },
+            "v02_sink_attached": getattr(self.stack.trace, "_v02_sink", None) is not None,
         }
 
     def set_degradation_level(self, level: str) -> str:
@@ -2265,15 +2364,215 @@ class DesktopService:
         self._last_organism_action = result
         return result
 
+
+    # ----- Physiology deep controls (v1.9 audit) -----
+
+    def immune_demo(self, *, cortisol: float = 0.6) -> dict[str, Any]:
+        """Ingress a random antigen through ImmuneLayer (virtual; writes FULL-salience binding)."""
+        if self.immune is None:
+            return {"ok": False, "error": "immune unavailable"}
+        antigen = Hypervector.random()
+        decision = self.immune.ingress(
+            antigen, source_module_id="desktop_immune_demo", cortisol=float(cortisol)
+        )
+        out = {
+            "ok": True,
+            "decision": decision.decision,
+            "classification": decision.classification,
+            "antigen_score": decision.antigen_score,
+            "remembered": getattr(decision, "remembered", False),
+            "latency_ms": getattr(decision, "latency_ms", None),
+            "may_actuate": False,
+        }
+        self._last_immune = out
+        return out
+
+    def autonomic_demo(self, *, mode: str | None = None, viability: float = 0.4, cortisol: float = 0.7) -> dict[str, Any]:
+        """Tick or force AutonomicController mode (params only — no module selection)."""
+        if self.autonomic is None:
+            return {"ok": False, "error": "autonomic unavailable"}
+        if mode:
+            params = self.autonomic.force_mode(mode, trigger="desktop_force")  # type: ignore[arg-type]
+        else:
+            params = self.autonomic.tick(
+                viability=float(viability), cortisol=float(cortisol), level=str(self.degrade.level)
+            )
+        out = {
+            "ok": True,
+            "mode": self.autonomic.mode,
+            "params": params.as_dict() if hasattr(params, "as_dict") else None,
+            "transitions": list(self.autonomic.transitions)[-5:],
+            "select_module_attempts": self.autonomic.select_module_attempts,
+            "may_actuate": False,
+        }
+        self._last_autonomic = out
+        return out
+
+    def circadian_demo(self, *, steps: int = 8, dt_phase: float = 0.05) -> dict[str, Any]:
+        """Advance CircadianClock and return phase trajectory (virtual)."""
+        if self.circadian is None:
+            return {"ok": False, "error": "circadian unavailable"}
+        from dataclasses import asdict
+
+        rows = []
+        state = None
+        for i in range(max(1, int(steps))):
+            state = self.circadian.advance(dt_phase)
+            if hasattr(state, "as_dict"):
+                rows.append(state.as_dict())
+            else:
+                try:
+                    rows.append(asdict(state))
+                except Exception:
+                    rows.append({"step": i, "repr": repr(state)})
+        out = {"ok": True, "steps": len(rows), "trajectory": rows, "final": rows[-1] if rows else None}
+        self._last_circadian = out
+        return out
+
+    def apoptosis_status(self) -> dict[str, Any]:
+        if self.apoptosis is None:
+            return {"ok": False, "error": "apoptosis unavailable"}
+        recs = self.apoptosis.synthetic_lifecycle_records
+        out = {
+            "ok": True,
+            "synthetic_records": len(recs),
+            "recent": recs[-5:] if recs else [],
+            "note": "Self-termination requires contract allowance; Desktop never enables bio actuation.",
+            "may_actuate": False,
+        }
+        self._last_apoptosis = out
+        return out
+
+    def morphogenesis_demo(self, module_id: str = "desktop_morph_demo") -> dict[str, Any]:
+        if self.morphogenesis is None:
+            return {"ok": False, "error": "morphogenesis unavailable"}
+        from organism_sdk.morphogenesis import DevelopmentalGenome, DevelopmentalStage
+
+        if self.morphogenesis.get(module_id) is None:
+            genome = DevelopmentalGenome(
+                genome_id=f"genome_{module_id}",
+                stages=[
+                    DevelopmentalStage(index=0, name="induce", locus="l0"),
+                    DevelopmentalStage(index=1, name="pattern", locus="l1"),
+                    DevelopmentalStage(index=2, name="differentiate", locus="l2"),
+                ],
+            )
+            self.morphogenesis.register_genome(module_id, genome)
+        stages = []
+        for _ in range(3):
+            st = self.morphogenesis.run_stage(module_id, pass_stage=True)
+            stages.append(st.name if hasattr(st, "name") else str(st))
+        offer = self.morphogenesis.offer_control_actuation(module_id)
+        out = {
+            "ok": True,
+            "module_id": module_id,
+            "stages": stages,
+            "may_enter_deliberation": self.morphogenesis.may_enter_deliberation(module_id),
+            "control_actuation_offer": offer,
+            "may_actuate": False,
+        }
+        self._last_morphogenesis = out
+        return out
+
+    def learned_ise_demo(self, *, promote: bool = False) -> dict[str, Any]:
+        if self.learned_ise is None:
+            return {"ok": False, "error": "learned_ise unavailable"}
+        h = HealthVector(thermal=0.9, latency_ok=0.9, calibration=0.85, energy=0.9, det_ok=1.0)
+        err = self.learned_ise.update(h, observed_viability=0.75)
+        shadow = self.learned_ise.shadow_compare(h)
+        gate = self.learned_ise.record_shadow_validate(pass_rate=0.95, ece_ok=True)
+        promoted = False
+        if promote:
+            promoted = bool(self.learned_ise.promote())
+        out = {
+            "ok": True,
+            "update_error": err,
+            "shadow": (
+                shadow.as_dict()
+                if hasattr(shadow, "as_dict")
+                else {
+                    "t0_viability": getattr(shadow, "t0_viability", None),
+                    "learned_viability": getattr(shadow, "learned_viability", None),
+                    "abs_delta": getattr(shadow, "abs_delta", None),
+                    "agree": getattr(shadow, "agree", None),
+                }
+            ),
+            "gate": gate.as_dict() if hasattr(gate, "as_dict") else gate,
+            "promoted": promoted,
+            "control_path_active": self.learned_ise.control_path_active,
+            "may_actuate": False,
+            "note": "ISE promote is software control-path only; never flips bio may_actuate.",
+        }
+        self._last_ise = out
+        return out
+
+    def learned_ise_demote(self) -> dict[str, Any]:
+        if self.learned_ise is None:
+            return {"ok": False, "error": "learned_ise unavailable"}
+        self.learned_ise.demote()
+        out = {"ok": True, "control_path_active": self.learned_ise.control_path_active}
+        self._last_ise = out
+        return out
+
+    def run_multiprocess_stub(self, *, n: int = 3) -> dict[str, Any]:
+        """Software multi-process oxytocin/BFT sim — labeled not production WAN."""
+        import inspect
+
+        sig = inspect.signature(run_multiprocess_oxytocin)
+        kwargs = {"bft": True}
+        n_val = max(2, int(n))
+        if "n_processes" in sig.parameters:
+            kwargs["n_processes"] = n_val
+        elif "n" in sig.parameters:
+            kwargs["n"] = n_val
+        else:
+            result = run_multiprocess_oxytocin(n_val)
+            out = result.as_dict() if hasattr(result, "as_dict") else dict(result)
+            out["ok"] = True
+            out["label"] = "not_production_bft"
+            out["may_actuate"] = False
+            self._last_multiprocess = out
+            return out
+        result = run_multiprocess_oxytocin(**kwargs)
+        out = result.as_dict() if hasattr(result, "as_dict") else dict(result)
+        out["ok"] = True
+        out["label"] = "not_production_bft"
+        out["may_actuate"] = False
+        self._last_multiprocess = out
+        return out
+
+    def list_draft_replays(self) -> list[dict[str, Any]]:
+        self._require_generative()
+        assert self.code_pipeline is not None
+        log = getattr(self.code_pipeline, "replay_log", None)
+        if log is None:
+            return []
+        return log.list_entries()
+
+    def replay_organism_draft(self, entry_id: str) -> dict[str, Any]:
+        self._require_generative()
+        assert self.code_pipeline is not None
+        log = getattr(self.code_pipeline, "replay_log", None)
+        if log is None:
+            return {"ok": False, "error": "no draft replay log"}
+        entry = log.replay(entry_id)
+        out = {"ok": True, "entry": entry.as_dict(), "source": entry.source, "may_actuate": False}
+        self._last_organism_action = out
+        return out
+
+
     def docs_links(self) -> list[dict[str, str]]:
 
         root = self._repo_root / "docs"
         return [
             {"title": "CPU Everywhere", "path": str(root / "CPU_EVERYWHERE.md")},
+            {"title": "Audit v1.8 (software gaps)", "path": str(root / "AUDIT_v1.8.md")},
+            {"title": "v1.9 Audit Closure", "path": str(root / "v1.9" / "AUDIT_CLOSURE.md")},
             {"title": "Soak Runbook", "path": str(root / "ops" / "SOAK_RUNBOOK.md")},
             {"title": "Degradation Drillbook", "path": str(root / "ops" / "DEGRADATION_DRILLBOOK.md")},
             {"title": "Wet-lab Safety Policy", "path": str(root / "ops" / "WETLAB_SAFETY_POLICY.md")},
             {"title": "Organism Generative Evolution", "path": str(root / "v1.7" / "ORGANISM_GENERATIVE_EVOLUTION.md")},
+            {"title": "Organism Surfaces v1.8", "path": str(root / "v1.8" / "ORGANISM_SURFACES.md")},
             {"title": "Organism v1.8 Desktop", "path": str(root / "v1.8" / "DESKTOP.md")},
             {"title": "Desktop v1.7", "path": str(root / "v1.7" / "DESKTOP.md")},
             {"title": "Desktop v1.6.1", "path": str(root / "v1.6.1" / "DESKTOP.md")},

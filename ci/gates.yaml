@@ -265,3 +265,29 @@ category_bio:
     blocking: true
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v17_generative.py -k fuzz_unsafe"
+
+
+  - id: v18:organism_surfaces
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q sdk/python/tests/test_v18_organism_surfaces.py desktop/tests/test_v18_organism_surfaces.py"
+
+  - id: v18:desktop_polish
+    blocking: true
+    status: green
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v181_organism_polish.py desktop/tests/test_nav.py"
+
+  - id: v19:audit_closure
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q sdk/python/tests/test_v19_audit_closure.py"
+
+  - id: v19:desktop_physiology
+    blocking: true
+    status: green
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v19_physiology_ops.py"
+
+  - id: v19:generative_cli
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v19_generative_cli.py"

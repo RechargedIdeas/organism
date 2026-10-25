@@ -1,4 +1,4 @@
-# Organism Desktop — Packaging notes (v1.6)
+# Organism Desktop — Packaging notes (v1.9)
 
 ## Install (developer)
 
@@ -21,27 +21,20 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. \
   python -m organism_desktop --smoke
 ```
 
-## Optional PyInstaller (not shipped as a binary in-tree)
-
-A frozen one-folder build is optional. Example sketch (adjust paths):
+## PyInstaller (committed `.spec`)
 
 ```bash
 pip install pyinstaller
-pyinstaller \
-  --name organism-desktop \
-  --noconfirm \
-  --collect-all PySide6 \
-  --hidden-import organism_sdk \
-  --hidden-import organism_desktop \
-  desktop/organism_desktop/__main__.py
+# from repo root:
+pyinstaller desktop/organism-desktop.spec
+# artifact: dist/organism-desktop/
 ```
 
-Notes:
+CI does **not** require a frozen binary artifact by default; the committed
+`desktop/organism-desktop.spec` is the supported recipe. Prefer the editable
+install + `--smoke` gate for PR checks.
 
-- Prefer **onedir** over onefile for Qt plugins.
-- Bundle `deploy/config/*.yaml` and `docs/` if operators need offline Ops/Docs.
-- **Do not** embed wet-lab credentials; actuation stays refused (`may_actuate=False`).
-- Hybrid PySide6 Studio / OpenGL twin UIs are **out of scope** (see `VENDOR.md`).
+## NiceGUI / remote status UI
 
-This repo does not require a committed `.spec` for CI; the entry point above is
-the supported packaging surface.
+Explicitly **out of scope** for Desktop packaging (see CHANGELOG / AUDIT).
+Use `organism serve` health/status HTTP or Desktop Ops panel instead.

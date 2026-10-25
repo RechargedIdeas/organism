@@ -67,4 +67,7 @@ class WorkspacePanel(BasePanel):
         self.refresh()
 
     def _hv(self) -> None:
-        set_json(self.detail, self.service.hypervector_preview(seed=42))
+        prev = self.service.hypervector_preview(seed=42)
+        spark = prev.get("sparkline") or ""
+        self.status.setText(f"{self.status.text().split('·')[0].strip()} · HV spark: {spark[:24]}")
+        set_json(self.detail, prev)

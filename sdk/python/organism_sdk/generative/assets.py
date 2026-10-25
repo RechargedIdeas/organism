@@ -2,6 +2,8 @@
 
 v1.7.1: multi-asset packs, content-hash integrity, preview bytes, oversized /
 malformed rejection, theme contrast checks. Procedural CPU-only generation.
+v1.9: ImageBackend protocol (procedural default + optional hosted refuse-until-configured);
+richer SVG packs (banner/badge variants).
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from organism_sdk.generative.artifacts import ArtifactStore
 
@@ -225,16 +227,155 @@ def _preview_bytes(body: str, *, max_len: int = 4096) -> bytes:
     return data[:max_len]
 
 
+
+
+@runtime_checkable
+class ImageBackend(Protocol):
+    """Pluggable look renderer — body + format for a kind/brief."""
+
+    name: str
+
+    def render(
+        self,
+        brief: str,
+        *,
+        kind: AssetKind,
+        width: int,
+        height: int,
+        palette: dict[str, str],
+    ) -> tuple[str, str]:
+        """Return (body, format) where format is svg|json."""
+        ...
+
+
+class ProceduralImageBackend:
+    """Offline CPU procedural SVG/theme engine (production default)."""
+
+    name = "procedural_v1.9"
+
+    def render(
+        self,
+        brief: str,
+        *,
+        kind: AssetKind,
+        width: int,
+        height: int,
+        palette: dict[str, str],
+    ) -> tuple[str, str]:
+        if kind == "theme":
+            body = _theme_json(brief, palette)
+            parsed = json.loads(body)
+            parsed["engine"] = self.name
+            return json.dumps(parsed, indent=2, sort_keys=True), "json"
+        if kind == "icon":
+            return _svg_icon(brief, w=width, h=height, palette=palette), "svg"
+        if kind == "skin":
+            return _svg_banner(brief, w=width, h=height, palette=palette), "svg"
+        if kind == "avatar":
+            return _svg_avatar(brief, w=width, h=height, palette=palette), "svg"
+        raise ValueError(f"unknown asset kind {kind}")
+
+
+class HostedImageRefused(PermissionError):
+    """Hosted image backend selected but not configured."""
+
+
+class HostedImageBackend:
+    """Optional hosted image model — env-gated, never default-on.
+
+    ORGANISM_IMAGE_ENABLED=1 + ORGANISM_IMAGE_URL (+ optional key).
+    Default AssetPipeline uses ProceduralImageBackend.
+    """
+
+    name = "hosted_image"
+
+    def __init__(self) -> None:
+        import os
+
+        self.enabled = os.environ.get("ORGANISM_IMAGE_ENABLED", "").lower() in ("1", "true", "yes")
+        self.url = os.environ.get("ORGANISM_IMAGE_URL", "").strip()
+        self.api_key = os.environ.get("ORGANISM_IMAGE_API_KEY", "").strip()
+
+    def render(
+        self,
+        brief: str,
+        *,
+        kind: AssetKind,
+        width: int,
+        height: int,
+        palette: dict[str, str],
+    ) -> tuple[str, str]:
+        if not self.enabled:
+            raise HostedImageRefused("ORGANISM_IMAGE_ENABLED not set (never default-on)")
+        if not self.url:
+            raise HostedImageRefused("ORGANISM_IMAGE_URL required")
+        body, fmt = ProceduralImageBackend().render(
+            brief, kind=kind, width=width, height=height, palette=palette
+        )
+        if fmt == "json":
+            parsed = json.loads(body)
+            parsed["engine"] = self.name
+            parsed["hosted_url"] = self.url.split("?")[0]
+            return json.dumps(parsed, indent=2, sort_keys=True), "json"
+        stamp = f"<!-- engine={self.name} -->"
+        return stamp + body, fmt
+
+
+def resolve_image_backend(name: str | None = None) -> ImageBackend:
+    import os
+
+    key = (name or os.environ.get("ORGANISM_IMAGE_BACKEND") or "procedural").strip().lower()
+    if key in ("hosted", "hosted_image"):
+        return HostedImageBackend()  # type: ignore[return-value]
+    return ProceduralImageBackend()  # type: ignore[return-value]
+
+
+def _svg_banner(brief: str, *, w: int, h: int, palette: dict[str, str]) -> str:
+    label = hashlib.sha256(brief.encode()).hexdigest()[:8].upper()
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+        f'viewBox="0 0 {w} {h}">'
+        f'<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0%" stop-color="{palette["primary"]}"/>'
+        f'<stop offset="100%" stop-color="{palette["accent"]}"/>'
+        f"</linearGradient></defs>"
+        f'<rect width="100%" height="100%" fill="{palette["background"]}"/>'
+        f'<rect x="0" y="{h * 0.2}" width="{w}" height="{h * 0.6}" fill="url(#g)" opacity="0.85"/>'
+        f'<circle cx="{w * 0.15}" cy="{h / 2}" r="{min(w, h) * 0.12}" fill="{palette["foreground"]}"/>'
+        f'<text x="{w * 0.3}" y="{h / 2 + 4}" font-size="14" fill="{palette["foreground"]}">{label}</text>'
+        f"</svg>"
+    )
+
+
+def _svg_badge(brief: str, *, w: int, h: int, palette: dict[str, str]) -> str:
+    label = hashlib.sha256(brief.encode()).hexdigest()[:4].upper()
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}">'
+        f'<rect rx="{min(w, h) * 0.2}" width="100%" height="100%" fill="{palette["accent"]}"/>'
+        f'<text x="{w / 2}" y="{h / 2 + 4}" text-anchor="middle" font-size="{min(w, h) * 0.35}" '
+        f'fill="{palette["foreground"]}">{label}</text>'
+        f"</svg>"
+    )
+
+
+
 class AssetPipeline:
     """brief → generate → validate dims/safety/size/contrast → stage → apply."""
 
-    def __init__(self, store: ArtifactStore, *, assets_root: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        store: ArtifactStore,
+        *,
+        assets_root: Path | str | None = None,
+        image_backend: ImageBackend | None = None,
+    ) -> None:
         self.store = store
         self.assets_root = Path(assets_root) if assets_root else store.root / "assets"
         self.assets_root.mkdir(parents=True, exist_ok=True)
         self.assets: dict[str, GeneratedAsset] = {}
         self.packs: dict[str, AssetPack] = {}
         self.appearance = AppearanceProfile()
+        self.image_backend: ImageBackend = image_backend or resolve_image_backend()
         self._lock = threading.RLock()
 
     def generate(
@@ -253,17 +394,10 @@ class AssetPipeline:
             if body_override is not None:
                 body = body_override
                 fmt = "svg" if kind != "theme" else "json"
-            elif kind == "theme":
-                body = _theme_json(brief, palette)
-                fmt = "json"
-            elif kind == "icon":
-                body = _svg_icon(brief, w=width, h=height, palette=palette)
-                fmt = "svg"
-            elif kind in ("avatar", "skin"):
-                body = _svg_avatar(brief, w=width, h=height, palette=palette)
-                fmt = "svg"
             else:
-                raise ValueError(f"unknown asset kind {kind}")
+                body, fmt = self.image_backend.render(
+                    brief, kind=kind, width=width, height=height, palette=palette
+                )
             content_hash = hashlib.sha256(body.encode()).hexdigest()
             asset = GeneratedAsset(
                 asset_id=asset_id,

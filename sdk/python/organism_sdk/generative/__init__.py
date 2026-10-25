@@ -18,6 +18,9 @@ multi-Organism store switch, export/import Organism bundles.
 
 v1.8.1: Desktop bundle path feedback, Active Organism shell badge,
 generative evolve/promote/rollback soak.
+
+v1.9: HostedLLMBackend (env-gated), sandbox process jail, ImageBackend,
+generative CLI, richer physiology Desktop, audit closure.
 """
 from __future__ import annotations
 
@@ -28,12 +31,19 @@ from organism_sdk.generative.assets import (
     AssetPack,
     AssetPipeline,
     GeneratedAsset,
+    HostedImageBackend,
+    HostedImageRefused,
+    ImageBackend,
+    ProceduralImageBackend,
     contrast_ratio,
+    resolve_image_backend,
 )
 from organism_sdk.generative.backends import (
     DraftBackend,
     DraftReplayLog,
     GeneratorBackend,
+    HostedLLMBackend,
+    HostedLLMRefused,
     LLMStubBackend,
     TemplateDraftBackend,
     list_templates,
@@ -83,10 +93,17 @@ __all__ = [
     "AssetPipeline",
     "GeneratedAsset",
     "contrast_ratio",
+    "resolve_image_backend",
+    "ProceduralImageBackend",
+    "ImageBackend",
+    "HostedImageRefused",
+    "HostedImageBackend",
     "DraftBackend",
     "DraftReplayLog",
     "GeneratorBackend",
     "LLMStubBackend",
+    "HostedLLMRefused",
+    "HostedLLMBackend",
     "TemplateDraftBackend",
     "list_templates",
     "resolve_backend",

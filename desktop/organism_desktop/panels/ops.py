@@ -87,6 +87,12 @@ class OpsPanel(BasePanel):
         rust_btn.clicked.connect(self._probe_rust)
         btn_row.addWidget(rust_btn)
 
+        mp_btn = QPushButton("Multiprocess stub")
+        mp_btn.setObjectName("ops_multiprocess")
+        mp_btn.setToolTip("Software multi-process oxytocin/BFT sim — not production WAN BFT/TPM.")
+        mp_btn.clicked.connect(self._multiprocess)
+        btn_row.addWidget(mp_btn)
+
         btn_row.addStretch(1)
         self._root.addLayout(btn_row)
         self.refresh()
@@ -205,3 +211,13 @@ class OpsPanel(BasePanel):
             win = self.window()
             if hasattr(win, "toast"):
                 win.toast(f"Rust probe failed: {exc}", error=True)
+
+    def _multiprocess(self) -> None:
+        result = self.service.run_multiprocess_stub(n=3)
+        set_json(self.view, result)
+        win = self.window()
+        if hasattr(win, "toast"):
+            win.toast(
+                f"Multiprocess stub oxytocin={result.get('oxytocin_accepted')} (not production BFT)",
+                error=not result.get("ok"),
+            )

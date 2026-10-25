@@ -1,0 +1,77 @@
+name: Organism CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: organism-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Python gates (not slow)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ".[dev,desktop]"
+      - name: Proto
+        run: |
+          if [ -f Makefile ]; then make proto PYTHON=.venv/bin/python || true; fi
+          PYTHONPATH=sdk/python:modules:. .venv/bin/python -c "import organism_sdk; print(organism_sdk.__version__)"
+      - name: Pytest (not slow)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          ORGANISM_SANDBOX_ISOLATE: "1"
+        run: |
+          PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q -m 'not slow'
+      - name: Desktop smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m organism_desktop --smoke
+      - name: Gate subset from ci/gates.yaml (v17+v18+v19)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q \
+            sdk/python/tests/test_v17_generative.py \
+            modules/generative/tests \
+            sdk/python/tests/test_v18_organism_surfaces.py \
+            desktop/tests/test_v18_organism_surfaces.py \
+            sdk/python/tests/test_v19_audit_closure.py \
+            desktop/tests/test_v19_physiology_ops.py \
+            -m 'not slow'
+
+  rust:
+    name: Rust workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo test --workspace --lib
+        run: cargo test --workspace --lib
+
+  docker:
+    name: Docker CPU image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [gates]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CPU image
+        run: docker build -f deploy/Dockerfile -t organism:cpu .

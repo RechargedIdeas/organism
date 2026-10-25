@@ -1,6 +1,6 @@
-# Organism Generative Evolution (v1.7 / v1.7.2)
+# Organism Generative Evolution (v1.7 → v1.9)
 
-**Release:** v1.7.2  
+**Release:** v1.9.0  
 **Goal:** Production-grade generative **code**, **asset (looks)**, and **skills** pipelines so Organisms can self-evolve under explicit promote gates.
 
 ## Principles
@@ -110,3 +110,13 @@ Service APIs:
 ## v1.8 follow-on
 
 See `docs/v1.8/DESKTOP.md` and `docs/v1.8/ORGANISM_SURFACES.md` for theme apply, multi-Organism, rollback deregister, and export/import bundles.
+
+
+## v1.9 production bar
+
+- **HostedLLMBackend** — env-gated (`ORGANISM_LLM_ENABLED` + URL/key); never default-on.
+- **Sandbox process jail** — AST gate + child process timeout/RSS (`ORGANISM_SANDBOX_*`).
+- **ImageBackend** — procedural default; hosted image refuse-until-configured.
+- **CLI parity** — `organism evolve-*` / `promote-*` / `rollback-code` / `bundle-*`.
+- **Product limit** — hot-register caps at EXPLORATION / `may_actuate=False` forever
+  unless a separate audited actuation policy is introduced (bio refuse stays).

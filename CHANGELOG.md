@@ -1,3 +1,39 @@
+## [1.9.0] — 2026-10-25
+
+### Added
+- **GitHub Actions CI** — `.github/workflows/ci.yml` (pytest not-slow, Desktop smoke, Rust, Docker).
+- **v18/v19 gates** in `ci/gates.yaml`.
+- **HostedLLMBackend** — OpenAI-compatible HTTP client; `ORGANISM_LLM_*` env-gated; never default-on.
+- **Sandbox process jail** — AST gate + child process wall-clock timeout + RSS cap.
+- **ImageBackend** protocol — `procedural_v1.9` default + hosted refuse-until-configured.
+- **Generative CLI** — `evolve-skill|looks|code`, `promote-*`, `rollback-code`, `bundle-*`, `list-*`, `replay-draft`.
+- **Physiology Desktop depth** — immune/autonomic/circadian/apoptosis/morphogenesis/Learned-ISE demos.
+- **Ops multiprocess stub** button (labeled `not_production_bft`).
+- **Draft Replay** tab on Organism Evolution panel.
+- **Rust control_loop** minimal tick loop + unit tests (`may_actuate=false`).
+- **PyInstaller** `desktop/organism-desktop.spec` + PACKAGING v1.9.
+- Template library expanded to 10 (normalizer/ranker/smoother/gate).
+- Docs: `docs/v1.9/AUDIT_CLOSURE.md`; AUDIT_v1.8 marked closed for software items.
+
+### Changed
+- README / STATUS synced to **v1.9.0**; generative evolution doc header updated.
+- Dockerfile sets generative defaults (`ORGANISM_LLM_ENABLED=0`, sandbox isolate).
+- Hypervector Workspace preview adds sparkline.
+- Package / SDK / Desktop / generative module versions **1.9.0**.
+
+### Safety
+- Bio `may_actuate=False` unchanged; generative promote caps at EXPLORATION.
+- Hosted LLM/image never default-on; secrets stay in env/vault.
+- NiceGUI status page remains out of scope.
+
+### Deferred (hardware / external)
+- Neuromorphic silicon, wet-lab GPIO, production WAN BFT+TPM, Hybrid Studio UI,
+  hosted LLM provider account.
+
+### Test baseline
+- `pytest -m 'not slow'`: **356** passed · 2 deselected
+- Rust `organism-control-loop`: 3 passed
+
 ## [1.8.1] — 2026-10-24
 
 ### Added

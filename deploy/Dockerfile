@@ -7,6 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ORGANISM_BIO_GPU_TWIN=0 \
     ORGANISM_NEURO_SIM=0 \
     ORGANISM_WETLAB_GPIO=0 \
+    ORGANISM_LLM_ENABLED=0 \
+    ORGANISM_SANDBOX_ISOLATE=1 \
+    ORGANISM_GENERATIVE_BACKEND=template \
     ORGANISM_HEALTH_HOST=0.0.0.0 \
     ORGANISM_HEALTH_PORT=8787 \
     ORGANISM_CONFIG=/etc/organism/cpu_only.yaml
@@ -25,6 +28,8 @@ COPY deploy ./deploy
 COPY harness ./harness
 
 RUN python -m pip install --no-cache-dir -e ".[dev]" \
+ && mkdir -p /var/lib/organism/artifacts /var/lib/organism/organisms \
+ && true \
  && mkdir -p /etc/organism \
  && cp deploy/config/cpu_only.yaml /etc/organism/cpu_only.yaml
 
