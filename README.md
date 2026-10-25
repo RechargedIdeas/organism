@@ -8,7 +8,7 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.4.0** — Ops completeness (deploy, soak runbook, optional torch, wet-lab policy) |
+| **Release** | **v1.5.0** — Organism Desktop (PySide6 control plane) |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |

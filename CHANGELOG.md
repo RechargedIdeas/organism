@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.0] — 2026-10-24
+
+### Added
+- **Organism Desktop** — first-party PySide6 control plane under `desktop/organism_desktop/`.
+- Panels: Home, Registry, Workspace, Pipelines, Physiology, Metamodel, Bio-Digital,
+  Traces, Ops, Docs (`docs/v1.5/DESKTOP.md`).
+- `DesktopService` headless façade; bio actuation **hard-refused** (`ActuationRefused`).
+- Console script `organism-desktop`; optional extra `[desktop]` (PySide6).
+- Offscreen smoke (`--smoke` / `QT_QPA_PLATFORM=offscreen`); `desktop/tests/`.
+- Design + plan: `docs/v1.5/`.
+
+### Changed
+- Package / SDK versions **1.5.0**.
+- pytest `testpaths` / `pythonpath` include `desktop`.
+
+### Security / safety
+- Bio / wet-lab panels never enable `control_actuation`; `may_actuate` badges shown.
+- Wet-lab policy viewer remains deny-by-default; UI cannot certify actuation.
+
+### Test baseline
+Default suite: **223 passed**, 0 skipped, 2 slow deselected.
+
 All notable changes to Organism are documented here.  
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md` (additive integrations in 1.x).
 
@@ -55,7 +77,7 @@ Default suite: **209 passed**, 0 skipped, 2 slow deselected.
 - Twin / telemetry still `affects_control=False`.
 
 ### Test baseline
-Default suite: _(filled after run)_.
+Default suite: **223 passed**, 0 skipped, 2 slow deselected.
 
 ## [1.2.0] — 2026-10-24
 

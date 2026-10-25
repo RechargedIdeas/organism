@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "organism"
-version = "1.4.0"
+version = "1.5.0"
 description = "Organism — homeostatic computational ecology substrate"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 organism = "organism_sdk.cli:main"
+organism-desktop = "organism_desktop.app:main"
 
 [project.optional-dependencies]
 dev = [
@@ -33,9 +34,17 @@ dev = [
     "ruff>=0.2",
     "black>=24.1",
 ]
+desktop = [
+    "PySide6>=6.6",
+]
 
 [tool.hatch.build.targets.wheel]
-packages = ["sdk/python/organism_sdk", "modules/deterministic_engine", "modules/learned_module"]
+packages = [
+    "sdk/python/organism_sdk",
+    "modules/deterministic_engine",
+    "modules/learned_module",
+    "desktop/organism_desktop",
+]
 
 [tool.ruff]
 line-length = 100
@@ -47,10 +56,10 @@ python_version = "3.11"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "modules", "harness", "sdk/python/tests"]
-pythonpath = ["sdk/python", "modules"]
+testpaths = ["tests", "modules", "harness", "sdk/python/tests", "desktop/tests"]
+pythonpath = ["sdk/python", "modules", "desktop"]
 markers = [
     "slow: full wall-clock SLO or extended soak; opt-in via ORGANISM_WALL_CLOCK_FULL=1 / ORGANISM_SOAK_FULL=1",
     "cpu_everywhere: CPU fallback / no-accelerator product guarantee",
+    "desktop: Organism Desktop GUI tests",
 ]
-
