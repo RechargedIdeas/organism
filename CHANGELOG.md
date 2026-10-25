@@ -1,3 +1,28 @@
+## [1.8.0] — 2026-10-24
+
+### Added
+- **Looks → Desktop theme apply** — Organism appearance palette drives shell
+  accents (`MainWindow.apply_organism_theme`, offscreen-safe QSS).
+- **Rollback deregisters GeneratedSkillModule** — code promote rollback/demote
+  removes hot-registered modules from `ModuleRegistry` + dynamic catalog.
+- **Multi-Organism store** — create/switch `OrganismProfile` in Desktop Evolution
+  panel; active id persisted.
+- **Export/import Organism bundle** — zip (`organism_bundle_v1`) with profile +
+  skill packs + appearance + asset bodies; import keeps skills RESEARCH_TIER.
+- SDK: `theme.py`, `bundle.py`; EvolutionRuntime `after_rollback`.
+- Docs: `docs/v1.8/DESKTOP.md`, `docs/v1.8/ORGANISM_SURFACES.md`.
+
+### Safety
+- Bio `may_actuate=False` unchanged; generative hot-register never actuates.
+- Promote gates remain mandatory; imported skills cannot control until promote.
+- Naming remains **Organism** only. No Hybrid Studio; CPU Everywhere.
+
+### Changed
+- Package / SDK / Desktop / generative module versions **1.8.0**.
+
+### Test baseline
+Default suite: **329 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.7.2] — 2026-10-24
 
 ### Added

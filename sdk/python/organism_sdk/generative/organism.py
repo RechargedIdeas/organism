@@ -24,6 +24,11 @@ EvolutionKind = Literal[
     "looks_generate",
     "looks_apply",
     "looks_pack",
+    "looks_theme_apply",
+    "organism_switch",
+    "organism_create",
+    "bundle_export",
+    "bundle_import",
     "metamodel_attach",
     "note",
 ]
@@ -77,17 +82,46 @@ class OrganismProfile:
 
 
 class OrganismStore:
-    """Filesystem + in-memory Organism profiles."""
+    """Filesystem + in-memory Organism profiles with active selection (v1.8 multi-Organism)."""
 
     def __init__(self, root: Path | str) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self._profiles: dict[str, OrganismProfile] = {}
+        self._active_id: str | None = None
         self._lock = threading.RLock()
         self._load_all()
+        self._load_active()
+
+    def _active_path(self) -> Path:
+        return self.root / "_active.json"
+
+    def _load_active(self) -> None:
+        path = self._active_path()
+        if path.is_file():
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                aid = raw.get("active_id")
+                if aid and aid in self._profiles:
+                    self._active_id = aid
+                    return
+            except Exception:
+                pass
+        if self._profiles and self._active_id is None:
+            self._active_id = next(iter(self._profiles))
+            self._persist_active()
+
+    def _persist_active(self) -> None:
+        path = self._active_path()
+        path.write_text(
+            json.dumps({"active_id": self._active_id}, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
     def _load_all(self) -> None:
         for path in self.root.glob("*.json"):
+            if path.name.startswith("_"):
+                continue
             try:
                 raw = json.loads(path.read_text(encoding="utf-8"))
                 p = OrganismProfile(**{k: raw[k] for k in OrganismProfile.__dataclass_fields__ if k in raw})
@@ -95,9 +129,11 @@ class OrganismStore:
             except Exception:
                 continue
 
-    def create(self, *, display_name: str = "Organism", organism_id: str | None = None) -> OrganismProfile:
+    def create(self, *, display_name: str = "Organism", organism_id: str | None = None, make_active: bool = False) -> OrganismProfile:
         with self._lock:
             oid = organism_id or f"organism_{uuid.uuid4().hex[:12]}"
+            if oid in self._profiles:
+                raise ValueError(f"organism_id already exists: {oid}")
             profile = OrganismProfile(
                 organism_id=oid,
                 display_name=display_name,
@@ -105,18 +141,61 @@ class OrganismStore:
             )
             self._profiles[oid] = profile
             self._save(profile)
+            if make_active or self._active_id is None:
+                self._active_id = oid
+                self._persist_active()
             return profile
 
     def get(self, organism_id: str) -> OrganismProfile | None:
         return self._profiles.get(organism_id)
 
+    def active_id(self) -> str | None:
+        return self._active_id
+
+    def get_active(self) -> OrganismProfile | None:
+        if self._active_id is None:
+            return None
+        return self._profiles.get(self._active_id)
+
+    def set_active(self, organism_id: str) -> OrganismProfile:
+        with self._lock:
+            p = self._require(organism_id)
+            self._active_id = organism_id
+            self._persist_active()
+            return p
+
+    def switch(self, organism_id: str) -> OrganismProfile:
+        """Alias for set_active — multi-Organism switch."""
+        return self.set_active(organism_id)
+
     def ensure_default(self) -> OrganismProfile:
-        if self._profiles:
-            return next(iter(self._profiles.values()))
-        return self.create(display_name="Primary Organism", organism_id="organism_primary")
+        with self._lock:
+            if self._active_id and self._active_id in self._profiles:
+                return self._profiles[self._active_id]
+            if self._profiles:
+                self._active_id = next(iter(self._profiles))
+                self._persist_active()
+                return self._profiles[self._active_id]
+            return self.create(display_name="Primary Organism", organism_id="organism_primary", make_active=True)
 
     def list_profiles(self) -> list[OrganismProfile]:
         return list(self._profiles.values())
+
+    def list_summaries(self) -> list[dict[str, Any]]:
+        active = self._active_id
+        out = []
+        for p in self._profiles.values():
+            d = {
+                "organism_id": p.organism_id,
+                "display_name": p.display_name,
+                "skill_count": len(p.skills),
+                "revision_count": len(p.code_revisions),
+                "log_count": len(p.evolution_log),
+                "active": p.organism_id == active,
+                "updated_at": p.updated_at,
+            }
+            out.append(d)
+        return out
 
     def log(
         self,

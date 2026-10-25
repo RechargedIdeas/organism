@@ -12,8 +12,8 @@ from organism_desktop.service import DESKTOP_VERSION, DesktopService
 
 
 def test_version():
-    assert __version__ == "1.7.2"
-    assert DESKTOP_VERSION == "1.7.2"
+    assert __version__ == "1.8.0"
+    assert DESKTOP_VERSION == "1.8.0"
 
 
 def test_service_home():
@@ -23,7 +23,7 @@ def test_service_home():
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
     assert st["degradation_level"] == "L0"
-    assert st["desktop_version"] == "1.7.2"
+    assert st["desktop_version"] == "1.8.0"
 
 
 def test_offscreen_app_smoke():

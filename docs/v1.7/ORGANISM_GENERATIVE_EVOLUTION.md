@@ -106,3 +106,7 @@ Service APIs:
 - [x] No arbitrary shell in sandbox
 - [x] Fuzz unsafe drafts refuse
 - [x] No Sophont naming in types/UI/docs
+
+## v1.8 follow-on
+
+See `docs/v1.8/DESKTOP.md` and `docs/v1.8/ORGANISM_SURFACES.md` for theme apply, multi-Organism, rollback deregister, and export/import bundles.

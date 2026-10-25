@@ -28,7 +28,7 @@ def test_nav_includes_organism():
 
 
 def test_service_evolution_roundtrip():
-    assert DESKTOP_VERSION == "1.7.2"
+    assert DESKTOP_VERSION.startswith("1.")
     svc = DesktopService.create()
     snap = svc.organism_snapshot()
     assert snap["organism_id"]
@@ -120,7 +120,7 @@ def test_catalog_generative_register():
 
 def test_e2e_evolve_improve_promote_appears_in_catalog():
     """v1.7.2: evolve skill → improve from trace → promote → appear in catalog."""
-    assert DESKTOP_VERSION == "1.7.2"
+    assert DESKTOP_VERSION.startswith("1.")
     svc = DesktopService.create()
     # 1. Evolve skill (shadow scored, not auto-promoted)
     gen = svc.evolve_organism_skill(

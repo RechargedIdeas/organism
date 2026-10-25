@@ -117,6 +117,42 @@ class MainWindow(QMainWindow):
         act.triggered.connect(self.refresh_all)
         self.addAction(act)
 
+
+    def apply_organism_theme(self, palette: dict | None = None, *, qss: str | None = None) -> None:
+        """Apply Organism appearance accents to the Desktop shell (offscreen-safe)."""
+        from organism_sdk.generative.theme import normalize_palette, shell_accent_qss
+
+        if qss is None:
+            if palette is None:
+                try:
+                    theme = self.service.apply_organism_theme()
+                    palette = theme.get("palette")
+                    qss = theme.get("qss")
+                except Exception:
+                    palette = None
+                    qss = None
+            if qss is None:
+                qss = shell_accent_qss(palette)
+        p = normalize_palette(palette)
+        # Scoped accents only — avoid full-window stylesheet that breaks offscreen CI.
+        brand_sub = self.findChild(QLabel, "brand_sub")
+        if brand_sub is not None:
+            brand_sub.setStyleSheet(f"color: {p['accent']};")
+        if hasattr(self, "cpu_badge") and self.cpu_badge is not None:
+            self.cpu_badge.setStyleSheet(
+                f"background:{p['primary']}; color:{p['foreground']}; "
+                f"font-weight:bold; padding:4px 8px; border-radius:4px;"
+            )
+        self.nav.setStyleSheet(
+            f"QListWidget#nav_list::item:selected {{ background:{p['primary']}; color:{p['foreground']}; }}"
+            f"QListWidget#nav_list::item:hover {{ background:{p['accent']}; color:{p['background']}; }}"
+        )
+        self.setProperty("organism_theme_primary", p["primary"])
+        self.setProperty("organism_theme_accent", p["accent"])
+        self._status.showMessage(
+            f"Organism theme applied · primary={p['primary']} accent={p['accent']}", 4000
+        )
+
     def toast(self, message: str, *, error: bool = False, ms: int = 6000) -> None:
         """Non-silent status feedback (errors and info)."""
         if error:
@@ -208,6 +244,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             app.processEvents()
         # Smoke also exercises refresh-all once (parity with keyboard path).
         win.refresh_all()
+        try:
+            win.apply_organism_theme()
+        except Exception:
+            pass
         if args.screenshot:
             root = Path(__file__).resolve().parents[1]
             out = Path(args.screenshot_dir) if args.screenshot_dir else root / "screenshots"

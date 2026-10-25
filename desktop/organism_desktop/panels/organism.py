@@ -1,4 +1,4 @@
-"""Organism Evolution panel — skills, looks, code promotions, evolution log (v1.7.2)."""
+"""Organism Evolution panel — skills, looks, code, multi-Organism, bundles (v1.8)."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
@@ -40,6 +40,37 @@ class OrganismPanel(BasePanel):
         safety.setWordWrap(True)
         safety.setStyleSheet("color:#a40; font-weight:bold;")
         self._root.addWidget(safety)
+
+        # Multi-Organism switcher + export/import (v1.8)
+        org_row = QHBoxLayout()
+        org_row.addWidget(QLabel("Active Organism"))
+        self.organism_combo = QComboBox()
+        self.organism_combo.setObjectName("organism_profile_combo")
+        self.organism_combo.currentIndexChanged.connect(self._on_organism_combo)
+        org_row.addWidget(self.organism_combo, stretch=1)
+        self.new_organism_name = QLineEdit("Organism Twin")
+        self.new_organism_name.setObjectName("organism_new_name")
+        self.new_organism_name.setMaximumWidth(160)
+        org_row.addWidget(self.new_organism_name)
+        b_create = QPushButton("Create")
+        b_create.setObjectName("organism_create")
+        b_create.clicked.connect(self._create_organism)
+        org_row.addWidget(b_create)
+        b_switch = QPushButton("Switch")
+        b_switch.setObjectName("organism_switch")
+        b_switch.clicked.connect(self._switch_organism)
+        org_row.addWidget(b_switch)
+        b_export = QPushButton("Export bundle")
+        b_export.setObjectName("organism_export_bundle")
+        b_export.clicked.connect(self._export_bundle)
+        org_row.addWidget(b_export)
+        b_import = QPushButton("Re-import last")
+        b_import.setObjectName("organism_import_bundle")
+        b_import.clicked.connect(self._import_last_bundle)
+        org_row.addWidget(b_import)
+        self._root.addLayout(org_row)
+        self._last_bundle_path: str | None = None
+        self._combo_guard = False
 
         tabs = QTabWidget()
         tabs.setObjectName("organism_tabs")
@@ -175,6 +206,15 @@ class OrganismPanel(BasePanel):
             f"skills={snap.get('skill_count')} · revs={snap.get('revision_count')} · "
             f"log={snap.get('log_count')}"
         )
+        self._fill_organism_combo(snap)
+        theme = snap.get("theme") or {}
+        if theme.get("palette"):
+            win = self.window()
+            if hasattr(win, "apply_organism_theme"):
+                try:
+                    win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+                except Exception:
+                    pass
         skills = snap.get("skills") or []
         fill_table(
             self.skills_table,
@@ -322,9 +362,20 @@ class OrganismPanel(BasePanel):
             result = self.service.evolve_organism_looks(brief, kind=kind)
         set_json(self.looks_preview, result)
         set_json(self.view, result)
+        theme = result.get("theme") or {}
+        if theme.get("ok") or theme.get("palette"):
+            win = self.window()
+            if hasattr(win, "apply_organism_theme"):
+                try:
+                    win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+                except Exception:
+                    pass
         self.refresh()
         self._refresh_asset_preview()
-        self._toast(f"Looks ok={result.get('ok')}", error=not result.get("ok"))
+        self._toast(
+            f"Looks ok={result.get('ok')} theme={bool(theme)}",
+            error=not result.get("ok"),
+        )
 
     def _refresh_asset_preview(self) -> None:
         snap = self.service.organism_snapshot()
@@ -398,5 +449,91 @@ class OrganismPanel(BasePanel):
             bid = (result.get("bundle") or {}).get("bundle_id")
             self._update_stage_progress(bid)
             self._toast(f"Rolled back {bid}")
+        except Exception as e:
+            self._toast(f"{type(e).__name__}: {e}", error=True)
+
+    def _fill_organism_combo(self, snap: dict | None = None) -> None:
+        snap = snap or self.service.organism_snapshot()
+        orgs = snap.get("organisms") or self.service.list_organisms()
+        active = snap.get("active_organism_id") or snap.get("organism_id")
+        self._combo_guard = True
+        self.organism_combo.blockSignals(True)
+        self.organism_combo.clear()
+        active_idx = 0
+        for i, o in enumerate(orgs):
+            label = f"{o.get('display_name')} ({o.get('organism_id')})"
+            self.organism_combo.addItem(label, o.get("organism_id"))
+            if o.get("organism_id") == active or o.get("active"):
+                active_idx = i
+        if orgs:
+            self.organism_combo.setCurrentIndex(active_idx)
+        self.organism_combo.blockSignals(False)
+        self._combo_guard = False
+
+    def _on_organism_combo(self, _idx: int = 0) -> None:
+        # Selection alone does not switch; use Switch button to avoid surprise.
+        return
+
+    def _create_organism(self) -> None:
+        name = self.new_organism_name.text().strip() or "Organism Twin"
+        try:
+            result = self.service.create_organism(name, make_active=True)
+            set_json(self.view, result)
+            self.refresh()
+            self._toast(f"Created {result.get('organism', {}).get('display_name')}")
+        except Exception as e:
+            self._toast(f"{type(e).__name__}: {e}", error=True)
+
+    def _switch_organism(self) -> None:
+        oid = self.organism_combo.currentData()
+        if not oid:
+            self._toast("Select an Organism", error=True)
+            return
+        try:
+            result = self.service.switch_organism(str(oid))
+            set_json(self.view, result)
+            theme = result.get("theme") or {}
+            win = self.window()
+            if hasattr(win, "apply_organism_theme") and theme:
+                win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+            self.refresh()
+            self._toast(f"Switched to {oid}")
+        except Exception as e:
+            self._toast(f"{type(e).__name__}: {e}", error=True)
+
+    def _export_bundle(self) -> None:
+        try:
+            result = self.service.export_organism_bundle()
+            self._last_bundle_path = result.get("path")
+            set_json(self.view, result)
+            self.refresh()
+            self._toast(f"Exported {result.get('path')}")
+        except Exception as e:
+            self._toast(f"{type(e).__name__}: {e}", error=True)
+
+    def _import_last_bundle(self) -> None:
+        path = self._last_bundle_path
+        if not path:
+            from pathlib import Path
+
+            root = Path(self.service._repo_root) / "organism_data" / "bundles"
+            zips = (
+                sorted(root.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if root.is_dir()
+                else []
+            )
+            if not zips:
+                self._toast("No bundle to import — export first", error=True)
+                return
+            path = str(zips[0])
+        try:
+            result = self.service.import_organism_bundle(path, switch_active=True)
+            set_json(self.view, result)
+            theme = result.get("theme") or {}
+            win = self.window()
+            if hasattr(win, "apply_organism_theme") and theme:
+                win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
+            self.refresh()
+            self._toast(f"Imported {result.get('organism_id')}", error=not result.get("ok"))
         except Exception as e:
             self._toast(f"{type(e).__name__}: {e}", error=True)

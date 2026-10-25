@@ -12,6 +12,9 @@ improve-from-trace.
 
 v1.7.2: EvolutionRuntime hot-register, evolution traces, hormone pulse,
 immune quarantine demote, wall-clock budgets.
+
+v1.8.0: Desktop theme apply from looks, rollback deregisters GeneratedSkillModule,
+multi-Organism store switch, export/import Organism bundles.
 """
 from __future__ import annotations
 
@@ -41,6 +44,17 @@ from organism_sdk.generative.code_pipeline import (
     ShadowMetrics,
 )
 from organism_sdk.generative.organism import EvolutionEvent, OrganismProfile, OrganismStore
+from organism_sdk.generative.theme import (
+    DEFAULT_PALETTE,
+    normalize_palette,
+    shell_accent_qss,
+    theme_apply_payload,
+)
+from organism_sdk.generative.bundle import (
+    BUNDLE_FORMAT,
+    export_organism_bundle,
+    import_organism_bundle,
+)
 from organism_sdk.generative.runtime import (
     EVOLVE_P95_MS,
     HOT_REGISTER_P95_MS,
@@ -89,4 +103,19 @@ __all__ = [
     "EvolutionStage",
     "PromoteGate",
     "EVOLVE_P95_MS",
+    "HOT_REGISTER_P95_MS",
+    "DEFAULT_PALETTE",
+    "normalize_palette",
+    "shell_accent_qss",
+    "theme_apply_payload",
+    "BUNDLE_FORMAT",
+    "export_organism_bundle",
+    "import_organism_bundle",
+    "PROMOTE_P95_MS",
+    "QUARANTINE_P95_MS",
+    "EvolutionRuntime",
+    "GeneratedSkillModule",
+    "HotRegisterResult",
+    "PipelineTiming",
+    "QuarantineResult",
 ]

@@ -36,7 +36,10 @@ from organism_sdk.generative import (
     PromoteRefused,
     SkillRegistry,
     TemplateDraftBackend,
+    export_organism_bundle,
+    import_organism_bundle,
     resolve_backend,
+    theme_apply_payload,
 )
 from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
@@ -52,7 +55,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.7.2"
+DESKTOP_VERSION = "1.8.0"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -1743,6 +1746,9 @@ class DesktopService:
         d = profile.as_dict()
         d["cpu_everywhere"] = True
         d["may_actuate"] = False
+        d["active_organism_id"] = self.organism_store.active_id()
+        d["organisms"] = self.organism_store.list_summaries()
+        d["theme"] = theme_apply_payload(d.get("appearance") or {})
         return d
 
     def last_organism_action(self) -> dict | None:
@@ -1869,12 +1875,22 @@ class DesktopService:
         result = self.asset_pipeline.evolve_looks(brief, kind=kind)  # type: ignore[arg-type]
         if result.get("ok"):
             self.organism_store.sync_appearance(profile.organism_id, self.asset_pipeline.appearance)
+            theme = None
+            if kind in ("theme", "pack") or (result.get("appearance") or {}).get("palette"):
+                theme = self.apply_organism_theme()
+                self.organism_store.log(
+                    profile.organism_id,
+                    "looks_theme_apply",
+                    f"Desktop theme apply after {kind}",
+                    payload=theme,
+                )
             self.organism_store.log(
                 profile.organism_id,
                 "looks_apply",
                 f"Applied {kind} from brief",
                 payload=result.get("appearance") or {},
             )
+            result["theme"] = theme or theme_apply_payload(result.get("appearance") or {})
         self._last_organism_action = result
         return result
 
@@ -1981,14 +1997,28 @@ class DesktopService:
         assert self.code_pipeline and self.organism_store
         profile = self.organism_store.ensure_default()
         bundle = self.code_pipeline.demote(bundle_id, reason=reason)
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None:
+            runtime_meta = self.evolution_runtime.after_rollback(
+                bundle, organism_id=profile.organism_id, reason=reason
+            )
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
             profile.organism_id,
             "code_demote",
             f"Demoted code bundle {bundle_id}",
-            payload={"bundle_id": bundle_id, "reason": reason},
+            payload={
+                "bundle_id": bundle_id,
+                "reason": reason,
+                "deregister": (runtime_meta.get("deregister") or {}),
+            },
         )
-        out = {"ok": True, "bundle": bundle.as_dict()}
+        out = {
+            "ok": True,
+            "bundle": bundle.as_dict(),
+            "runtime": runtime_meta,
+            "deregistered": (runtime_meta.get("deregister") or {}).get("deregistered"),
+        }
         self._last_organism_action = out
         return out
 
@@ -2001,14 +2031,29 @@ class DesktopService:
             bundle = self.code_pipeline.rollback_last_promote(reason=reason)
         except PromoteRefused as e:
             raise ActuationRefused(f"REFUSE rollback: {e}") from e
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None:
+            runtime_meta = self.evolution_runtime.after_rollback(
+                bundle, organism_id=profile.organism_id, reason=reason
+            )
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
             profile.organism_id,
             "code_rollback",
             f"Rolled back code bundle {bundle.bundle_id}",
-            payload={"bundle_id": bundle.bundle_id, "reason": reason},
+            payload={
+                "bundle_id": bundle.bundle_id,
+                "reason": reason,
+                "deregister": (runtime_meta.get("deregister") or {}),
+            },
         )
-        out = {"ok": True, "bundle": bundle.as_dict()}
+        out = {
+            "ok": True,
+            "bundle": bundle.as_dict(),
+            "runtime": runtime_meta,
+            "deregistered": (runtime_meta.get("deregister") or {}).get("deregistered"),
+            "module_id": (runtime_meta.get("deregister") or {}).get("module_id"),
+        }
         self._last_organism_action = out
         return out
 
@@ -2080,12 +2125,20 @@ class DesktopService:
         result = self.asset_pipeline.evolve_pack(brief)
         if result.get("ok"):
             self.organism_store.sync_appearance(profile.organism_id, self.asset_pipeline.appearance)
+            theme = self.apply_organism_theme()
             self.organism_store.log(
                 profile.organism_id,
                 "looks_pack",
                 "Applied multi-asset looks pack",
                 payload=result.get("appearance") or {},
             )
+            self.organism_store.log(
+                profile.organism_id,
+                "looks_theme_apply",
+                "Desktop theme apply after looks pack",
+                payload=theme,
+            )
+            result["theme"] = theme
         self._last_organism_action = result
         return result
 
@@ -2094,7 +2147,121 @@ class DesktopService:
         assert self.asset_pipeline is not None
         return self.asset_pipeline.preview_for_desktop(asset_id)
 
+    def apply_organism_theme(self) -> dict:
+        """Looks promote → Desktop theme apply payload (offscreen-safe QSS)."""
+        self._require_generative()
+        assert self.asset_pipeline is not None
+        appearance = self.asset_pipeline.appearance.as_dict()
+        payload = theme_apply_payload(appearance)
+        self._last_organism_action = {"ok": True, "theme": payload}
+        return payload
+
+    def list_organisms(self) -> list[dict]:
+        self._require_generative()
+        assert self.organism_store is not None
+        return self.organism_store.list_summaries()
+
+    def create_organism(self, display_name: str = "Organism", *, make_active: bool = True) -> dict:
+        self._require_generative()
+        assert self.organism_store is not None
+        profile = self.organism_store.create(display_name=display_name, make_active=make_active)
+        self.organism_store.log(
+            profile.organism_id,
+            "organism_create",
+            f"Created Organism {profile.display_name}",
+            payload={"organism_id": profile.organism_id, "active": make_active},
+        )
+        if make_active and self.asset_pipeline is not None:
+            # Fresh appearance for new Organism
+            from organism_sdk.generative.assets import AppearanceProfile
+
+            self.asset_pipeline.appearance = AppearanceProfile()
+        out = {
+            "ok": True,
+            "organism": profile.as_dict(),
+            "active_organism_id": self.organism_store.active_id(),
+            "organisms": self.organism_store.list_summaries(),
+        }
+        self._last_organism_action = out
+        return out
+
+    def switch_organism(self, organism_id: str) -> dict:
+        self._require_generative()
+        assert self.organism_store is not None and self.asset_pipeline is not None
+        before = self.organism_store.active_id()
+        profile = self.organism_store.switch(organism_id)
+        # Restore appearance palette onto live asset pipeline
+        from organism_sdk.generative.assets import AppearanceProfile
+
+        app_raw = dict(profile.appearance or {})
+        self.asset_pipeline.appearance = AppearanceProfile(
+            avatar_id=app_raw.get("avatar_id"),
+            skin_id=app_raw.get("skin_id"),
+            icon_id=app_raw.get("icon_id"),
+            theme_id=app_raw.get("theme_id"),
+            pack_id=app_raw.get("pack_id"),
+            palette=dict(app_raw.get("palette") or {}),
+            revision=int(app_raw.get("revision") or 0),
+        )
+        theme = self.apply_organism_theme()
+        self.organism_store.log(
+            profile.organism_id,
+            "organism_switch",
+            f"Switched active Organism {before} → {organism_id}",
+            payload={"before": before, "after": organism_id},
+        )
+        out = {
+            "ok": True,
+            "before": before,
+            "organism": profile.as_dict(),
+            "active_organism_id": self.organism_store.active_id(),
+            "theme": theme,
+            "organisms": self.organism_store.list_summaries(),
+        }
+        self._last_organism_action = out
+        return out
+
+    def export_organism_bundle(self, dest: str | Path | None = None) -> dict:
+        self._require_generative()
+        assert self.organism_store and self.skill_registry and self.asset_pipeline
+        profile = self.organism_store.ensure_default()
+        if dest is None:
+            out_dir = self._repo_root / "organism_data" / "bundles"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            dest = out_dir / f"{profile.organism_id}_bundle.zip"
+        result = export_organism_bundle(
+            profile=profile,
+            skills=self.skill_registry.list_skills(),
+            appearance=self.asset_pipeline.appearance,
+            asset_pipeline=self.asset_pipeline,
+            dest=dest,
+        )
+        self.organism_store.log(
+            profile.organism_id,
+            "bundle_export",
+            f"Exported Organism bundle to {result['path']}",
+            payload=result.get("manifest") or {},
+        )
+        self._last_organism_action = result
+        return result
+
+    def import_organism_bundle(self, path: str | Path, *, switch_active: bool = True) -> dict:
+        self._require_generative()
+        assert self.organism_store and self.skill_registry and self.asset_pipeline
+        result = import_organism_bundle(
+            path=path,
+            organism_store=self.organism_store,
+            skill_registry=self.skill_registry,
+            asset_pipeline=self.asset_pipeline,
+            switch_active=switch_active,
+        )
+        theme = self.apply_organism_theme() if result.get("ok") else None
+        result["theme"] = theme
+        self._last_organism_action = result
+        return result
+
     def docs_links(self) -> list[dict[str, str]]:
+
         root = self._repo_root / "docs"
         return [
             {"title": "CPU Everywhere", "path": str(root / "CPU_EVERYWHERE.md")},
@@ -2102,6 +2269,7 @@ class DesktopService:
             {"title": "Degradation Drillbook", "path": str(root / "ops" / "DEGRADATION_DRILLBOOK.md")},
             {"title": "Wet-lab Safety Policy", "path": str(root / "ops" / "WETLAB_SAFETY_POLICY.md")},
             {"title": "Organism Generative Evolution", "path": str(root / "v1.7" / "ORGANISM_GENERATIVE_EVOLUTION.md")},
+            {"title": "Organism v1.8 Desktop", "path": str(root / "v1.8" / "DESKTOP.md")},
             {"title": "Desktop v1.7", "path": str(root / "v1.7" / "DESKTOP.md")},
             {"title": "Desktop v1.6.1", "path": str(root / "v1.6.1" / "DESKTOP.md")},
             {"title": "API Freeze v1.0", "path": str(root / "API_FREEZE_v1.0.md")},

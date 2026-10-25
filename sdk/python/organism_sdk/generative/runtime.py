@@ -2,6 +2,7 @@
 
 v1.7.2: CodePipeline promote → ModuleRegistry hot-register (shadow gate),
 evolution events → TraceEmitter, optional hormone pulse on promote,
+v1.8.0: rollback / demote also deregisters GeneratedSkillModule from ModuleRegistry;
 ImmuneLayer quarantine demotes drafts that fail contracts.
 """
 from __future__ import annotations
@@ -550,7 +551,100 @@ class EvolutionRuntime:
             elapsed_ms=elapsed,
         )
 
+    def module_id_for(self, bundle: CodeBundle, *, skill: SkillDescriptor | None = None) -> str:
+        base = skill.skill_id if skill is not None else bundle.bundle_id
+        return f"gen_{base}"[:64]
+
+    def find_catalog_for_bundle(self, bundle_id: str) -> dict[str, Any] | None:
+        for entry in self._catalog.values():
+            if entry.get("bundle_id") == bundle_id:
+                return entry
+        # Fallback: module id derived from bare bundle id.
+        mid = f"gen_{bundle_id}"[:64]
+        for entry in self._catalog.values():
+            if entry.get("module_id") == mid:
+                return entry
+        return None
+
+    def deregister_promoted(
+        self,
+        bundle: CodeBundle,
+        *,
+        skill: SkillDescriptor | None = None,
+        organism_id: str = "",
+        reason: str = "rollback",
+    ) -> dict[str, Any]:
+        """Remove GeneratedSkillModule registered for a promoted bundle (v1.8)."""
+        if self.registry is None:
+            return {"deregistered": False, "reason": "no_registry"}
+        entry = self.find_catalog_for_bundle(bundle.bundle_id)
+        module_id = None
+        catalog_id = None
+        if entry is not None:
+            module_id = entry.get("module_id")
+            catalog_id = entry.get("catalog_id")
+        if module_id is None:
+            module_id = self.module_id_for(bundle, skill=skill)
+            catalog_id = f"generative:{module_id}"
+        deregistered = False
+        with self._lock:
+            if module_id in self.registry.list_module_ids():
+                try:
+                    self.registry.deregister(module_id, drain="immediate", timeout_s=1)
+                    deregistered = True
+                except Exception as exc:
+                    return {
+                        "deregistered": False,
+                        "module_id": module_id,
+                        "error": str(exc),
+                        "reason": reason,
+                    }
+            self.modules.pop(module_id, None)
+            if catalog_id and catalog_id in self._catalog:
+                self._catalog.pop(catalog_id, None)
+            # Also drop any catalog entry matching module_id.
+            drop = [cid for cid, e in self._catalog.items() if e.get("module_id") == module_id]
+            for cid in drop:
+                self._catalog.pop(cid, None)
+        self.emit_evolution(
+            kind="code_rollback" if reason.startswith("roll") else "code_demote",
+            summary=f"Deregistered {module_id} after {reason}",
+            organism_id=organism_id,
+            bundle_id=bundle.bundle_id,
+            skill_id=skill.skill_id if skill else (entry or {}).get("skill_id"),
+            module_id=module_id,
+            stage="ROLLBACK" if reason.startswith("roll") else "DEMOTION",
+            payload={"deregistered": deregistered, "catalog_id": catalog_id, "reason": reason},
+        )
+        if self.trace is not None and deregistered:
+            self.trace.emit_lifecycle(
+                LifecycleTraceEntry(
+                    module_id=module_id,
+                    from_state="EXPLORATION",
+                    to_state="DRAINED",
+                    event=f"generative_{reason}_deregister",
+                )
+            )
+        return {
+            "deregistered": deregistered,
+            "module_id": module_id,
+            "catalog_id": catalog_id,
+            "reason": reason,
+        }
+
+    def after_rollback(
+        self,
+        bundle: CodeBundle,
+        *,
+        organism_id: str = "",
+        reason: str = "rollback",
+    ) -> dict[str, Any]:
+        """Post-rollback hook: deregister GeneratedSkillModule from ModuleRegistry."""
+        result = self.deregister_promoted(bundle, organism_id=organism_id, reason=reason)
+        return {"deregister": result, "timings": self.timings.as_dict()}
+
     def after_promote(
+
         self,
         bundle: CodeBundle,
         *,
