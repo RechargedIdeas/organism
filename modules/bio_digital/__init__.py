@@ -1,4 +1,4 @@
-"""Bio-Digital Hybrid Cluster adapters for Organism (v1.3).
+"""Bio-Digital Hybrid Cluster adapters for Organism (v1.4).
 
 Maps Physarum / Mycelium RESEARCH_TIER substrates from
 https://github.com/Recharged-Ideas/Bio-Digital_Hybrid_Cluster
@@ -43,3 +43,5 @@ __all__ = [
     "gpu_twin_enabled",
     "run_numpy_wave",
 ]
+
+# v1.4 wet-lab stub (import bio_digital.wetlab explicitly)

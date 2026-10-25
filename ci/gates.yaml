@@ -243,3 +243,8 @@ category_bio:
     blocking: true
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/ops/test_soak_ops.py"
+
+  - id: v14:wetlab
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/bio_digital/tests/test_wetlab.py"
