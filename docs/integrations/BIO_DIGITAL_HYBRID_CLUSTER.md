@@ -142,6 +142,15 @@ Phases I1–I8 are implemented in this release line.
 
 ---
 
+
+## 8c. v1.2 bridges
+
+| Piece | Module | Notes |
+|---|---|---|
+| Telemetry | `telemetry_bridge.py` | In-process metrics; optional HTTP JSON client |
+| Hypervisor drill | `hypervisor_map.kill_active_mid_flight` | CI `v12:hypervisor_drill` |
+| GPU twin | `gpu_twin.py` | `ORGANISM_BIO_GPU_TWIN=1` + torch; else CPU HAL |
+
 ## 8b. Live import (v1.2)
 
 `BIO_DIGITAL_HYBRID_ROOT` (default `/workspace/Bio-Digital_Hybrid_Cluster` when present) loads real Hybrid HAL / slime_mold / mycelium via `bio_digital.vendor_loader`. Missing path → Organism stubs. See `modules/bio_digital/VENDOR.md`.

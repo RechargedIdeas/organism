@@ -17,6 +17,7 @@ from bio_digital.twin_bridge import TwinBridge
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
 from bio_digital.vendor_loader import load_hybrid, resolve_hybrid_root, hybrid_root_present
 from bio_digital.telemetry_bridge import TelemetryBridge, NodeStatusView, EnvironmentStateView
+from bio_digital.gpu_twin import GpuTwinSimulator, torch_available, gpu_twin_enabled
 
 __all__ = [
     "SlimeMoldModule",
@@ -37,4 +38,7 @@ __all__ = [
     "TelemetryBridge",
     "NodeStatusView",
     "EnvironmentStateView",
+    "GpuTwinSimulator",
+    "torch_available",
+    "gpu_twin_enabled",
 ]

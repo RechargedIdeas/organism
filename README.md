@@ -8,7 +8,7 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.1.0** — software Organism **COMPLETE** |
+| **Release** | **v1.2.0** — Live Hybrid import, telemetry bridge, hypervisor drill, optional GPU twin |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |

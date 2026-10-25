@@ -3,6 +3,26 @@
 All notable changes to Organism are documented here.  
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md` (additive integrations in 1.x).
 
+## [1.2.0] — 2026-10-24
+
+### Added
+- **Live Hybrid import** — `bio_digital.vendor_loader` loads real HAL / slime_mold / mycelium when `BIO_DIGITAL_HYBRID_ROOT` (or default checkout) is present; stub fallback otherwise.
+- **Telemetry bridge** — NodeStatus / EnvironmentState / metrics → `HealthReport.probes` + optional hormone stress; workspace mirror `affects_control=False`.
+- **Hypervisor drill** — Active/Standby drain→promote; kill ACTIVE mid-flight; CI gate `v12:hypervisor_drill`.
+- **Optional GPU twin** — torch wave sim behind RESEARCH_SIM + `ORGANISM_BIO_GPU_TWIN`; CPU HAL twin default; skip-clean without torch.
+- `HealthReport.probes` additive field (API freeze additive).
+
+### Changed
+- Package / SDK versions **1.2.0**.
+- Bio species module versions **1.2.0**.
+
+### Security / safety
+- Bio modules remain `may_actuate=False`; hypervisor events never control path.
+- Twin / telemetry feeds mark `affects_control=False`.
+
+### Test baseline
+Default suite: **167 passed**, 1 skipped (torch), 2 slow deselected.
+
 ## [1.1.0] — 2026-10-24
 
 ### Added

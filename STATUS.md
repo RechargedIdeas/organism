@@ -1,54 +1,52 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v1.1.0 — Bio-Digital Hybrid Cluster integration**  
-**Corpus:** closed v0.1–v1.0 + bio-digital mapping (I1–I8)  
+**Release:** **v1.2.0 — Live Hybrid import, telemetry, hypervisor drill, GPU twin**  
+**Corpus:** closed v0.1–v1.1 + v1.2 P1–P4  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.1.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.1.0)
+**Tag:** [v1.2.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.2.0)
 
 ## Verdict
 
-Software Organism remains complete (v1.0). **v1.1** adds a proper mapping of [Bio-Digital_Hybrid_Cluster](https://github.com/Recharged-Ideas/Bio-Digital_Hybrid_Cluster) as RESEARCH_TIER / exploration-only adapters under `modules/bio_digital/`. Wet-lab GPIO and PySide6 studio stay external.
+Software Organism complete (v1.0). Bio-Digital mapping (v1.1). **v1.2** wires a live Hybrid checkout when present, telemetry→health/hormone, Active/Standby kill-mid-flight drill, and an optional torch GPU twin (CPU HAL default).
 
-## v1.1 phase table
+## v1.2 phase table
 
 | Phase | Status | Notes |
 |---|---|---|
-| **I1** Mapping doc | **green** | `docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md` |
-| **I2** HAL / RESEARCH_SIM | **green** | `BioDigitalHAL`, `ORGANISM_BIO_DIGITAL_SIM` |
-| **I3** Species modules | **green** | `slime_mold`, `mycelium` — `may_actuate=False` |
-| **I4** Bus → Channel+workspace | **green** | heartbeat channel-only; spike/spatial → bindings |
-| **I5** Twin bridge | **green** | `bio_twin` + optional `hormone_state` stress feed |
-| **I6** Hypervisor map | **green** | `DrainPolicy` + hot_swap / apoptosis successor |
-| **I7** Router invariants | **green** | never control primary; HW gate |
-| **I8** Release | **green** | tag `v1.1.0` |
+| **P1** Live Hybrid import | **green** | `vendor_loader`; default root `/workspace/Bio-Digital_Hybrid_Cluster` |
+| **P2** Telemetry bridge | **green** | probes + hormone stress; twin/telemetry `affects_control=False` |
+| **P3** Hypervisor drill | **green** | kill ACTIVE → promote STANDBY; `v12:hypervisor_drill` |
+| **P4** Optional GPU twin | **green** | `ORGANISM_BIO_GPU_TWIN=1` + torch; else CPU HAL / gated |
 
-**Default pytest:** 150 passed (2 slow deselected).
+**Default pytest:** **167 passed**, 1 skipped (torch), 2 slow deselected.
+
+## Live vs stub
+
+| Condition | Backend |
+|---|---|
+| `BIO_DIGITAL_HYBRID_ROOT` set to valid checkout, or default path exists | **live** Hybrid modules (PySide6 QColor shim if needed) |
+| Path missing / `backend="stub"` | Organism RESEARCH_SIM stubs |
 
 ## True external deps left
 
 | Dep | Why external |
 |---|---|
 | Real neuromorphic silicon | RESEARCH_SIM via `ORGANISM_NEURO_SIM` |
-| Wet-lab / molecular / bioreactor GPIO | bio_digital + physical_research exploration only |
+| Wet-lab / bioreactor GPIO | bio_digital + physical_research exploration only |
 | Production WAN BFT + TPM | multi-process software only |
 | Hybrid PySide6 studio / OpenGL twin UI | external tooling (VENDOR.md) |
-
-## Amendments (IMP-*)
-
-| ID | Topic | Resolution |
-|---|---|---|
-| IMP-22–25 | (v1.0) | unchanged |
-| IMP-26 | bio_digital adapters | Hybrid domain re-implemented as Organism modules; optional `BIO_DIGITAL_HYBRID_ROOT` |
+| Torch (optional) | GPU twin only when installed + opted in |
 
 ## Tooling
 
 ```bash
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q -m 'not slow'
-# Opt-in: ORGANISM_WALL_CLOCK_FULL=1 | ORGANISM_SOAK_FULL=1 | ORGANISM_NEURO_SIM=1
-# Bio-digital RESEARCH_SIM default on; set ORGANISM_BIO_DIGITAL_SIM=0 to mark physical-unavailable
+export BIO_DIGITAL_HYBRID_ROOT=/workspace/Bio-Digital_Hybrid_Cluster
+# Opt-in: ORGANISM_BIO_GPU_TWIN=1 (requires torch)
+# Opt-in: ORGANISM_BIO_DIGITAL_REAL_DELAYS=1
 ```
 
 ## Prior lines
 
-v1.0.0 software-complete (Phases A–H). See git history and `docs/v0.*/` / `docs/v1.0/`.
+v1.1.0 Hybrid mapping I1–I8. v1.0.0 software-complete A–H.
