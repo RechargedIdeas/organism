@@ -24,6 +24,7 @@ def _cmd_validate_config(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
     from organism_sdk.deploy.stack import build_minimal_stack
+    from organism_sdk.deploy.status_facts import enrich_cli_status
 
     cfg = load_deploy_config(args.config)
     issues = validate_deploy_config(cfg)
@@ -31,7 +32,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "issues": issues}, indent=2))
         return 1
     stack = build_minimal_stack(cfg)
-    print(json.dumps(stack.status(), indent=2))
+    print(json.dumps(enrich_cli_status(stack), indent=2))
     return 0
 
 

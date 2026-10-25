@@ -19,6 +19,7 @@ from organism_sdk.degradation import (
 )
 from organism_sdk.deploy.config import DeployConfig, default_cpu_only_config, load_deploy_config
 from organism_sdk.deploy.stack import MinimalStack, build_minimal_stack
+from organism_sdk.deploy.status_facts import PARITY_KEYS, common_status_facts
 from organism_sdk.device import accelerator_selection_summary, select_compute_backend
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.hypervector import Hypervector
@@ -35,7 +36,7 @@ from organism_sdk.trace import (
 )
 from organism_sdk.workspace import BindingRecord
 
-DESKTOP_VERSION = "1.5.1"
+DESKTOP_VERSION = "1.5.2"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -146,24 +147,74 @@ class DesktopService:
 
     def home_status(self) -> dict[str, Any]:
         st = self.stack.status()
-        device = select_compute_backend().as_dict()
+        common = common_status_facts(self.stack)
+        device = common.get("device") or select_compute_backend().as_dict()
         return {
-            "organism_version": sdk_version,
+            "organism_version": common["organism_version"],
             "desktop_version": DESKTOP_VERSION,
-            "profile": st.get("profile"),
+            "profile": common["profile"],
+            "version": common["version"],
             "cpu_everywhere": True,
             "device": device,
-            "accelerator_summary": accelerator_selection_summary(),
+            "device_runtime": common["device_runtime"],
+            "device_backend": common["device_backend"],
+            "prefer_gpu": common["prefer_gpu"],
+            "accelerator_summary": common["accelerator_summary"],
             "degradation_level": str(self.degrade.level),
-            "router_level": st.get("router_level"),
+            "router_level": self.stack.router.current_level(),
+            "router_level_config": common["router_level_config"],
             "module_count": st.get("module_count"),
             "modules": st.get("modules"),
+            "registered_ids": list(st.get("registered_ids") or []),
             "workspace_bindings": st.get("workspace_bindings"),
-            "health_host": st.get("health_host"),
-            "health_port": st.get("health_port"),
+            "health_host": common["health_host"],
+            "health_port": common["health_port"],
             "serve_hint": "organism serve -c deploy/config/cpu_only.yaml",
+            "cli_parity": self.status_parity(),
+            "soak": self.soak_snapshot(),
             "ok": True,
         }
+
+    def status_parity(self) -> dict[str, Any]:
+        """Subset of facts that must match `organism status` (enrich_cli_status).
+
+        Compared against a freshly built MinimalStack with the same DeployConfig
+        (Desktop may register extra bio modules; those are excluded from parity).
+        """
+        common = common_status_facts(self.stack)
+        return {k: common[k] for k in PARITY_KEYS}
+
+    def soak_snapshot(self) -> dict[str, Any]:
+        """Lightweight ops soak snapshot for Home/Ops panels (no long soak)."""
+        runbook = self._repo_root / "docs" / "ops" / "SOAK_RUNBOOK.md"
+        script = self._repo_root / "scripts" / "soak_target.sh"
+        try:
+            from harness.scenarios.v04_soak import run_soak, soak_reconstructibility_ok
+
+            # Tiny virtual-clock soak — UI/ops friendly, not the full suite.
+            result = run_soak(windows=4, max_bindings=16)
+            recon = soak_reconstructibility_ok(result)
+            soak_body: dict[str, Any] = {
+                "ok": True,
+                "reconstructible": recon,
+                "windows": result.windows,
+                "plans": result.plans,
+                "binding_count_final": result.binding_count_final,
+                "flapping": result.flapping,
+                "levels_seen": list(result.levels_seen),
+            }
+        except Exception as exc:
+            soak_body = {"ok": False, "error": str(exc)}
+        soak_body.update(
+            {
+                "runbook_path": str(runbook),
+                "runbook_exists": runbook.is_file(),
+                "script_path": str(script),
+                "script_exists": script.is_file(),
+                "cpu_everywhere": True,
+            }
+        )
+        return soak_body
 
     # ----- Registry -----
 
@@ -668,16 +719,41 @@ class DesktopService:
     def ops_info(self) -> dict[str, Any]:
         from bio_digital.wetlab.safety import SafetyPolicy
 
+        validate = self.validate_deploy_config()
+        runbook = self._repo_root / "docs" / "ops" / "SOAK_RUNBOOK.md"
+        script = self._repo_root / "scripts" / "soak_target.sh"
+        cfg_path = self._repo_root / "deploy" / "config" / "cpu_only.yaml"
         return {
             "cpu_everywhere": True,
-            "validate": self.validate_deploy_config(),
-            "soak_runbook": str(self._repo_root / "docs" / "ops" / "SOAK_RUNBOOK.md"),
-            "soak_script": str(self._repo_root / "scripts" / "soak_target.sh"),
+            "cpu_everywhere_badge": "CPU Everywhere ●",
+            "deploy_profile": validate.get("profile") or self.stack.config.profile,
+            "deploy_config_path": str(cfg_path),
+            "deploy_config_exists": cfg_path.is_file(),
+            "validate": validate,
+            "soak_runbook": str(runbook),
+            "soak_runbook_exists": runbook.is_file(),
+            "soak_script": str(script),
+            "soak_script_exists": script.is_file(),
+            "soak_snapshot": self.soak_snapshot(),
+            "cli_parity": self.status_parity(),
             "wetlab_policy_doc": str(self._repo_root / "docs" / "ops" / "WETLAB_SAFETY_POLICY.md"),
             "wetlab_policy": SafetyPolicy.deny_all().as_dict(),
             "cpu_everywhere_doc": str(self._repo_root / "docs" / "CPU_EVERYWHERE.md"),
             "api_freeze": str(self._repo_root / "docs" / "API_FREEZE_v1.0.md"),
             "desktop_version": DESKTOP_VERSION,
+            "organism_version": sdk_version,
+        }
+
+    def refresh_bundle(self) -> dict[str, Any]:
+        """Aggregate snapshot used by Refresh-All (Ctrl+Shift+R)."""
+        return {
+            "home": self.home_status(),
+            "ops": self.ops_info(),
+            "physiology": self.physiology_snapshot(),
+            "modules": len(self.list_modules()),
+            "bindings": len(self.list_bindings()),
+            "traces": len(self.list_traces(limit=500)),
+            "ok": True,
         }
 
     def docs_links(self) -> list[dict[str, str]]:

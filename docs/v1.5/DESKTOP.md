@@ -94,3 +94,16 @@ Interactive panels now drive live SDK round-trips (not smoke-only):
 QT_QPA_PLATFORM=offscreen python -m organism_desktop --screenshot
 # writes desktop/screenshots/<panel>.png (gitignored)
 ```
+
+
+## v1.5.2 polish + CLI parity
+
+| Surface | Behavior |
+|---|---|
+| **Shared facts** | `organism_sdk.deploy.status_facts` — `PARITY_KEYS` shared by `organism status` and `DesktopService.status_parity` |
+| **Home** | CPU Everywhere badge, degrade badge, CLI parity JSON, short soak snapshot + runbook path |
+| **Ops** | Deploy profile badge, soak runbook path (exists check), validate-config, wet-lab deny policy |
+| **Shell** | Ctrl+R refresh panel · Ctrl+Shift+R refresh-all · Ctrl+1–0 panel jump · status-bar toasts |
+| **Smoke** | `--smoke` runs refresh-all and prints a parity summary line |
+
+Bio / wet-lab actuation remains **hard-refused** in the service layer.

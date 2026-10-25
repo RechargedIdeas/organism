@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.5.2] — 2026-10-24
+
+### Added
+- Shared **CLI ↔ Desktop status parity** (`organism_sdk.deploy.status_facts`):
+  `common_status_facts` / `enrich_cli_status` / `PARITY_KEYS`; `organism status`
+  JSON now includes `cpu_everywhere`, `organism_version`, `device_runtime`.
+- `DesktopService.status_parity`, `soak_snapshot`, `refresh_bundle`.
+- Home / Ops polish: live CPU Everywhere + deploy profile badges, soak snapshot
+  + runbook path, CLI parity block on Home.
+- Keyboard shortcuts: **Ctrl+R** refresh panel, **Ctrl+Shift+R** refresh-all,
+  **Ctrl+1–0** jump panels; status-bar **toasts** for errors (non-silent).
+- Tests: CLI/Desktop parity, e2e register→bind→decide→traces→L0→L1,
+  desktop refresh soak (50× offscreen), CLI status enrichment.
+
+### Changed
+- Package / SDK / Desktop versions **1.5.2**.
+- `--smoke` prints parity line and runs refresh-all once.
+
+### Security / safety
+- Bio actuation remains hard-refused (`ActuationRefused`); e2e asserts refuse
+  after full flow. Wet-lab policy still deny-by-default.
+
+### Test baseline
+Default suite: **249 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.5.1] — 2026-10-24
 
 ### Added

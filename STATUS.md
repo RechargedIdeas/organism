@@ -1,16 +1,16 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v1.5.1 — Desktop deepenings**  
+**Release:** **v1.5.2 — Desktop polish + CLI parity**  
 **Corpus:** closed v0.1–v1.4 + v1.5 desktop  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.5.1](https://github.com/RechargedIdeas/organism/releases/tag/v1.5.1)
+**Tag:** [v1.5.2](https://github.com/RechargedIdeas/organism/releases/tag/v1.5.2)
 
 ## Verdict
 
-**v1.5.1** deepens the first-party **Organism Desktop** (PySide6): status, registry,
-workspace, pipeline builder, physiology, metamodel, bio-digital (exploration-only),
-traces, ops, and docs. Bio/wet-lab actuation is hard-refused in the UI service layer.
+**v1.5.2** polishes Organism Desktop and locks **CLI ↔ Desktop status parity**:
+Home/Ops show live CPU Everywhere + deploy/soak facts; shortcuts and toasts;
+e2e + refresh soak tests. Bio/wet-lab actuation remains hard-refused.
 
 ## v1.5 phase table
 
@@ -23,10 +23,11 @@ traces, ops, and docs. Bio/wet-lab actuation is hard-refused in the UI service l
 | **D4** Packaging | **green** | `[desktop]` extra, `organism-desktop` |
 | **D5** Release | **green** | tag **v1.5.0** |
 | **D6** Panel deepen + tests | **green** | tag **v1.5.1** |
+| **D7** Polish + CLI parity | **green** | tag **v1.5.2** |
 
 **Stack:** PySide6 6.12 (primary). NiceGUI documented as fallback only.
 
-**Default pytest:** **239 passed**, 0 skipped, 2 slow deselected (includes desktop).
+**Default pytest:** **249 passed**, 0 skipped, 2 slow deselected.
 
 ## True external deps left
 
@@ -44,5 +45,6 @@ traces, ops, and docs. Bio/wet-lab actuation is hard-refused in the UI service l
 PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q -m 'not slow'
 QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. \
   .venv/bin/python -m organism_desktop --smoke
+organism status -c deploy/config/cpu_only.yaml
 organism-desktop
 ```

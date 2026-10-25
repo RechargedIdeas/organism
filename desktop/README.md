@@ -1,6 +1,6 @@
 # Organism Desktop
 
-First-party **PySide6** control plane for Organism (v1.5.1).
+First-party **PySide6** control plane for Organism (v1.5.2).
 
 ```bash
 pip install -e '.[desktop]'

@@ -93,3 +93,17 @@ def test_cli_status():
 
 def test_cli_serve_dry_run():
     assert main(["serve", "-c", str(CFG), "--dry-run"]) == 0
+
+
+def test_cli_status_enrichment(capsys):
+    """organism status JSON includes shared parity keys (cpu_everywhere, etc.)."""
+    from organism_sdk.deploy.status_facts import PARITY_KEYS
+
+    rc = main(["status", "-c", str(CFG)])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    for k in PARITY_KEYS:
+        assert k in out, k
+    assert out["cpu_everywhere"] is True
+    assert out["device_runtime"] == "CPU_GENERAL"
+    assert out["profile"] == "cpu_only"

@@ -1,7 +1,7 @@
 """Organism Desktop — first-party control plane (v1.5)."""
 from __future__ import annotations
 
-__version__ = "1.5.1"
+__version__ = "1.5.2"
 
 from organism_desktop.nav import PANELS, panel_ids
 from organism_desktop.service import ActuationRefused, DESKTOP_VERSION, DesktopService

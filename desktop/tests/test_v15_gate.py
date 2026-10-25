@@ -19,12 +19,12 @@ def test_v15_desktop_gate():
         "ops",
         "docs",
     ]
-    assert DESKTOP_VERSION == "1.5.1"
+    assert DESKTOP_VERSION == "1.5.2"
     svc = DesktopService.create()
     st = svc.home_status()
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
-    assert st["desktop_version"] == "1.5.1"
+    assert st["desktop_version"] == "1.5.2"
 
     # Registry round-trip
     reg = svc.register_core_module("deterministic")
@@ -60,3 +60,9 @@ def test_v15_desktop_gate():
         pass
 
     assert svc.ops_info()["validate"]["ok"] is True
+    parity = svc.status_parity()
+    assert parity["cpu_everywhere"] is True
+    assert parity["device_runtime"] == "CPU_GENERAL"
+    soak = svc.soak_snapshot()
+    assert soak["runbook_exists"] is True
+    assert svc.refresh_bundle()["ok"] is True

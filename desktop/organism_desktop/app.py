@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QStatusBar,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -46,10 +47,19 @@ class MainWindow(QMainWindow):
         brand.setFont(f)
         left.addWidget(brand)
         sub = QLabel(f"Desktop {__version__} · CPU-first control plane")
+        sub.setObjectName("brand_sub")
         sub.setStyleSheet("color: #666;")
         left.addWidget(sub)
 
+        self.cpu_badge = QLabel("CPU Everywhere ●")
+        self.cpu_badge.setObjectName("shell_cpu_badge")
+        self.cpu_badge.setStyleSheet(
+            "background:#0a7; color:white; font-weight:bold; padding:4px 8px; border-radius:4px;"
+        )
+        left.addWidget(self.cpu_badge)
+
         self.nav = QListWidget()
+        self.nav.setObjectName("nav_list")
         self.nav.setFixedWidth(220)
         for spec in PANELS:
             item = QListWidgetItem(spec.title)
@@ -59,6 +69,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(left)
 
         self.stack = QStackedWidget()
+        self.stack.setObjectName("panel_stack")
         self._panels: dict[str, QWidget] = {}
         for spec in PANELS:
             cls = PANEL_CLASSES[spec.id]
@@ -69,6 +80,75 @@ class MainWindow(QMainWindow):
 
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
+
+        self._status = QStatusBar()
+        self.setStatusBar(self._status)
+        self._status.showMessage("Ready · Ctrl+R refresh panel · Ctrl+Shift+R refresh all · Ctrl+1–0 panels")
+
+        self._install_shortcuts()
+
+    def _install_shortcuts(self) -> None:
+        # Refresh current panel
+        sc_r = QShortcut(QKeySequence("Ctrl+R"), self)
+        sc_r.setObjectName("shortcut_refresh")
+        sc_r.activated.connect(self.refresh_current)
+
+        # Refresh all panels + service bundle
+        sc_ra = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+        sc_ra.setObjectName("shortcut_refresh_all")
+        sc_ra.activated.connect(self.refresh_all)
+
+        # Panel jump Ctrl+1 .. Ctrl+0 (10 panels)
+        for i, spec in enumerate(PANELS):
+            key = f"Ctrl+{0 if i == 9 else i + 1}"
+            sc = QShortcut(QKeySequence(key), self)
+            sc.setObjectName(f"shortcut_panel_{spec.id}")
+            # Capture index by default-arg
+            sc.activated.connect(lambda idx=i: self.nav.setCurrentRow(idx))
+
+        # Also expose as QActions for menu-less discoverability in tests
+        act = QAction("Refresh All", self)
+        act.setObjectName("action_refresh_all")
+        act.setShortcut(QKeySequence("Ctrl+Shift+R"))
+        act.triggered.connect(self.refresh_all)
+        self.addAction(act)
+
+    def toast(self, message: str, *, error: bool = False, ms: int = 6000) -> None:
+        """Non-silent status feedback (errors and info)."""
+        if error:
+            self._status.setStyleSheet("QStatusBar { color: #a40; font-weight: bold; }")
+        else:
+            self._status.setStyleSheet("")
+        self._status.showMessage(message, ms)
+
+    def refresh_current(self) -> None:
+        panel = self.stack.currentWidget()
+        try:
+            if hasattr(panel, "refresh"):
+                panel.refresh()
+            self.toast(f"Refreshed {getattr(panel, 'panel_id', 'panel')}")
+        except Exception as exc:
+            self.toast(f"Refresh failed: {exc}", error=True)
+
+    def refresh_all(self) -> None:
+        errors: list[str] = []
+        try:
+            self.service.refresh_bundle()
+        except Exception as exc:
+            errors.append(f"bundle:{exc}")
+        for pid, panel in self._panels.items():
+            try:
+                if hasattr(panel, "refresh"):
+                    panel.refresh()
+            except Exception as exc:
+                errors.append(f"{pid}:{exc}")
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+        if errors:
+            self.toast(f"Refresh-all errors: {'; '.join(errors)}", error=True)
+        else:
+            self.toast("Refresh-all OK (all panels)")
 
     def panel_ids(self) -> list[str]:
         return [p.id for p in PANELS]
@@ -122,11 +202,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         for i in range(win.nav.count()):
             win.nav.setCurrentRow(i)
             app.processEvents()
+        # Smoke also exercises refresh-all once (parity with keyboard path).
+        win.refresh_all()
         if args.screenshot:
             root = Path(__file__).resolve().parents[1]
             out = Path(args.screenshot_dir) if args.screenshot_dir else root / "screenshots"
             paths = win.grab_panel_screenshots(out)
             print(f"wrote {len(paths)} screenshots to {out}")
+        # Print CLI-parity JSON line for operators / CI grepping.
+        parity = service.status_parity()
+        print(f"smoke_ok desktop={__version__} cpu_everywhere={parity.get('cpu_everywhere')} "
+              f"profile={parity.get('profile')} runtime={parity.get('device_runtime')}")
         return 0
 
     win.show()
