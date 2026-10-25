@@ -34,9 +34,10 @@ def test_default_selection_is_cpu(monkeypatch):
 
 def test_prefer_gpu_falls_back_to_cpu_without_cuda(monkeypatch):
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
+    monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: False)
+    monkeypatch.setattr("organism_sdk.device.probe_accelerators", lambda: set())
+    # Leave torch_available as real; either torch_cpu or numpy_cpu is fine
     sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
-    if sel.runtime == RuntimeId.GPU_CUDA:
-        pytest.skip("box has CUDA — fallback branch N/A")
     assert sel.runtime == RuntimeId.CPU_GENERAL
     assert sel.fallback_from == RuntimeId.GPU_CUDA
     assert sel.backend in {"numpy_cpu", "torch_cpu"}
@@ -122,3 +123,63 @@ def test_prefer_accelerator_env(monkeypatch):
 
 def test_torch_probe_is_bool():
     assert isinstance(torch_available(), bool)
+
+
+def test_organism_torch_zero_forces_numpy(monkeypatch):
+    monkeypatch.setenv("ORGANISM_TORCH", "0")
+    monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
+    from organism_sdk import device as dev
+
+    assert dev.torch_opt_in_allowed() is False
+    assert dev.torch_available() is False
+    sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
+    assert sel.runtime == RuntimeId.CPU_GENERAL
+    assert sel.backend == "numpy_cpu"
+
+
+def test_prefer_gpu_with_mocked_no_cuda(monkeypatch):
+    """Never skip: mock cuda absent even if box has GPU."""
+    monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
+    monkeypatch.setenv("ORGANISM_TORCH", "1")
+    monkeypatch.setattr("organism_sdk.device.torch_available", lambda: True)
+    monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: False)
+    monkeypatch.setattr("organism_sdk.device.probe_accelerators", lambda: set())
+    sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
+    assert sel.runtime == RuntimeId.CPU_GENERAL
+    assert sel.fallback_from == RuntimeId.GPU_CUDA
+    assert sel.backend == "torch_cpu"
+
+
+def test_prefer_gpu_with_mocked_cuda(monkeypatch):
+    monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
+    monkeypatch.setenv("ORGANISM_TORCH", "1")
+    monkeypatch.setattr("organism_sdk.device.torch_available", lambda: True)
+    monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: True)
+    monkeypatch.setattr(
+        "organism_sdk.device.probe_accelerators",
+        lambda: {RuntimeId.GPU_CUDA.value},
+    )
+    sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
+    assert sel.runtime == RuntimeId.GPU_CUDA
+    assert sel.backend == "torch_cuda"
+    assert sel.accelerator_present is True
+
+
+def test_no_torch_mocked_stays_numpy(monkeypatch):
+    monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
+    monkeypatch.setattr("organism_sdk.device.torch_available", lambda: False)
+    monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: False)
+    monkeypatch.setattr("organism_sdk.device.probe_accelerators", lambda: set())
+    sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
+    assert sel.backend == "numpy_cpu"
+    assert sel.runtime == RuntimeId.CPU_GENERAL
+
+
+def test_accelerator_selection_summary_keys():
+    from organism_sdk.device import accelerator_selection_summary
+
+    s = accelerator_selection_summary()
+    assert s["default_runtime"] == "CPU_GENERAL"
+    assert "torch_available" in s
+    assert "cuda_available" in s
+    assert s["policy"] == "cuda_only_when_opt_in_and_present_else_cpu"

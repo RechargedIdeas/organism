@@ -74,7 +74,16 @@ class DeviceSelection:
         }
 
 
+def torch_opt_in_allowed() -> bool:
+    """False when ORGANISM_TORCH disables torch even if installed (CPU force)."""
+    v = os.environ.get("ORGANISM_TORCH", "1").strip().lower()
+    return v not in {"0", "false", "no", "off"}
+
+
 def torch_available() -> bool:
+    """True if the torch package imports AND is not disabled via ORGANISM_TORCH=0."""
+    if not torch_opt_in_allowed():
+        return False
     try:
         import torch  # noqa: F401
 
@@ -84,6 +93,7 @@ def torch_available() -> bool:
 
 
 def cuda_available() -> bool:
+    """True only when torch is usable and CUDA devices are present."""
     if not torch_available():
         return False
     try:
@@ -95,12 +105,28 @@ def cuda_available() -> bool:
 
 
 def prefer_accelerator() -> bool:
-    """True when env asks to prefer GPU/accelerator if present."""
+    """True when env asks to prefer GPU/accelerator if present (still soft).
+
+    Opt-in flags: ORGANISM_BIO_GPU_TWIN=1 or ORGANISM_PREFER_GPU=1.
+    Default is CPU. CUDA is used only when opted in AND torch+CUDA present.
+    """
     v = os.environ.get("ORGANISM_BIO_GPU_TWIN", "0").strip().lower()
     if v in {"1", "true", "yes", "on"}:
         return True
     v2 = os.environ.get("ORGANISM_PREFER_GPU", "0").strip().lower()
     return v2 in {"1", "true", "yes", "on"}
+
+
+def accelerator_selection_summary() -> dict[str, object]:
+    """Human/ops summary of torch/CUDA prefer policy (never raises)."""
+    return {
+        "torch_opt_in_allowed": torch_opt_in_allowed(),
+        "torch_available": torch_available(),
+        "cuda_available": cuda_available(),
+        "prefer_accelerator": prefer_accelerator(),
+        "default_runtime": RuntimeId.CPU_GENERAL.value,
+        "policy": "cuda_only_when_opt_in_and_present_else_cpu",
+    }
 
 
 def probe_accelerators() -> set[str]:
