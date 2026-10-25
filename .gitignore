@@ -43,3 +43,6 @@ Thumbs.db
 
 # Desktop offscreen screenshots (generated)
 desktop/screenshots/*.png
+
+# Desktop harness artifacts (soak/fuzz JSON)
+desktop/artifacts/*.json

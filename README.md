@@ -8,7 +8,7 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.6.0** — Trace explorer, plan inspector, multi-profile, catalog, contracts |
+| **Release** | **v1.6.1** — Hormone timeline, drillbook, rust ops, soak/fuzz |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
@@ -16,8 +16,9 @@ Organism is not a model. It is the **substrate** in which models live.
 | **CPU Everywhere** | [docs/CPU_EVERYWHERE.md](docs/CPU_EVERYWHERE.md) |
 | **Deploy** | [deploy/README.md](deploy/README.md) |
 | **Soak runbook** | [docs/ops/SOAK_RUNBOOK.md](docs/ops/SOAK_RUNBOOK.md) |
+| **Degradation drillbook** | [docs/ops/DEGRADATION_DRILLBOOK.md](docs/ops/DEGRADATION_DRILLBOOK.md) |
 | **Wet-lab safety** | [docs/ops/WETLAB_SAFETY_POLICY.md](docs/ops/WETLAB_SAFETY_POLICY.md) |
-| **Desktop** | [docs/v1.5/DESKTOP.md](docs/v1.5/DESKTOP.md) · [docs/v1.6/DESKTOP.md](docs/v1.6/DESKTOP.md) |
+| **Desktop** | [docs/v1.5/DESKTOP.md](docs/v1.5/DESKTOP.md) · [docs/v1.6/DESKTOP.md](docs/v1.6/DESKTOP.md) · [docs/v1.6.1/DESKTOP.md](docs/v1.6.1/DESKTOP.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Implementation** | [STATUS.md](STATUS.md) |
 

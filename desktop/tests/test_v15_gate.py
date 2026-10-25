@@ -21,12 +21,12 @@ def test_v15_desktop_gate():
         "ops",
         "docs",
     ]
-    assert DESKTOP_VERSION == "1.6.0"
+    assert DESKTOP_VERSION == "1.6.1"
     svc = DesktopService.create()
     st = svc.home_status()
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
-    assert st["desktop_version"] == "1.6.0"
+    assert st["desktop_version"] == "1.6.1"
 
     # Registry round-trip
     reg = svc.register_core_module("deterministic")
@@ -90,4 +90,16 @@ def test_v15_desktop_gate():
     assert parity["profile"] == "default"
     soak = svc.soak_snapshot()
     assert soak["runbook_exists"] is True
+    # v1.6.1: hormone timeline, drillbook, rust, soak harness
+    ht = svc.run_hormone_timeline(windows=4)
+    assert ht["ok"] is True and len(ht["rows"]) == 4
+    drill = svc.run_degradation_drillbook(confirm=True, target="L2")
+    assert drill["ok"] is True and drill["level"] == "L2"
+    svc.reset_physiology_demo()
+    fed = svc.run_federation_stub()
+    assert fed["stub_only"] is True and fed["not_production_bft"] is True
+    rust = svc.rust_runtime_status(probe_cargo=False)
+    assert rust["read_only"] is True and rust["crates_present"] >= 1
+    soak = svc.run_short_soak_harness(windows=4)
+    assert soak["ok"] is True and soak["result_path"]
     assert svc.refresh_bundle()["ok"] is True

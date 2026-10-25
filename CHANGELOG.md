@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.6.1] — 2026-10-24
+
+### Added
+- **Hormone / physiology timeline** — Physiology table of virtual-clock
+  `hormone_state` windows; emits `HormoneTraceEntry`; **Open Traces** jump.
+- **Degradation drillbook UI** — scripted L0→L4 with confirm dialog + reset;
+  `docs/ops/DEGRADATION_DRILLBOOK.md` safety notes.
+- **Federation / oxytocin stub** — multi-node mirror lag + quorum exploration
+  (explicitly not production WAN BFT+TPM).
+- **Rust runtime status** — Ops read-only crate inventory + optional
+  `cargo metadata` probe (no forced build on refresh).
+- **Soak / fuzz from Desktop** — Ops triggers short harness runs; writes
+  `desktop/artifacts/soak_*.json` / `fuzz_*.json` with progress + path.
+- UX: tooltips, empty hormone/bio states, bio actuation messaging polish.
+- Tests: hormone timeline, drillbook confirm, federation stub, rust/ops harness,
+  physiology panel Qt interactions.
+
+### Changed
+- Package / SDK / Desktop versions **1.6.1**.
+- Docs links include Degradation Drillbook + Desktop v1.6.1.
+
+### Security / safety
+- Bio actuation remains hard-refused (`ActuationRefused`).
+- Drillbook refuses without `confirm=True`; virtual clock only.
+- Federation stub labeled `not_production_bft` / `stub_only`.
+- Rust probe is read-only.
+
+### Test baseline
+Default suite: **280 passed**, 0 skipped, 2 slow deselected.
+
+
 ## [1.6.0] — 2026-10-24
 
 ### Added

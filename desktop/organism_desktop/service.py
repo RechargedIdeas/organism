@@ -38,7 +38,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.6.0"
+DESKTOP_VERSION = "1.6.1"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -101,6 +101,11 @@ class DesktopService:
     _active_config_path: Path | None = None
     _bio_register_error: str | None = None
     _hal: Any = None
+    _last_hormone_timeline: list[dict[str, Any]] = field(default_factory=list)
+    _last_drillbook: dict[str, Any] | None = None
+    _last_federation_stub: dict[str, Any] | None = None
+    _last_harness_result: dict[str, Any] | None = None
+    _last_rust_status: dict[str, Any] | None = None
 
     @classmethod
     def create(
@@ -575,6 +580,282 @@ class DesktopService:
         except Exception:
             pass
         return {"level": self.degrade.level, "router_level": self.stack.router.current_level()}
+
+
+    def last_hormone_timeline(self) -> list[dict[str, Any]]:
+        return list(self._last_hormone_timeline)
+
+    def run_hormone_timeline(
+        self,
+        *,
+        windows: int = 12,
+        dt_s: float = 1.0,
+    ) -> dict[str, Any]:
+        """Virtual-clock hormone_state demo → timeline rows + HormoneTraceEntry.
+
+        Does not enable bio actuation. Links to Traces via shared TraceEmitter.
+        """
+        if self.hormone is None:
+            return {
+                "ok": False,
+                "error": "hormone_bus_unavailable",
+                "rows": [],
+                "safe": True,
+                "note": "HormoneBus not attached; timeline empty.",
+            }
+        windows = max(1, min(int(windows), 64))
+        dt_s = float(dt_s) if dt_s > 0 else 1.0
+        rows: list[dict[str, Any]] = []
+        t_s = 0.0
+        for i in range(windows):
+            stress = 0.15 + 0.7 * (i / max(1, windows - 1))
+            reward = 0.05 * (i % 4)
+            accept = 0.4 + 0.5 * ((i % 5) / 4.0)
+            phase = (i % 24) / 24.0
+            levels = self.hormone.compute_release(
+                stress_load=stress,
+                viability_score=max(0.0, 1.0 - stress * 0.35),
+                crisis_precursor_count=float(i // 8),
+                mean_recent_reward=reward,
+                adapter_acceptance_rate=accept,
+                circadian_phase=phase,
+                dt_s=dt_s,
+            )
+            self.hormone.write_telemetry_window(levels)
+            reading = self.hormone.read_mirror(consumer="desktop_timeline")
+            dig = levels.digest() if hasattr(levels, "digest") else ""
+            try:
+                self.stack.trace.emit_hormone(
+                    HormoneTraceEntry(
+                        hormone_state_digest=str(dig),
+                        cortisol=float(levels.cortisol),
+                        dopamine=float(levels.dopamine),
+                        oxytocin=float(levels.oxytocin),
+                        melatonin=float(levels.melatonin),
+                        staleness_ms=float(getattr(reading, "staleness_ms", 0.0) or 0.0),
+                        source=str(getattr(reading, "source", "hormone_bus_mirror")),
+                    )
+                )
+            except Exception:
+                pass
+            row = {
+                "t_s": round(t_s, 3),
+                "window_id": levels.window_id,
+                "cortisol": round(float(levels.cortisol), 6),
+                "dopamine": round(float(levels.dopamine), 6),
+                "oxytocin": round(float(levels.oxytocin), 6),
+                "melatonin": round(float(levels.melatonin), 6),
+                "stress_load": round(stress, 4),
+                "source": str(getattr(reading, "source", levels.source)),
+            }
+            rows.append(row)
+            t_s += dt_s
+        self._last_hormone_timeline = rows
+        return {
+            "ok": True,
+            "rows": rows,
+            "windows": windows,
+            "dt_s": dt_s,
+            "safe": True,
+            "note": "Virtual-clock hormone timeline; no bio actuation. Open Traces for Hormone entries.",
+        }
+
+    def run_degradation_drillbook(
+        self,
+        *,
+        confirm: bool = False,
+        target: str = "L4",
+        max_steps_per_level: int = 48,
+    ) -> dict[str, Any]:
+        """Scripted L0→L4 physiology drill (virtual clock + FAST hysteresis).
+
+        Requires ``confirm=True`` (Desktop shows a confirmation dialog). Never
+        enables bio/wet-lab actuation. Emits DegradationTraceEntry per transition.
+        """
+        if not confirm:
+            return {
+                "ok": False,
+                "error": "confirm_required",
+                "safe": True,
+                "note": "Drillbook refused without confirm=True. See docs/ops/DEGRADATION_DRILLBOOK.md",
+            }
+        order = ["L1", "L2", "L3", "L4"]
+        if target not in ("L1", "L2", "L3", "L4"):
+            return {"ok": False, "error": f"bad_target:{target}", "safe": True}
+        stop_at = order.index(target)
+
+        self.reset_physiology_demo()
+        steps: list[dict[str, Any]] = []
+        steps.append(
+            {
+                "phase": "start",
+                "level": self.degrade.level,
+                "now_s": self.degrade.now_s,
+                "trigger": None,
+            }
+        )
+
+        # Signal scripts for each downward hop (FAST hysteresis).
+        scripts: list[tuple[str, HealthSignals]] = [
+            (
+                "L0→L1",
+                HealthSignals(
+                    h_m={"learned_module_t2": "DEGRADED"},
+                    c_m={"learned_module_t2": 0.5},
+                    thermal=0.05,
+                    det_ok=True,
+                    trace_ok=True,
+                    causal_ok=True,
+                ),
+            ),
+            (
+                "L1→L2",
+                HealthSignals(
+                    h_m={"learned_module_t2": "FAILED"},
+                    c_m={"learned_module_t2": 0.4},
+                    thermal=0.05,
+                    det_ok=True,
+                    trace_ok=True,
+                    causal_ok=False,
+                ),
+            ),
+            (
+                "L2→L3",
+                HealthSignals(
+                    h_m={"learned_module_t2": "FAILED"},
+                    c_m={"learned_module_t2": 0.3},
+                    thermal=0.05,
+                    gc=0.65,
+                    q_p95=80.0,
+                    det_ok=True,
+                    trace_ok=True,
+                    causal_ok=False,
+                ),
+            ),
+            (
+                "L3→L4",
+                HealthSignals(
+                    h_m={"learned_module_t2": "FAILED"},
+                    c_m={"learned_module_t2": 0.2},
+                    thermal=0.05,
+                    gc=0.9,
+                    mem=0.95,
+                    q_p95=300.0,
+                    byz=True,
+                    byz_count=3,
+                    det_ok=False,
+                    trace_ok=False,
+                    causal_ok=False,
+                ),
+            ),
+        ]
+
+        for idx in range(stop_at + 1):
+            phase, signals = scripts[idx]
+            expect = order[idx]
+            self.degrade.signals = signals
+            advanced = 0
+            while self.degrade.level != expect and advanced < max_steps_per_level:
+                self.degrade.advance(0.2)
+                advanced += 1
+            steps.append(
+                {
+                    "phase": phase,
+                    "level": self.degrade.level,
+                    "expected": expect,
+                    "now_s": round(self.degrade.now_s, 3),
+                    "ticks": advanced,
+                    "ok": self.degrade.level == expect,
+                    "transitions": list(self.degrade.transitions),
+                }
+            )
+            if self.degrade.level != expect:
+                break
+
+        # Mirror display level onto router
+        try:
+            self.stack.router.set_level(self.degrade.level)  # type: ignore[arg-type]
+        except Exception:
+            pass
+
+        result = {
+            "ok": self.degrade.level == target,
+            "level": self.degrade.level,
+            "target": target,
+            "steps": steps,
+            "transitions": list(self.degrade.transitions),
+            "now_s": self.degrade.now_s,
+            "safe": True,
+            "bio_actuation": False,
+            "note": (
+                "Virtual-clock degradation drillbook; no bio actuation. "
+                "Reset with reset_physiology_demo(). See docs/ops/DEGRADATION_DRILLBOOK.md"
+            ),
+        }
+        self._last_drillbook = result
+        return result
+
+    def last_drillbook(self) -> dict[str, Any] | None:
+        return dict(self._last_drillbook) if self._last_drillbook else None
+
+    def run_federation_stub(self) -> dict[str, Any]:
+        """Exploration-only multi-node mirror lag + oxytocin quorum (not WAN BFT)."""
+        from organism_sdk.multinode import MultiNodeCluster
+
+        cluster = MultiNodeCluster(
+            ["node_a", "node_b", "node_c"],
+            default_lag_ms=2.0,
+            lag_slo_ms=50.0,
+        )
+        levels = cluster.release_and_mirror(
+            "node_a",
+            lag_ms=2.0,
+            stress_load=0.55,
+            viability_score=0.7,
+            adapter_acceptance_rate=0.9,
+        )
+        applied = cluster.advance(wait_ms=5.0)
+        try:
+            cluster.assert_lag_slo()
+            lag_ok = True
+            lag_error = None
+        except AssertionError as exc:
+            lag_ok = False
+            lag_error = str(exc)
+        quorum = cluster.federated_oxytocin(
+            votes={"node_a": 0.9, "node_b": 0.85, "node_c": 0.8},
+            accept_threshold=0.5,
+        )
+        # Partition demo (safe degrade path)
+        cluster.partition("node_c")
+        quorum_part = cluster.federated_oxytocin(
+            votes={"node_a": 0.9, "node_b": 0.85, "node_c": 0.1},
+            accept_threshold=0.5,
+        )
+        cluster.heal("node_c")
+        result = {
+            "ok": True,
+            "safe": True,
+            "stub_only": True,
+            "not_production_bft": True,
+            "note": (
+                "Software multi-node stub only — not production WAN BFT + TPM. "
+                "See STATUS.md external deps."
+            ),
+            "release": levels.as_dict() if hasattr(levels, "as_dict") else {},
+            "mirrors_applied": applied,
+            "max_lag_ms": cluster.max_observed_lag_ms(),
+            "lag_slo_ok": lag_ok,
+            "lag_error": lag_error,
+            "quorum": quorum.as_dict(),
+            "quorum_after_partition_c": quorum_part.as_dict(),
+            "nodes": list(cluster.nodes.keys()),
+        }
+        self._last_federation_stub = result
+        return result
+
+    def last_federation_stub(self) -> dict[str, Any] | None:
+        return dict(self._last_federation_stub) if self._last_federation_stub else None
 
     # ----- Metamodel -----
 
@@ -1164,6 +1445,9 @@ class DesktopService:
             "api_freeze": str(self._repo_root / "docs" / "API_FREEZE_v1.0.md"),
             "desktop_version": DESKTOP_VERSION,
             "organism_version": sdk_version,
+            "rust_runtime": self.rust_runtime_status(probe_cargo=False),
+            "last_harness_result": self._last_harness_result,
+            "drillbook_doc": str(self._repo_root / "docs" / "ops" / "DEGRADATION_DRILLBOOK.md"),
         }
 
     def refresh_bundle(self) -> dict[str, Any]:
@@ -1181,12 +1465,214 @@ class DesktopService:
             "ok": True,
         }
 
+
+    def rust_runtime_status(self, *, probe_cargo: bool = True) -> dict[str, Any]:
+        """Read-only Rust workspace parity probe (no build forced on every refresh)."""
+        import json
+        import shutil
+        import subprocess
+
+        root = self._repo_root
+        cargo_toml = root / "Cargo.toml"
+        member_dirs = [
+            "runtime/registry",
+            "runtime/workspace",
+            "runtime/router",
+            "runtime/degradation",
+            "runtime/control_loop",
+            "sdk/rust/organism-proto",
+            "sdk/rust/organism-client",
+            "modules/kernel",
+            "modules/hdc",
+            "harness/runner",
+            "harness/injector",
+            "harness/observer",
+            "harness/assertions",
+        ]
+        crates = []
+        present = 0
+        for rel in member_dirs:
+            p = root / rel
+            lib_rs = p / "src" / "lib.rs"
+            main_rs = p / "src" / "main.rs"
+            ok = lib_rs.is_file() or main_rs.is_file()
+            if ok:
+                present += 1
+            crates.append(
+                {
+                    "path": rel,
+                    "present": ok,
+                    "lib_rs": lib_rs.is_file(),
+                    "main_rs": main_rs.is_file(),
+                }
+            )
+        cargo_bin = shutil.which("cargo")
+        rustc_bin = shutil.which("rustc")
+        meta: dict[str, Any] = {"probed": False}
+        if probe_cargo and cargo_bin and cargo_toml.is_file():
+            try:
+                proc = subprocess.run(
+                    [cargo_bin, "metadata", "--no-deps", "--format-version", "1"],
+                    cwd=str(root),
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+                meta["probed"] = True
+                meta["returncode"] = proc.returncode
+                if proc.returncode == 0 and proc.stdout.strip():
+                    data = json.loads(proc.stdout)
+                    meta["package_names"] = [p.get("name") for p in data.get("packages", [])]
+                    meta["package_count"] = len(meta["package_names"])
+                    ws = data.get("workspace_root")
+                    meta["workspace_root"] = ws
+                else:
+                    meta["stderr"] = (proc.stderr or "")[:500]
+            except Exception as exc:
+                meta["probed"] = True
+                meta["error"] = str(exc)
+
+        # Workspace package version from Cargo.toml (best-effort)
+        ws_version = None
+        if cargo_toml.is_file():
+            for line in cargo_toml.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.strip().startswith("version"):
+                    # first version= under [workspace.package] typically
+                    if '"' in line:
+                        ws_version = line.split('"')[1]
+                        break
+
+        result = {
+            "ok": cargo_toml.is_file() and present > 0,
+            "read_only": True,
+            "cargo_toml_exists": cargo_toml.is_file(),
+            "workspace_package_version": ws_version,
+            "crates_present": present,
+            "crates_expected": len(member_dirs),
+            "crates": crates,
+            "cargo_bin": cargo_bin,
+            "rustc_bin": rustc_bin,
+            "cargo_metadata": meta,
+            "note": (
+                "Read-only inventory. Desktop never force-builds Rust on panel refresh. "
+                "Use `cargo test -q` locally for full parity."
+            ),
+        }
+        self._last_rust_status = result
+        return result
+
+    def last_rust_status(self) -> dict[str, Any] | None:
+        return dict(self._last_rust_status) if self._last_rust_status else None
+
+    def run_short_soak_harness(self, *, windows: int = 8) -> dict[str, Any]:
+        """Trigger a short virtual-clock soak; write JSON under desktop/artifacts/."""
+        import json
+        from datetime import datetime, timezone
+
+        from harness.scenarios.v04_soak import run_soak, soak_reconstructibility_ok
+
+        windows = max(2, min(int(windows), 48))
+        result = run_soak(windows=windows, max_bindings=16)
+        recon = soak_reconstructibility_ok(result)
+        out_dir = self._repo_root / "desktop" / "artifacts"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        path = out_dir / f"soak_{stamp}.json"
+        payload = {
+            "kind": "soak",
+            "ok": True,
+            "windows": result.windows,
+            "simulated_s": result.simulated_s,
+            "levels_seen": list(result.levels_seen),
+            "transitions": [list(t) for t in result.transitions],
+            "binding_count_peak": result.binding_count_peak,
+            "binding_count_final": result.binding_count_final,
+            "plans": result.plans,
+            "hormone_windows": result.hormone_windows,
+            "flapping": result.flapping,
+            "reconstructible": recon,
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        }
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        out = {
+            "ok": True,
+            "kind": "soak",
+            "result_path": str(path),
+            "reconstructible": recon,
+            "windows": result.windows,
+            "flapping": result.flapping,
+            "levels_seen": list(result.levels_seen),
+            "safe": True,
+            "progress": [
+                {"step": "init", "pct": 0},
+                {"step": "soak_windows", "pct": 70, "windows": windows},
+                {"step": "write_artifact", "pct": 100, "path": str(path)},
+            ],
+        }
+        self._last_harness_result = out
+        return out
+
+    def run_short_fuzz_harness(self, *, trials: int = 16) -> dict[str, Any]:
+        """Trigger short security fuzz helpers; write JSON under desktop/artifacts/."""
+        import json
+        from datetime import datetime, timezone
+
+        from harness.scenarios.v04_security_fuzz import (
+            fuzz_immune_forgeries,
+            fuzz_malformed_contracts,
+        )
+
+        trials = max(4, min(int(trials), 64))
+        contracts = fuzz_malformed_contracts(trials=trials)
+        forgeries = fuzz_immune_forgeries(trials=trials)
+        out_dir = self._repo_root / "desktop" / "artifacts"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        path = out_dir / f"fuzz_{stamp}.json"
+        payload = {
+            "kind": "fuzz",
+            "ok": True,
+            "contracts": {
+                "trials": contracts.trials,
+                "rejected_contracts": contracts.rejected_contracts,
+            },
+            "forgeries": {
+                "trials": forgeries.trials,
+                "rejected_forgeries": forgeries.rejected_forgeries,
+            },
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        }
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        out = {
+            "ok": True,
+            "kind": "fuzz",
+            "result_path": str(path),
+            "contracts_rejected": contracts.rejected_contracts,
+            "forgeries_rejected": forgeries.rejected_forgeries,
+            "trials": trials,
+            "safe": True,
+            "progress": [
+                {"step": "init", "pct": 0},
+                {"step": "fuzz_contracts", "pct": 40, "rejected": contracts.rejected_contracts},
+                {"step": "fuzz_forgeries", "pct": 80, "rejected": forgeries.rejected_forgeries},
+                {"step": "write_artifact", "pct": 100, "path": str(path)},
+            ],
+        }
+        self._last_harness_result = out
+        return out
+
+    def last_harness_result(self) -> dict[str, Any] | None:
+        return dict(self._last_harness_result) if self._last_harness_result else None
+
     def docs_links(self) -> list[dict[str, str]]:
         root = self._repo_root / "docs"
         return [
             {"title": "CPU Everywhere", "path": str(root / "CPU_EVERYWHERE.md")},
             {"title": "Soak Runbook", "path": str(root / "ops" / "SOAK_RUNBOOK.md")},
+            {"title": "Degradation Drillbook", "path": str(root / "ops" / "DEGRADATION_DRILLBOOK.md")},
             {"title": "Wet-lab Safety Policy", "path": str(root / "ops" / "WETLAB_SAFETY_POLICY.md")},
+            {"title": "Desktop v1.6.1", "path": str(root / "v1.6.1" / "DESKTOP.md")},
             {"title": "API Freeze v1.0", "path": str(root / "API_FREEZE_v1.0.md")},
             {"title": "Desktop Design", "path": str(root / "v1.5" / "DESKTOP.md")},
             {"title": "Desktop v1.6", "path": str(root / "v1.6" / "DESKTOP.md")},
