@@ -155,5 +155,24 @@ def run_soak(
 
 
 def run_soak_extended(*, windows: int = 240) -> SoakResult:
-    """Longer simulated soak (opt-in slow)."""
-    return run_soak(windows=windows, dt_s=1.0, max_bindings=96, stress_every=12)
+    """Longer simulated soak (opt-in slow). Honors ORGANISM_SOAK_* env overrides."""
+    import os
+
+    w = windows
+    if os.environ.get("ORGANISM_SOAK_WINDOWS", "").strip():
+        w = int(os.environ["ORGANISM_SOAK_WINDOWS"])
+    mb = 96
+    if os.environ.get("ORGANISM_SOAK_MAX_BINDINGS", "").strip():
+        mb = int(os.environ["ORGANISM_SOAK_MAX_BINDINGS"])
+    return run_soak(windows=w, dt_s=1.0, max_bindings=mb, stress_every=12)
+
+
+def soak_reconstructibility_ok(result: SoakResult) -> bool:
+    """True when traces cover every plan and memory stayed bounded."""
+    if result.routing_trace_count < result.plans:
+        return False
+    if result.flapping:
+        return False
+    if result.hormone_windows < result.windows:
+        return False
+    return True

@@ -238,3 +238,8 @@ category_bio:
     blocking: true
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/deploy"
+
+  - id: v14:soak_ops
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/ops/test_soak_ops.py"
