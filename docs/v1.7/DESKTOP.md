@@ -13,3 +13,9 @@ Metamodel → Organism Evolution → Bio-Digital → Traces → Contracts → Op
 ```
 
 Catalog includes **Generative Evolution** (`generative_organism`, RESEARCH_TIER).
+
+## v1.7.2
+
+- EvolutionRuntime hot-register of promoted skills into ModuleRegistry + dynamic catalog
+- Evolution traces, optional hormone pulse, immune quarantine demote
+- Wall-clock generative budgets on evolve/promote

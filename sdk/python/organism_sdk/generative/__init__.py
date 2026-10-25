@@ -9,6 +9,9 @@ v1.7.1 hardenings: template library, GeneratorBackend protocol, replayable
 drafts, expanded AST forbid list, shadow metrics, promote rollback, concurrent
 ArtifactStore, multi-asset packs, content-hash integrity, skill DAG +
 improve-from-trace.
+
+v1.7.2: EvolutionRuntime hot-register, evolution traces, hormone pulse,
+immune quarantine demote, wall-clock budgets.
 """
 from __future__ import annotations
 
@@ -38,6 +41,17 @@ from organism_sdk.generative.code_pipeline import (
     ShadowMetrics,
 )
 from organism_sdk.generative.organism import EvolutionEvent, OrganismProfile, OrganismStore
+from organism_sdk.generative.runtime import (
+    EVOLVE_P95_MS,
+    HOT_REGISTER_P95_MS,
+    PROMOTE_P95_MS,
+    QUARANTINE_P95_MS,
+    EvolutionRuntime,
+    GeneratedSkillModule,
+    HotRegisterResult,
+    PipelineTiming,
+    QuarantineResult,
+)
 from organism_sdk.generative.sandbox import SafeSandbox, SandboxRefused, SandboxResult
 from organism_sdk.generative.skills import SkillDescriptor, SkillRegistry
 from organism_sdk.generative.stages import EvolutionStage, PromoteGate
@@ -74,4 +88,5 @@ __all__ = [
     "SkillRegistry",
     "EvolutionStage",
     "PromoteGate",
+    "EVOLVE_P95_MS",
 ]

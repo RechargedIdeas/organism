@@ -4,6 +4,7 @@ Self-evolution MUST pass PromoteGate before any control-path overwrite.
 Silent overwrite of control path is refused (PromoteRefused).
 
 v1.7.1: richer static AST forbid list, shadow metrics, rollback, replayable drafts.
+v1.7.2: wall-clock evolve/promote budgets recorded on last_timings.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import ast
 import hashlib
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -243,6 +245,10 @@ class CodePipeline:
         self._lock = threading.RLock()
         self._promote_stack: list[str] = []  # bundle_ids in promote order
         self._last_promoted: str | None = None
+        self._last_timings: dict[str, float] = {}
+        # Wall-clock budgets (ms) — see EvolutionRuntime constants
+        self.evolve_budget_ms: float = 250.0
+        self.promote_budget_ms: float = 100.0
 
     def start(
         self,
@@ -383,6 +389,7 @@ class CodePipeline:
             return b
 
     def promote(self, bundle_id: str) -> CodeBundle:
+        t0 = time.perf_counter()
         with self._lock:
             b = self._get(bundle_id)
             if not b.gate.ready():
@@ -396,7 +403,13 @@ class CodePipeline:
             b.research_tier = False
             b.stage = CodeStage.PROMOTED
             b.stage_progress.append(CodeStage.PROMOTED.value)
-            self._persist(b, CodeStage.PROMOTED.value, metadata={"promoted": True, "prior": prior})
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            self._last_timings["promote_ms"] = elapsed_ms
+            self._persist(
+                b,
+                CodeStage.PROMOTED.value,
+                metadata={"promoted": True, "prior": prior, "promote_ms": elapsed_ms},
+            )
             self._promote_stack.append(bundle_id)
             self._last_promoted = bundle_id
             return b
@@ -443,19 +456,26 @@ class CodePipeline:
         auto_promote: bool = False,
     ) -> CodeBundle:
         """Full pipeline. Promote only if auto_promote and gate ready."""
+        t0 = time.perf_counter()
         b = self.start(intent, spec=spec, backend=backend)
         self.run_static(b.bundle_id)
         if b.stage == CodeStage.REJECTED:
+            self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_contract(b.bundle_id, spec=spec)
         if b.stage == CodeStage.REJECTED:
+            self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_sandbox(b.bundle_id)
         if b.stage == CodeStage.REJECTED:
+            self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_shadow(b.bundle_id)
         if auto_promote and b.gate.ready():
-            return self.promote(b.bundle_id)
+            out = self.promote(b.bundle_id)
+            self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
+            return out
+        self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
         return b
 
     def stage_progress_summary(self, bundle_id: str) -> dict[str, Any]:
@@ -508,3 +528,17 @@ class CodePipeline:
     @property
     def last_promoted_id(self) -> str | None:
         return self._last_promoted
+
+    @property
+    def last_timings(self) -> dict[str, float]:
+        return dict(self._last_timings)
+
+    def within_wall_clock_budgets(self) -> bool:
+        """True if last evolve/promote timings (if any) are under budgets."""
+        e = self._last_timings.get("evolve_ms")
+        p = self._last_timings.get("promote_ms")
+        if e is not None and e > self.evolve_budget_ms:
+            return False
+        if p is not None and p > self.promote_budget_ms:
+            return False
+        return True

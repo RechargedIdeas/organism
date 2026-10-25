@@ -157,7 +157,12 @@ CATALOG: tuple[CatalogEntry, ...] = (
 )
 
 
-def catalog_as_dicts(*, registered_ids: set[str] | None = None) -> list[dict[str, Any]]:
+def catalog_as_dicts(
+    *,
+    registered_ids: set[str] | None = None,
+    dynamic_entries: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Static substrate catalog plus optional generative hot-registered entries."""
     reg = registered_ids or set()
     out: list[dict[str, Any]] = []
     for e in CATALOG:
@@ -172,8 +177,16 @@ def catalog_as_dicts(*, registered_ids: set[str] | None = None) -> list[dict[str
                 "may_actuate_declared": e.may_actuate_declared,
                 "description": e.description,
                 "registered": e.module_id in reg,
+                "generative": e.catalog_id == "generative_organism",
             }
         )
+    for d in dynamic_entries or []:
+        row = dict(d)
+        mid = str(row.get("module_id") or "")
+        row.setdefault("registered", mid in reg)
+        row.setdefault("generative", True)
+        row.setdefault("research_badge", "RESEARCH_TIER" if row.get("research_tier", True) else "")
+        out.append(row)
     return out
 
 

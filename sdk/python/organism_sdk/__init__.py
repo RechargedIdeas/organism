@@ -5,7 +5,7 @@ from organism_sdk._proto_path import ensure_proto_path
 
 ensure_proto_path()
 
-__version__ = "1.7.1"
+__version__ = "1.7.2"
 
 from organism_sdk.contract import (
     CapabilityScopes,

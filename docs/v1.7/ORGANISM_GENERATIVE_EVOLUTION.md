@@ -1,6 +1,6 @@
-# Organism Generative Evolution (v1.7 / v1.7.1)
+# Organism Generative Evolution (v1.7 / v1.7.2)
 
-**Release:** v1.7.1  
+**Release:** v1.7.2  
 **Goal:** Production-grade generative **code**, **asset (looks)**, and **skills** pipelines so Organisms can self-evolve under explicit promote gates.
 
 ## Principles
@@ -58,7 +58,18 @@ intent → draft (TemplateDraftBackend | LLMStubBackend | custom GeneratorBacken
 - `OrganismProfile`: id, skills[], appearance, code_revisions[], evolution_log
 - `OrganismStore` persists JSON under `organism_data/organisms/`
 
-## Desktop (v1.7.1)
+
+### E. Runtime integration (v1.7.2)
+
+- `EvolutionRuntime.hot_register_promoted` — ModuleRegistry shadow gate + dynamic catalog
+- `EvolutionTraceEntry` via `TraceEmitter.emit_evolution`
+- Optional `HormoneBus` dopamine/oxytocin pulse on promote
+- `ImmuneLayer` quarantine demotes generative drafts that fail contracts
+- Wall-clock budgets: `EVOLVE_P95_MS` (250) · `PROMOTE_P95_MS` (100) · hot-register / quarantine
+
+Desktop service returns `runtime` / `timings` / `within_budgets` on evolve/promote.
+
+## Desktop (v1.7.1 / v1.7.2)
 
 Navigation keeps **Organism Evolution** (13 panels). New UI:
 

@@ -30,6 +30,7 @@ from organism_sdk.generative import (
     AssetPipeline,
     CodePipeline,
     DraftReplayLog,
+    EvolutionRuntime,
     LLMStubBackend,
     OrganismStore,
     PromoteRefused,
@@ -41,6 +42,7 @@ from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
 from organism_sdk.trace import (
     DegradationTraceEntry,
+    EvolutionTraceEntry,
     HormoneTraceEntry,
     RoutingTraceEntry,
     TraceEmitter,
@@ -50,7 +52,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.7.1"
+DESKTOP_VERSION = "1.7.2"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -110,6 +112,7 @@ class DesktopService:
     asset_pipeline: AssetPipeline | None = None
     skill_registry: SkillRegistry | None = None
     organism_store: OrganismStore | None = None
+    evolution_runtime: EvolutionRuntime | None = None
     _last_organism_action: dict | None = None
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
@@ -193,6 +196,14 @@ class DesktopService:
         self.organism_store = OrganismStore(root / "organisms")
         self.organism_store.ensure_default()
         self._last_organism_action = None
+        self.evolution_runtime = EvolutionRuntime(
+            registry=self.stack.registry,
+            trace=self.stack.trace,
+            hormone=self.hormone,
+            immune=self.immune,
+            modules=self.stack.modules,
+            pulse_on_promote=True,
+        )
 
     def _init_hal(self) -> None:
         try:
@@ -1033,6 +1044,12 @@ class DesktopService:
                 "source",
                 "level",
                 "emitted_at",
+                "summary",
+                "organism_id",
+                "bundle_id",
+                "skill_id",
+                "stage",
+                "evolution_kind",
             ):
                 if hasattr(e, attr):
                     val = getattr(e, attr)
@@ -1270,7 +1287,10 @@ class DesktopService:
 
     def module_catalog(self) -> list[dict[str, Any]]:
         registered = {m["module_id"] for m in self.list_modules()}
-        return catalog_as_dicts(registered_ids=registered)
+        dynamic = []
+        if self.evolution_runtime is not None:
+            dynamic = self.evolution_runtime.catalog_entries()
+        return catalog_as_dicts(registered_ids=registered, dynamic_entries=dynamic)
 
     def register_catalog_module(self, catalog_id: str) -> dict[str, Any]:
         """One-click register from the substrate catalog.
@@ -1733,6 +1753,11 @@ class DesktopService:
         assert self.code_pipeline is not None
         return self.code_pipeline.list_bundles()
 
+
+    def _runtime_hooks(self) -> EvolutionRuntime | None:
+        self._require_generative()
+        return self.evolution_runtime
+
     def evolve_organism_skill(
         self,
         name: str,
@@ -1751,6 +1776,34 @@ class DesktopService:
             auto_promote=auto_promote,
             backend_name=backend,
         )
+        runtime = self.evolution_runtime
+        runtime_meta: dict = {}
+        if runtime is not None:
+            if bundle.stage.value == "REJECTED":
+                runtime_meta = runtime.after_reject(
+                    bundle,
+                    code_pipeline=self.code_pipeline,
+                    organism_id=profile.organism_id,
+                    evolve_elapsed_ms=self.code_pipeline.last_timings.get("evolve_ms"),
+                )
+            elif bundle.may_control:
+                runtime_meta = runtime.after_promote(
+                    bundle,
+                    skill=skill,
+                    organism_id=profile.organism_id,
+                    promote_elapsed_ms=self.code_pipeline.last_timings.get("promote_ms"),
+                )
+            else:
+                runtime.emit_evolution(
+                    kind="skill_generate",
+                    summary=f"Generated skill {skill.name} stage={bundle.stage.value}",
+                    organism_id=profile.organism_id,
+                    bundle_id=bundle.bundle_id,
+                    skill_id=skill.skill_id,
+                    stage=bundle.stage.value,
+                )
+                if self.code_pipeline.last_timings.get("evolve_ms") is not None:
+                    runtime.timings.record("evolve", self.code_pipeline.last_timings["evolve_ms"])
         self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
@@ -1764,6 +1817,9 @@ class DesktopService:
             "skill": skill.as_dict(),
             "bundle": bundle.as_dict(),
             "gate_ready": bundle.gate.ready() or bundle.may_control,
+            "runtime": runtime_meta,
+            "timings": self.code_pipeline.last_timings,
+            "within_budgets": self.code_pipeline.within_wall_clock_budgets(),
         }
         self._last_organism_action = out
         return out
@@ -1776,14 +1832,33 @@ class DesktopService:
             skill = self.skill_registry.promote_skill(skill_id, code_pipeline=self.code_pipeline)
         except PromoteRefused as e:
             raise ActuationRefused(f"REFUSE unsafe skill promote: {e}") from e
+        bundle = self.code_pipeline._get(skill.code_bundle_id) if skill.code_bundle_id else None
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None and bundle is not None:
+            runtime_meta = self.evolution_runtime.after_promote(
+                bundle,
+                skill=skill,
+                organism_id=profile.organism_id,
+                promote_elapsed_ms=self.code_pipeline.last_timings.get("promote_ms"),
+            )
         self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
         self.organism_store.log(
             profile.organism_id,
             "skill_promote",
             f"Promoted skill {skill_id}",
-            payload={"skill_id": skill_id, "may_control": skill.may_control},
+            payload={
+                "skill_id": skill_id,
+                "may_control": skill.may_control,
+                "module_id": (runtime_meta.get("hot_register") or {}).get("module_id"),
+            },
         )
-        out = {"ok": True, "skill": skill.as_dict()}
+        out = {
+            "ok": True,
+            "skill": skill.as_dict(),
+            "runtime": runtime_meta,
+            "timings": self.code_pipeline.last_timings,
+            "within_budgets": self.code_pipeline.within_wall_clock_budgets(),
+        }
         self._last_organism_action = out
         return out
 
@@ -1820,6 +1895,33 @@ class DesktopService:
             backend=be,
             auto_promote=auto_promote,
         )
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None:
+            if bundle.stage.value == "REJECTED":
+                runtime_meta = self.evolution_runtime.after_reject(
+                    bundle,
+                    code_pipeline=self.code_pipeline,
+                    organism_id=profile.organism_id,
+                    evolve_elapsed_ms=self.code_pipeline.last_timings.get("evolve_ms"),
+                )
+            elif bundle.may_control:
+                runtime_meta = self.evolution_runtime.after_promote(
+                    bundle,
+                    organism_id=profile.organism_id,
+                    promote_elapsed_ms=self.code_pipeline.last_timings.get("promote_ms"),
+                )
+            else:
+                self.evolution_runtime.emit_evolution(
+                    kind="code_draft",
+                    summary=f"Code pipeline → {bundle.stage.value}",
+                    organism_id=profile.organism_id,
+                    bundle_id=bundle.bundle_id,
+                    stage=bundle.stage.value,
+                )
+                if self.code_pipeline.last_timings.get("evolve_ms") is not None:
+                    self.evolution_runtime.timings.record(
+                        "evolve", self.code_pipeline.last_timings["evolve_ms"]
+                    )
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
             profile.organism_id,
@@ -1831,6 +1933,9 @@ class DesktopService:
             "ok": bundle.stage.value != "REJECTED",
             "bundle": bundle.as_dict(),
             "gate_ready": bundle.gate.ready() or bundle.may_control,
+            "runtime": runtime_meta,
+            "timings": self.code_pipeline.last_timings,
+            "within_budgets": self.code_pipeline.within_wall_clock_budgets(),
         }
         self._last_organism_action = out
         return out
@@ -1843,14 +1948,31 @@ class DesktopService:
             bundle = self.code_pipeline.promote(bundle_id)
         except PromoteRefused as e:
             raise ActuationRefused(f"REFUSE unsafe code promote: {e}") from e
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None:
+            runtime_meta = self.evolution_runtime.after_promote(
+                bundle,
+                organism_id=profile.organism_id,
+                promote_elapsed_ms=self.code_pipeline.last_timings.get("promote_ms"),
+            )
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
             profile.organism_id,
             "code_promote",
             f"Promoted code bundle {bundle_id}",
-            payload={"bundle_id": bundle_id, "may_control": bundle.may_control},
+            payload={
+                "bundle_id": bundle_id,
+                "may_control": bundle.may_control,
+                "module_id": (runtime_meta.get("hot_register") or {}).get("module_id"),
+            },
         )
-        out = {"ok": True, "bundle": bundle.as_dict()}
+        out = {
+            "ok": True,
+            "bundle": bundle.as_dict(),
+            "runtime": runtime_meta,
+            "timings": self.code_pipeline.last_timings,
+            "within_budgets": self.code_pipeline.within_wall_clock_budgets(),
+        }
         self._last_organism_action = out
         return out
 
@@ -1912,6 +2034,25 @@ class DesktopService:
             code_pipeline=self.code_pipeline,
             auto_promote=auto_promote,
         )
+        runtime_meta: dict = {}
+        if self.evolution_runtime is not None:
+            if bundle.may_control:
+                runtime_meta = self.evolution_runtime.after_promote(
+                    bundle,
+                    skill=skill,
+                    organism_id=profile.organism_id,
+                    promote_elapsed_ms=self.code_pipeline.last_timings.get("promote_ms"),
+                )
+            else:
+                self.evolution_runtime.emit_evolution(
+                    kind="skill_improve",
+                    summary=f"Improved skill {skill_id} from evolution_log → {bundle.stage.value}",
+                    organism_id=profile.organism_id,
+                    bundle_id=bundle.bundle_id,
+                    skill_id=skill.skill_id,
+                    stage=bundle.stage.value,
+                    payload={"version": skill.version},
+                )
         self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
         self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
         self.organism_store.log(
@@ -1925,6 +2066,9 @@ class DesktopService:
             "skill": skill.as_dict(),
             "bundle": bundle.as_dict(),
             "gate_ready": bundle.gate.ready() or bundle.may_control,
+            "runtime": runtime_meta,
+            "timings": self.code_pipeline.last_timings,
+            "within_budgets": self.code_pipeline.within_wall_clock_budgets(),
         }
         self._last_organism_action = out
         return out

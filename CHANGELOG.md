@@ -1,3 +1,32 @@
+## [1.7.2] — 2026-10-24
+
+### Added
+- **EvolutionRuntime** — generative promote → `ModuleRegistry` hot-register with
+  shadow gate (`SANDBOXED` → `SHADOW_VALIDATED` → `EXPLORATION`); dynamic
+  catalog entries for promoted skill/code modules (`may_actuate=False`).
+- **EvolutionTraceEntry** / `TraceEmitter.emit_evolution` — evolution events on
+  draft / promote / demote / quarantine.
+- **Hormone pulse** (optional) on promote — dopamine/oxytocin bump via
+  `HormoneBus.write_telemetry_window`.
+- **ImmuneLayer quarantine** — drafts that fail contracts are demoted under
+  QUARANTINE/DEMOTE decisions.
+- **Wall-clock budgets** — `evolve_ms` / `promote_ms` on `CodePipeline`;
+  `EVOLVE_P95_MS` / `PROMOTE_P95_MS` / hot-register / quarantine budgets in
+  `EvolutionRuntime.PipelineTiming`.
+- Desktop e2e: evolve skill → improve from trace → promote → appear in catalog.
+
+### Safety
+- Bio `may_actuate=False` unchanged; generative hot-register never actuates.
+- Promote gates remain mandatory; unsafe promote → `PromoteRefused` /
+  `ActuationRefused`.
+- Naming remains **Organism** only. No Hybrid Studio; CPU Everywhere.
+
+### Changed
+- Package / SDK / Desktop / generative module versions **1.7.2**.
+
+### Test baseline
+Default suite: **319 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.7.1] — 2026-10-24
 
 ### Added / Hardened

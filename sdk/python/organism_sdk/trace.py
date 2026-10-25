@@ -118,6 +118,23 @@ class AutonomicTraceEntry:
     emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+@dataclass
+class EvolutionTraceEntry:
+    """v1.7.2 — Organism generative evolution events (promote, demote, quarantine)."""
+    evolution_kind: str = ""
+    summary: str = ""
+    organism_id: str = ""
+    bundle_id: str | None = None
+    skill_id: str | None = None
+    module_id: str | None = None
+    stage: str = ""
+    payload: dict[str, Any] = field(default_factory=dict)
+    policy_id: str | None = None
+    policy_digest: bytes | None = None
+    level: str | None = None
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class V02TraceSink:
     """Optional sink for v0.2 biological trace kinds (stub until G–I runtime)."""
 
@@ -218,6 +235,10 @@ class TraceEmitter:
         stamped = self._stamp(entry)
         self._v02_sink.record(stamped)
         self._entries.append(stamped)
+
+    def emit_evolution(self, entry: EvolutionTraceEntry) -> None:
+        """First-class generative evolution traces (no v0.2 sink required)."""
+        self._entries.append(self._stamp(entry))
 
     def emit_autonomic(self, entry: AutonomicTraceEntry) -> None:
         if self._v02_sink is None:

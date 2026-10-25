@@ -1,4 +1,4 @@
-"""Organism Evolution panel — skills, looks, code promotions, evolution log (v1.7.1)."""
+"""Organism Evolution panel — skills, looks, code promotions, evolution log (v1.7.2)."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (

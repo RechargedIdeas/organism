@@ -1,4 +1,4 @@
-"""v1.7 / v1.7.1 Organism Evolution Desktop surfaces."""
+"""v1.7 / v1.7.2 Organism Evolution Desktop surfaces."""
 from __future__ import annotations
 
 import os
@@ -28,7 +28,7 @@ def test_nav_includes_organism():
 
 
 def test_service_evolution_roundtrip():
-    assert DESKTOP_VERSION == "1.7.1"
+    assert DESKTOP_VERSION == "1.7.2"
     svc = DesktopService.create()
     snap = svc.organism_snapshot()
     assert snap["organism_id"]
@@ -116,3 +116,82 @@ def test_catalog_generative_register():
     mods = svc.list_modules()
     entry = next(m for m in mods if m["module_id"] == "generative_organism")
     assert entry.get("may_actuate") in (False, None) or entry["may_actuate"] is False
+
+
+def test_e2e_evolve_improve_promote_appears_in_catalog():
+    """v1.7.2: evolve skill → improve from trace → promote → appear in catalog."""
+    assert DESKTOP_VERSION == "1.7.2"
+    svc = DesktopService.create()
+    # 1. Evolve skill (shadow scored, not auto-promoted)
+    gen = svc.evolve_organism_skill(
+        "catalog_evolver",
+        intent="Organism signal analyst for catalog e2e",
+        auto_promote=False,
+    )
+    assert gen["ok"]
+    skill_id = gen["skill"]["skill_id"]
+    assert gen["bundle"]["stage"] == "SHADOW_SCORED"
+    assert gen.get("within_budgets") is True
+
+    # 2. Improve from evolution_log / traces
+    improved = svc.improve_organism_skill_from_trace(skill_id, auto_promote=False)
+    assert improved["ok"]
+    assert "from_trace" in improved["skill"]["tags"]
+    assert improved["skill"]["version"] != gen["skill"]["version"]
+
+    # 3. Promote → hot-register into ModuleRegistry + catalog
+    promoted = svc.promote_organism_skill(skill_id)
+    assert promoted["ok"]
+    assert promoted["skill"]["may_control"] is True
+    runtime = promoted.get("runtime") or {}
+    hot = runtime.get("hot_register")
+    assert hot is not None
+    assert hot["module_id"].startswith("gen_")
+    assert hot["may_actuate"] is False
+    assert "EXPLORATION" in hot["shadow_gate"] or hot["state"] == "EXPLORATION"
+
+    # 4. Appear in Desktop module catalog (dynamic generative entry)
+    cat = svc.module_catalog()
+    match = [c for c in cat if c.get("module_id") == hot["module_id"]]
+    assert match, f"hot-registered module missing from catalog: {hot['module_id']}"
+    assert match[0].get("generative") is True
+    assert match[0].get("registered") is True
+    assert match[0].get("may_actuate_declared") is False
+
+    # 5. Evolution traces emitted
+    traces = svc.list_traces(limit=200, kind="Evolution")
+    assert traces, "expected EvolutionTraceEntry in TraceEmitter"
+    evo_kinds = {t.get("evolution_kind") or "" for t in traces}
+    assert (
+        any("promote" in str(k).lower() for k in evo_kinds)
+        or any("Hot-registered" in str(t.get("summary") or "") for t in traces)
+    )
+
+    # 6. Hormone pulse optional — dopamine should have moved if HormoneBus present
+    if svc.hormone is not None and runtime.get("hormone_pulse"):
+        assert runtime["hormone_pulse"]["dopamine"] > 0.0
+
+    # 7. Registered in stack modules
+    assert hot["module_id"] in svc.stack.modules
+    assert hot["module_id"] in svc.stack.registry.list_module_ids()
+
+
+def test_immune_quarantine_via_desktop_reject():
+    svc = DesktopService.create()
+    assert svc.evolution_runtime is not None
+    assert svc.immune is not None
+
+    class Bad:
+        name = "desktop_bad"
+
+        def draft(self, intent, *, spec=None):
+            return "import os\ndef main():\n    return os.getcwd()\n"
+
+    # Drive reject through code pipeline then after_reject
+    raw = svc.code_pipeline.evolve("hack", backend=Bad(), auto_promote=False)  # type: ignore[arg-type]
+    assert raw.stage.value == "REJECTED"
+    meta = svc.evolution_runtime.after_reject(
+        raw, code_pipeline=svc.code_pipeline, organism_id="organism_primary"
+    )
+    assert meta["quarantine"] is not None
+    assert meta["quarantine"]["demoted"] is True

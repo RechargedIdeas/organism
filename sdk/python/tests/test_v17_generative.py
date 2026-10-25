@@ -361,3 +361,125 @@ def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore):
         assert b.gate.ready() is False
         with pytest.raises(PromoteRefused):
             pipe.promote(b.bundle_id)
+
+
+# ----- v1.7.2 runtime integration -----
+
+
+def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path):
+    from organism_sdk.generative.runtime import EvolutionRuntime, EVOLVE_P95_MS
+    from organism_sdk.registry import RegistryClient
+    from organism_sdk.trace import TraceEmitter, EvolutionTraceEntry
+
+    pipe = CodePipeline(art)
+    reg = RegistryClient()
+    # Ensure modules path for contract factory
+    import sys
+    root = Path(__file__).resolve().parents[3]
+    mods = str(root / "modules")
+    if mods not in sys.path:
+        sys.path.insert(0, mods)
+
+    trace = TraceEmitter()
+    rt = EvolutionRuntime(registry=reg, trace=trace, modules={}, pulse_on_promote=False)
+    skills = SkillRegistry(art)
+    skill, bundle = skills.generate_skill(
+        "runtime_scout", intent="scout", code_pipeline=pipe, auto_promote=False
+    )
+    assert bundle.gate.ready()
+    promoted = pipe.promote(bundle.bundle_id)
+    skill.may_control = True
+    skill.research_tier = False
+    skill.source = "promoted"
+    skills.register(skill)
+    result = rt.after_promote(promoted, skill=skill, organism_id="organism_primary")
+    hot = result["hot_register"]
+    assert hot is not None
+    assert hot["module_id"].startswith("gen_")
+    assert "EXPLORATION" in hot["shadow_gate"] or hot["state"] == "EXPLORATION"
+    assert hot["may_actuate"] is False
+    assert hot["module_id"] in reg.list_module_ids()
+    assert any(e["module_id"] == hot["module_id"] for e in rt.catalog_entries())
+    evo = [e for e in trace.entries if isinstance(e, EvolutionTraceEntry)]
+    assert evo
+    assert pipe.within_wall_clock_budgets()
+    assert EVOLVE_P95_MS >= 100.0
+
+
+def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
+    from organism_sdk.generative.runtime import EvolutionRuntime
+    from organism_sdk.immune import ImmuneLayer
+    from organism_sdk.workspace import WorkspaceClient
+    from organism_sdk.trace import TraceEmitter, V02TraceSink
+
+    import sys
+    root = Path(__file__).resolve().parents[3]
+    mods = str(root / "modules")
+    if mods not in sys.path:
+        sys.path.insert(0, mods)
+
+    ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
+    trace = TraceEmitter()
+    trace.attach_v02_sink(V02TraceSink())
+    immune = ImmuneLayer(workspace=ws, trace=trace)
+    pipe = CodePipeline(art)
+    rt = EvolutionRuntime(immune=immune, trace=trace, pulse_on_promote=False)
+
+    class Bad:
+        name = "bad"
+
+        def draft(self, intent, *, spec=None):
+            return "may_actuate = True\ndef main():\n    return 1\n"
+
+    b = pipe.evolve("bad", backend=Bad(), auto_promote=False)  # type: ignore[arg-type]
+    assert b.stage.value == "REJECTED"
+    meta = rt.after_reject(b, code_pipeline=pipe, organism_id="organism_primary")
+    q = meta["quarantine"]
+    assert q is not None
+    assert q["decision"] in ("QUARANTINE", "DEMOTE")
+    assert q["demoted"] is True
+    assert b.may_control is False
+
+
+def test_hormone_pulse_on_promote(art: ArtifactStore):
+    from organism_sdk.generative.runtime import EvolutionRuntime
+    from organism_sdk.hormone import HormoneBus, HormoneLevels
+    from organism_sdk.registry import RegistryClient
+    from organism_sdk.trace import TraceEmitter, V02TraceSink
+    from organism_sdk.workspace import WorkspaceClient
+
+    import sys
+    root = Path(__file__).resolve().parents[3]
+    mods = str(root / "modules")
+    if mods not in sys.path:
+        sys.path.insert(0, mods)
+
+    ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
+    trace = TraceEmitter()
+    trace.attach_v02_sink(V02TraceSink())
+    hormone = HormoneBus(workspace=ws, trace=trace)
+    hormone.write_telemetry_window(HormoneLevels(dopamine=0.1, oxytocin=0.05, source="test"))
+    pipe = CodePipeline(art)
+    reg = RegistryClient(trace=trace)
+    rt = EvolutionRuntime(
+        registry=reg, trace=trace, hormone=hormone, modules={}, pulse_on_promote=True
+    )
+    b = pipe.evolve("pulse skill", auto_promote=True)
+    assert b.may_control
+    result = rt.after_promote(b, organism_id="organism_primary")
+    assert result["hormone_pulse"] is not None
+    assert result["hormone_pulse"]["dopamine"] >= 0.1
+    reading = hormone.read_workspace_hormone_state()
+    assert reading is not None
+    assert reading.dopamine > 0.1
+
+
+def test_wall_clock_budgets_recorded(art: ArtifactStore):
+    pipe = CodePipeline(art)
+    b = pipe.evolve("budget check", auto_promote=True)
+    assert "evolve_ms" in pipe.last_timings
+    assert "promote_ms" in pipe.last_timings
+    assert pipe.last_timings["evolve_ms"] < pipe.evolve_budget_ms
+    assert pipe.last_timings["promote_ms"] < pipe.promote_budget_ms
+    assert pipe.within_wall_clock_budgets()
+    assert b.may_control

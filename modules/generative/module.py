@@ -29,7 +29,7 @@ from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
 
 MODULE_ID = "generative_organism"
-MODULE_VERSION = "1.7.1"
+MODULE_VERSION = "1.7.2"
 FMT = "typed-json:generative/v1"
 
 
