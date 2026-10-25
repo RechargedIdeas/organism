@@ -8,12 +8,15 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.3.0** — CPU Everywhere (GPU workloads fall back to CPU) |
+| **Release** | **v1.4.0** — Ops completeness (deploy, soak runbook, optional torch, wet-lab policy) |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
 | **Hardening** | [docs/v1.0/HARDENING.md](docs/v1.0/HARDENING.md) |
 | **CPU Everywhere** | [docs/CPU_EVERYWHERE.md](docs/CPU_EVERYWHERE.md) |
+| **Deploy** | [deploy/README.md](deploy/README.md) |
+| **Soak runbook** | [docs/ops/SOAK_RUNBOOK.md](docs/ops/SOAK_RUNBOOK.md) |
+| **Wet-lab safety** | [docs/ops/WETLAB_SAFETY_POLICY.md](docs/ops/WETLAB_SAFETY_POLICY.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Implementation** | [STATUS.md](STATUS.md) |
 

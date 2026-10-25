@@ -39,7 +39,7 @@ from bio_digital.limits import (
 from bio_digital.vendor_loader import load_hybrid
 
 MODULE_ID = "bio_digital.mycelium"
-MODULE_VERSION = "1.3.0"
+MODULE_VERSION = "1.4.0"
 FMT = "typed-json:bio-mycelium/v1"
 
 BackendKind = Literal["stub", "live"]

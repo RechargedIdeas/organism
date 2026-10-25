@@ -9,11 +9,11 @@ runbook, optional torch accelerator clarity, wet-lab HAL stub + safety policy.
 
 | Phase | Deliverable | Gate |
 |---|---|---|
-| **P1** | Single-device CPU-only deploy (`deploy/`, CLI `serve`/`status`) | `v14:deploy` |
-| **P2** | Soak / target-box runbook + `scripts/soak_target.sh` | `v14:soak_ops` |
-| **P3** | Torch as optional accelerator (CUDA prefer + opt-in; CPU default) | `cpu:everywhere` + docs |
-| **P4** | Wet-lab HAL stub + SafetyPolicy (no real GPIO in default) | `v14:wetlab` |
-| **P5** | Docs / CHANGELOG / STATUS / tag **v1.4.0** | release |
+| **P1** | Single-device CPU-only deploy (`deploy/`, CLI `serve`/`status`) | **green** `v14:deploy` |
+| **P2** | Soak / target-box runbook + `scripts/soak_target.sh` | **green** `v14:soak_ops` |
+| **P3** | Torch as optional accelerator (CUDA prefer + opt-in; CPU default) | **green** `cpu:everywhere` |
+| **P4** | Wet-lab HAL stub + SafetyPolicy (no real GPIO in default) | **green** `v14:wetlab` |
+| **P5** | Docs / CHANGELOG / STATUS / tag **v1.4.0** | **green** release |
 
 ## Explicitly out of scope
 

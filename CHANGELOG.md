@@ -3,6 +3,34 @@
 All notable changes to Organism are documented here.  
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow SemVer for the **frozen** surface in `docs/API_FREEZE_v1.0.md` (additive integrations in 1.x).
 
+## [1.4.0] — 2026-10-24
+
+### Added
+- **Single-device CPU-only deploy** — `deploy/config/cpu_only.yaml`, Dockerfile,
+  systemd unit, entrypoint; CLI `organism` / `python -m organism_sdk`
+  (`validate-config`, `status`, `serve`) with `/health` + `/status`.
+- **Soak / target-box runbook** — `docs/ops/SOAK_RUNBOOK.md`,
+  `scripts/soak_target.sh`, soak reconstructibility helper + env overrides.
+- **Torch optional accelerator clarity** — `ORGANISM_TORCH=0` force-CPU;
+  `accelerator_selection_summary()`; CUDA only when opted in + present;
+  mocked device tests with **no default-suite skips**.
+- **Wet-lab HAL stub + SafetyPolicy** — `bio_digital.wetlab`; actuation denied
+  until certified policy **and** `ORGANISM_WETLAB_GPIO=1`; sim loop; clamps;
+  `docs/ops/WETLAB_SAFETY_POLICY.md`.
+- Gates: `v14:deploy`, `v14:soak_ops`, `v14:wetlab`.
+- Plan: `docs/v1.4/PLAN.md`.
+
+### Changed
+- Package / SDK / bio module versions **1.4.0**.
+- `docs/CPU_EVERYWHERE.md` documents optional torch install path.
+
+### Security / safety
+- Wet-lab default `SafetyPolicy.deny_all`; bio modules remain `may_actuate=False`.
+- Real GPIO open refused without env+policy; missing device → `device_missing`.
+
+### Test baseline
+Default suite: **209 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.3.0] — 2026-10-24
 
 ### Added
