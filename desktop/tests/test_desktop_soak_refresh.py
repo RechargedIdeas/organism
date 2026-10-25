@@ -55,7 +55,7 @@ def test_refresh_all_soak_stable(qapp):
     assert growth < 5000, f"QObject growth too high after {n} refreshes: {growth} (base={baseline}, after={after})"
 
     # Panels still responsive
-    assert win.nav.count() == 12
+    assert win.nav.count() == 13
     win.refresh_all()
     text = win._panels["home"].view.toPlainText()
     assert "CPU Everywhere" in text or "cpu_everywhere" in text.lower() or "Organism SDK" in text

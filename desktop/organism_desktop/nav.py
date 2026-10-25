@@ -19,6 +19,11 @@ PANELS: tuple[PanelSpec, ...] = (
     PanelSpec("pipelines", "Router / Pipelines", "TaskDescriptor → DispatchPlan + plan inspector"),
     PanelSpec("physiology", "Physiology", "Degradation, hormones, immune, autonomic"),
     PanelSpec("metamodel", "Metamodel", "Synthesize → sandbox → shadow → promote"),
+    PanelSpec(
+        "organism",
+        "Organism Evolution",
+        "Evolve skills / looks / code promotions / evolution log",
+    ),
     PanelSpec("bio", "Bio-Digital", "Slime / mycelium / HAL — exploration only"),
     PanelSpec("traces", "Traces / Replay", "Filterable explorer · export JSON · jump from pipeline"),
     PanelSpec("contracts", "Contracts / Assert", "Last SubstrateContract.validate() results"),

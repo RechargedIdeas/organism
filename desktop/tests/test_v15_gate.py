@@ -15,18 +15,19 @@ def test_v15_desktop_gate():
         "pipelines",
         "physiology",
         "metamodel",
+        "organism",
         "bio",
         "traces",
         "contracts",
         "ops",
         "docs",
     ]
-    assert DESKTOP_VERSION == "1.6.1"
+    assert DESKTOP_VERSION == "1.7.0"
     svc = DesktopService.create()
     st = svc.home_status()
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
-    assert st["desktop_version"] == "1.6.1"
+    assert st["desktop_version"] == "1.7.0"
 
     # Registry round-trip
     reg = svc.register_core_module("deterministic")
@@ -103,3 +104,10 @@ def test_v15_desktop_gate():
     soak = svc.run_short_soak_harness(windows=4)
     assert soak["ok"] is True and soak["result_path"]
     assert svc.refresh_bundle()["ok"] is True
+    # v1.7 Organism generative evolution
+    gen = svc.evolve_organism_skill("gate_skill", intent="gate skill", auto_promote=True)
+    assert gen["ok"] and gen["skill"]["may_control"] is True
+    looks = svc.evolve_organism_looks("gate avatar", kind="avatar")
+    assert looks["ok"] is True
+    assert "sophont" not in svc.organism_snapshot()["organism_id"].lower()
+    assert any(c["catalog_id"] == "generative_organism" for c in svc.module_catalog())

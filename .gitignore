@@ -46,3 +46,11 @@ desktop/screenshots/*.png
 
 # Desktop harness artifacts (soak/fuzz JSON)
 desktop/artifacts/*.json
+
+# Generative evolution runtime artifacts (keep trees via .gitkeep)
+organism_data/artifacts/**
+!organism_data/artifacts/.gitkeep
+organism_data/assets/**
+!organism_data/assets/.gitkeep
+organism_data/organisms/**
+!organism_data/organisms/.gitkeep

@@ -1,3 +1,31 @@
+## [1.7.0] — 2026-10-24
+
+### Added
+- **Organism Generative Evolution** — production-grade pipelines so Organisms can
+  self-evolve **code**, **looks (assets)**, and **skills** under promote gates.
+- SDK `organism_sdk.generative`: `CodePipeline`, `SafeSandbox`, pluggable
+  `TemplateDraftBackend` / `LLMStubBackend`, `AssetPipeline` + `AppearanceProfile`,
+  `SkillDescriptor` / `SkillRegistry`, `OrganismProfile` / `OrganismStore`,
+  versioned `ArtifactStore` + provenance.
+- Module `generative_organism` (RESEARCH_TIER, `may_actuate=False`) + catalog entry.
+- Desktop **Organism Evolution** panel (13th): Evolve Skills / Looks / Code
+  Promotions / Evolution Log; service APIs wired through `DesktopService`.
+- Docs: `docs/v1.7/ORGANISM_GENERATIVE_EVOLUTION.md`, `docs/v1.7/DESKTOP.md`.
+- Tests: SDK generative suite + Desktop organism evolution / catalog / gate.
+
+### Safety
+- Code exec sandbox-only (no arbitrary shell / imports / `open`).
+- Promote without full gate → `PromoteRefused` / Desktop `ActuationRefused`.
+- Generative drafts cannot declare `may_actuate=True`.
+- Bio actuation remains hard-refused; no Hybrid Studio; CPU Everywhere.
+- Naming is **Organism** throughout (not Sophont).
+
+### Changed
+- Package / SDK / Desktop versions **1.7.0**.
+
+### Test baseline
+Default suite: **296 passed**, 0 skipped, 2 slow deselected.
+
 # Changelog
 
 ## [1.6.1] — 2026-10-24

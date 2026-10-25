@@ -25,6 +25,16 @@ from organism_sdk.hormone import HormoneBus
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.immune import ImmuneLayer
 from organism_sdk.metamodel import MetamodelTracker
+from organism_sdk.generative import (
+    ArtifactStore,
+    AssetPipeline,
+    CodePipeline,
+    LLMStubBackend,
+    OrganismStore,
+    PromoteRefused,
+    SkillRegistry,
+    TemplateDraftBackend,
+)
 from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
 from organism_sdk.trace import (
@@ -38,7 +48,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.6.1"
+DESKTOP_VERSION = "1.7.0"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -93,6 +103,12 @@ class DesktopService:
     metamodel: MetamodelTracker = field(
         default_factory=lambda: MetamodelTracker(enabled=True, exploration_mode=True)
     )
+    artifact_store: ArtifactStore | None = None
+    code_pipeline: CodePipeline | None = None
+    asset_pipeline: AssetPipeline | None = None
+    skill_registry: SkillRegistry | None = None
+    organism_store: OrganismStore | None = None
+    _last_organism_action: dict | None = None
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     _last_plan: DispatchPlan | None = None
@@ -160,7 +176,20 @@ class DesktopService:
                 svc._hormone_attach_error = "attach_hormone_bus unavailable"  # type: ignore[attr-defined]
         svc._register_bio_modules()
         svc._init_hal()
+        svc._init_generative()
         return svc
+
+    def _init_generative(self) -> None:
+        """Wire Organism generative evolution pipelines (CPU-only artifact roots)."""
+        root = self._repo_root / "organism_data"
+        art = ArtifactStore(root / "artifacts")
+        self.artifact_store = art
+        self.code_pipeline = CodePipeline(art)
+        self.asset_pipeline = AssetPipeline(art, assets_root=root / "assets")
+        self.skill_registry = SkillRegistry(art)
+        self.organism_store = OrganismStore(root / "organisms")
+        self.organism_store.ensure_default()
+        self._last_organism_action = None
 
     def _init_hal(self) -> None:
         try:
@@ -1207,6 +1236,12 @@ class DesktopService:
         self.immune = new_svc.immune
         self.autonomic = new_svc.autonomic
         self.metamodel = new_svc.metamodel
+        self.artifact_store = new_svc.artifact_store
+        self.code_pipeline = new_svc.code_pipeline
+        self.asset_pipeline = new_svc.asset_pipeline
+        self.skill_registry = new_svc.skill_registry
+        self.organism_store = new_svc.organism_store
+        self._last_organism_action = new_svc._last_organism_action
         self.bio_modules = new_svc.bio_modules
         self._hal = new_svc._hal
         self._bio_register_error = new_svc._bio_register_error
@@ -1665,6 +1700,173 @@ class DesktopService:
     def last_harness_result(self) -> dict[str, Any] | None:
         return dict(self._last_harness_result) if self._last_harness_result else None
 
+
+    # ----- Organism generative evolution (v1.7) -----
+
+    def _require_generative(self) -> None:
+        if self.code_pipeline is None or self.organism_store is None:
+            self._init_generative()
+
+    def organism_snapshot(self) -> dict:
+        self._require_generative()
+        assert self.organism_store is not None and self.skill_registry is not None
+        assert self.asset_pipeline is not None
+        profile = self.organism_store.ensure_default()
+        # keep skills synced from registry
+        self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
+        self.organism_store.sync_appearance(profile.organism_id, self.asset_pipeline.appearance)
+        profile = self.organism_store.get(profile.organism_id)
+        assert profile is not None
+        d = profile.as_dict()
+        d["cpu_everywhere"] = True
+        d["may_actuate"] = False
+        return d
+
+    def last_organism_action(self) -> dict | None:
+        return dict(self._last_organism_action) if self._last_organism_action else None
+
+    def list_code_bundles(self) -> list:
+        self._require_generative()
+        assert self.code_pipeline is not None
+        return self.code_pipeline.list_bundles()
+
+    def evolve_organism_skill(
+        self,
+        name: str,
+        *,
+        intent: str,
+        auto_promote: bool = False,
+        backend: str = "template",
+    ) -> dict:
+        self._require_generative()
+        assert self.skill_registry and self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        skill, bundle = self.skill_registry.generate_skill(
+            name,
+            intent=intent,
+            code_pipeline=self.code_pipeline,
+            auto_promote=auto_promote,
+            backend_name=backend,
+        )
+        self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "skill_generate",
+            f"Generated skill {skill.name} stage={bundle.stage.value}",
+            payload={"skill_id": skill.skill_id, "bundle_id": bundle.bundle_id},
+        )
+        out = {
+            "ok": bundle.stage.value != "REJECTED",
+            "skill": skill.as_dict(),
+            "bundle": bundle.as_dict(),
+            "gate_ready": bundle.gate.ready() or bundle.may_control,
+        }
+        self._last_organism_action = out
+        return out
+
+    def promote_organism_skill(self, skill_id: str) -> dict:
+        self._require_generative()
+        assert self.skill_registry and self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        try:
+            skill = self.skill_registry.promote_skill(skill_id, code_pipeline=self.code_pipeline)
+        except PromoteRefused as e:
+            raise ActuationRefused(f"REFUSE unsafe skill promote: {e}") from e
+        self.organism_store.sync_skills(profile.organism_id, self.skill_registry.list_skills())
+        self.organism_store.log(
+            profile.organism_id,
+            "skill_promote",
+            f"Promoted skill {skill_id}",
+            payload={"skill_id": skill_id, "may_control": skill.may_control},
+        )
+        out = {"ok": True, "skill": skill.as_dict()}
+        self._last_organism_action = out
+        return out
+
+    def evolve_organism_looks(self, brief: str, *, kind: str = "avatar") -> dict:
+        self._require_generative()
+        assert self.asset_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        result = self.asset_pipeline.evolve_looks(brief, kind=kind)  # type: ignore[arg-type]
+        if result.get("ok"):
+            self.organism_store.sync_appearance(profile.organism_id, self.asset_pipeline.appearance)
+            self.organism_store.log(
+                profile.organism_id,
+                "looks_apply",
+                f"Applied {kind} from brief",
+                payload=result.get("appearance") or {},
+            )
+        self._last_organism_action = result
+        return result
+
+    def evolve_organism_code(
+        self,
+        intent: str,
+        *,
+        auto_promote: bool = False,
+        backend: str = "template",
+    ) -> dict:
+        self._require_generative()
+        assert self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        be = LLMStubBackend() if backend == "llm_stub" else TemplateDraftBackend()
+        bundle = self.code_pipeline.evolve(
+            intent,
+            spec={"skill_name": "organism_code", "may_actuate": False},
+            backend=be,
+            auto_promote=auto_promote,
+        )
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "code_draft",
+            f"Code pipeline → {bundle.stage.value}",
+            payload={"bundle_id": bundle.bundle_id, "stage": bundle.stage.value},
+        )
+        out = {
+            "ok": bundle.stage.value != "REJECTED",
+            "bundle": bundle.as_dict(),
+            "gate_ready": bundle.gate.ready() or bundle.may_control,
+        }
+        self._last_organism_action = out
+        return out
+
+    def promote_organism_code(self, bundle_id: str) -> dict:
+        self._require_generative()
+        assert self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        try:
+            bundle = self.code_pipeline.promote(bundle_id)
+        except PromoteRefused as e:
+            raise ActuationRefused(f"REFUSE unsafe code promote: {e}") from e
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "code_promote",
+            f"Promoted code bundle {bundle_id}",
+            payload={"bundle_id": bundle_id, "may_control": bundle.may_control},
+        )
+        out = {"ok": True, "bundle": bundle.as_dict()}
+        self._last_organism_action = out
+        return out
+
+    def demote_organism_code(self, bundle_id: str, *, reason: str = "desktop_demote") -> dict:
+        self._require_generative()
+        assert self.code_pipeline and self.organism_store
+        profile = self.organism_store.ensure_default()
+        bundle = self.code_pipeline.demote(bundle_id, reason=reason)
+        self.organism_store.add_code_revision(profile.organism_id, bundle.as_dict())
+        self.organism_store.log(
+            profile.organism_id,
+            "code_demote",
+            f"Demoted code bundle {bundle_id}",
+            payload={"bundle_id": bundle_id, "reason": reason},
+        )
+        out = {"ok": True, "bundle": bundle.as_dict()}
+        self._last_organism_action = out
+        return out
+
     def docs_links(self) -> list[dict[str, str]]:
         root = self._repo_root / "docs"
         return [
@@ -1672,6 +1874,8 @@ class DesktopService:
             {"title": "Soak Runbook", "path": str(root / "ops" / "SOAK_RUNBOOK.md")},
             {"title": "Degradation Drillbook", "path": str(root / "ops" / "DEGRADATION_DRILLBOOK.md")},
             {"title": "Wet-lab Safety Policy", "path": str(root / "ops" / "WETLAB_SAFETY_POLICY.md")},
+            {"title": "Organism Generative Evolution", "path": str(root / "v1.7" / "ORGANISM_GENERATIVE_EVOLUTION.md")},
+            {"title": "Desktop v1.7", "path": str(root / "v1.7" / "DESKTOP.md")},
             {"title": "Desktop v1.6.1", "path": str(root / "v1.6.1" / "DESKTOP.md")},
             {"title": "API Freeze v1.0", "path": str(root / "API_FREEZE_v1.0.md")},
             {"title": "Desktop Design", "path": str(root / "v1.5" / "DESKTOP.md")},

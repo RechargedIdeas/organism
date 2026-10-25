@@ -132,6 +132,18 @@ CATALOG: tuple[CatalogEntry, ...] = (
         description="Spiking sentinel — RESEARCH_SIM via ORGANISM_NEURO_SIM",
     ),
     CatalogEntry(
+        catalog_id="generative_organism",
+        module_id="generative_organism",
+        title="Generative Evolution",
+        package="generative.module",
+        factory="GenerativeOrganismModule",
+        tier="T3_LEARNED_UNCALIBRATED",
+        research_tier=True,
+        may_actuate_declared=False,
+        description="Code/asset/skill evolution — RESEARCH_TIER until promote gates pass",
+        promote="EXPLORATION",
+    ),
+    CatalogEntry(
         catalog_id="physical_research",
         module_id="physical_research",
         title="Physical Research",

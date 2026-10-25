@@ -8,7 +8,7 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.6.1** — Hormone timeline, drillbook, rust ops, soak/fuzz |
+| **Release** | **v1.7.0** — Organism Generative Evolution — code, looks, skills |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
