@@ -1,0 +1,23 @@
+# Optional OCI image build — NEVER required for Organism merge gates.
+# Organism is first-class on bare metal / VM; containers are an optional backend.
+name: Organism container (optional)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/container/**"
+      - "deploy/Dockerfile"
+      - "deploy/config/container_generic.yaml"
+
+jobs:
+  oci:
+    name: Build Containerfile (Docker daemon as one backend)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f deploy/container/Containerfile -t organism:cpu .

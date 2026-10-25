@@ -61,7 +61,7 @@ def svc(tmp_path: Path) -> DesktopService:
 
 
 def test_desktop_version_v181():
-    assert DESKTOP_VERSION == "1.9.0"
+    assert DESKTOP_VERSION == "1.10.0"
 
 
 def test_shell_active_organism_badge(qapp, tmp_path: Path):

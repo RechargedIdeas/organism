@@ -1,47 +1,74 @@
-# Organism single-device deploy (CPU-only)
+# Organism deploy — bare metal first, Docker optional
 
-Run Organism on **any hardware** with no GPU and no Hybrid checkout required.
+Organism runs **100% bare metal**, inside **any VM**, and inside **any container
+system**. **Docker is not required** and is never the only path.
 
-## N-step quickstart (host)
+| Profile | Config | Host |
+|---|---|---|
+| `bare_metal` | `deploy/config/bare_metal.yaml` | Physical host (first-class) |
+| `vm` | `deploy/config/vm.yaml` | Any hypervisor / cloud VM |
+| `container_generic` | `deploy/config/container_generic.yaml` | Docker **or** Podman **or** CRI-O / containerd |
+| `cpu_only` | `deploy/config/cpu_only.yaml` | Alias of bare-metal CPU defaults |
+
+`organism status` reports `host_kind` (`bare_metal`|`vm`|`container`) without
+assuming Docker. Override with `ORGANISM_FORCE_HOST_KIND`.
+
+## N-step quickstart (bare metal / VM — preferred)
 
 ```bash
-# 1. Clone / enter repo
 cd /path/to/organism
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-# 2. venv + install
-python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-
-# 3. Validate profile
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
-  validate-config -c deploy/config/cpu_only.yaml
+  validate-config -c deploy/config/bare_metal.yaml
 
-# 4. Dry-run (builds stack, no bind)
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
-  serve -c deploy/config/cpu_only.yaml --dry-run
+  serve -c deploy/config/bare_metal.yaml --dry-run
 
-# 5. Serve health/status
-PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
-  serve -c deploy/config/cpu_only.yaml
-# → http://127.0.0.1:8787/health  and  /status
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk status
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk sandbox self-check
 ```
 
 Or: `./deploy/entrypoint.sh --dry-run`
 
-## Docker
+### systemd (bare / VM)
 
 ```bash
-docker build -f deploy/Dockerfile -t organism:cpu .
-docker run --rm -p 8787:8787 organism:cpu
+sudo ./deploy/bare/install.sh /opt/organism
+sudo systemctl start organism
 ```
 
-## systemd
+Unit: `deploy/systemd/organism.service` (NoNewPrivileges, ProtectSystem, MemoryMax).
 
-Copy `deploy/systemd/organism.service` to `/etc/systemd/system/`, install the
-tree under `/opt/organism`, config under `/etc/organism/cpu_only.yaml`, then:
+## Container (optional)
+
+Docker is **one** optional backend under `container_generic`. Prefer the
+Docker-and-Podman-friendly Containerfile:
 
 ```bash
-systemctl enable --now organism
+# Podman (rootless OK)
+podman build -f deploy/container/Containerfile -t organism:cpu .
+podman run --rm -p 8787:8787 organism:cpu
+
+# Docker (optional)
+docker build -f deploy/container/Containerfile -t organism:cpu .
+# or: docker build -f deploy/Dockerfile -t organism:cpu .
 ```
+
+CRI-O / containerd: build the same OCI image and run under your runtime; no
+Organism code path hard-depends on the Docker CLI or daemon.
+
+## Native sandbox
+
+Organism ships a **custom integrated sandbox** (`organism_sdk.sandbox`):
+
+```bash
+organism sandbox status
+organism sandbox self-check
+organism sandbox run -- python -c "print('jailed')"
+```
+
+See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](../docs/v1.10/BARE_METAL_AND_SANDBOX.md).
 
 ## Env
 

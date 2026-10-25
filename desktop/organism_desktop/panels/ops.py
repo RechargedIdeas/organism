@@ -34,6 +34,20 @@ class OpsPanel(BasePanel):
             "background:#444; color:white; font-weight:bold; padding:6px 10px; border-radius:4px;"
         )
         row.addWidget(self.rust_badge)
+        self.host_badge = QLabel("host: ?")
+        self.host_badge.setObjectName("ops_host_badge")
+        self.host_badge.setToolTip("Detected host kind: bare_metal / vm / container (Docker never assumed).")
+        self.host_badge.setStyleSheet(
+            "background:#365; color:white; font-weight:bold; padding:6px 10px; border-radius:4px;"
+        )
+        row.addWidget(self.host_badge)
+        self.sandbox_badge = QLabel("sandbox: ?")
+        self.sandbox_badge.setObjectName("ops_sandbox_badge")
+        self.sandbox_badge.setToolTip("Native Organism sandbox — Docker not required.")
+        self.sandbox_badge.setStyleSheet(
+            "background:#536; color:white; font-weight:bold; padding:6px 10px; border-radius:4px;"
+        )
+        row.addWidget(self.sandbox_badge)
         row.addStretch(1)
         wrap = QWidget()
         wrap.setLayout(row)
@@ -93,6 +107,12 @@ class OpsPanel(BasePanel):
         mp_btn.clicked.connect(self._multiprocess)
         btn_row.addWidget(mp_btn)
 
+        sb_btn = QPushButton("Sandbox self-check")
+        sb_btn.setObjectName("ops_sandbox_check")
+        sb_btn.setToolTip("Native Organism sandbox self-check (no Docker).")
+        sb_btn.clicked.connect(self._sandbox_check)
+        btn_row.addWidget(sb_btn)
+
         btn_row.addStretch(1)
         self._root.addLayout(btn_row)
         self.refresh()
@@ -119,6 +139,12 @@ class OpsPanel(BasePanel):
             return
 
         profile = info.get("deploy_profile") or info.get("active_profile") or "?"
+        host_kind = info.get("host_kind") or (info.get("host") or {}).get("kind") or "?"
+        self.host_badge.setText(f"host: {host_kind}")
+        sb = info.get("sandbox") or {}
+        self.sandbox_badge.setText(
+            "sandbox: native" if sb.get("native") else "sandbox: ?"
+        )
         self.profile_badge.setText(f"deploy: {profile}")
         self._reload_profile_box(info.get("profiles") or [], str(profile))
         rust = info.get("rust_runtime") or {}
@@ -221,3 +247,14 @@ class OpsPanel(BasePanel):
                 f"Multiprocess stub oxytocin={result.get('oxytocin_accepted')} (not production BFT)",
                 error=not result.get("ok"),
             )
+
+    def _sandbox_check(self) -> None:
+        try:
+            result = self.service.sandbox_self_check()
+            set_json(self.view, result)
+            win = self.window()
+            ok = bool(result.get("ok"))
+            if hasattr(win, "toast"):
+                win.toast("Sandbox self-check OK" if ok else "Sandbox self-check failed", error=not ok)
+        except Exception as exc:
+            self.view.setPlainText(f"ERROR sandbox self-check:\n{exc}")

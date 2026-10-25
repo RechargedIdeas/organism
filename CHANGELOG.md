@@ -1,3 +1,32 @@
+## [1.10.0] — 2026-10-25
+
+### Added
+- **Host portability profiles** — `bare_metal`, `vm`, `container_generic` (Docker is one optional backend, never required).
+- **Host detection** — `organism_sdk.host.detect_host()`; `organism status` reports `host_kind` + `docker_required: false`.
+- **Bare install** — `deploy/bare/install.sh` + hardened `deploy/systemd/organism.service`.
+- **OCI Containerfile** — `deploy/container/Containerfile` (Docker-and-Podman friendly); Dockerfile marked example-only.
+- **Native Organism Sandbox** — `organism_sdk.sandbox` ProcessJail (rlimits + optional Linux namespaces), self-sandbox, audit → `SandboxTraceEntry`.
+- **CLI** — `organism sandbox status|run|self-check`.
+- **Desktop Ops** — host/sandbox badges + Sandbox self-check.
+- Docs: `docs/v1.10/BARE_METAL_AND_SANDBOX.md`; gates `v110:*`.
+- CI: Docker/OCI jobs `continue-on-error` / separate optional workflow; main gates never need Docker.
+
+### Changed
+- README / STATUS / deploy README: **Docker optional; first-class bare metal**.
+- Generative `SafeSandbox` composes with native jail (`run_under_organism_jail`).
+- Package / SDK / Desktop / generative versions **1.10.0**.
+
+### Safety
+- Bio `may_actuate=False` unchanged; shell-escape fuzz refused; env key scrub in jail.
+- CPU Everywhere; no GPU hard-dep; no Hybrid Studio.
+
+### Deferred (hardware / external)
+- Neuromorphic silicon, wet-lab GPIO, production WAN BFT+TPM, Hybrid Studio UI,
+  hosted LLM provider account.
+
+### Test baseline
+- `pytest -m 'not slow'`: **377** passed · 2 deselected
+
 ## [1.9.0] — 2026-10-25
 
 ### Added

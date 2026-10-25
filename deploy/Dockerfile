@@ -1,3 +1,7 @@
+# EXAMPLE ONLY — Organism does NOT require Docker.
+# Prefer bare metal: ./deploy/bare/install.sh
+# Prefer Podman/CRI-O: build deploy/container/Containerfile
+# This Dockerfile remains for operators who already use Docker.
 # Organism single-device image — CPU only (no CUDA base).
 FROM python:3.12-slim-bookworm
 
@@ -9,10 +13,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ORGANISM_WETLAB_GPIO=0 \
     ORGANISM_LLM_ENABLED=0 \
     ORGANISM_SANDBOX_ISOLATE=1 \
+    ORGANISM_JAIL_NAMESPACES=0 \
     ORGANISM_GENERATIVE_BACKEND=template \
     ORGANISM_HEALTH_HOST=0.0.0.0 \
     ORGANISM_HEALTH_PORT=8787 \
-    ORGANISM_CONFIG=/etc/organism/cpu_only.yaml
+    ORGANISM_CONFIG=/etc/organism/container_generic.yaml \
+    ORGANISM_FORCE_HOST_KIND=container
 
 WORKDIR /opt/organism
 
@@ -28,9 +34,8 @@ COPY deploy ./deploy
 COPY harness ./harness
 
 RUN python -m pip install --no-cache-dir -e ".[dev]" \
- && mkdir -p /var/lib/organism/artifacts /var/lib/organism/organisms \
- && true \
- && mkdir -p /etc/organism \
+ && mkdir -p /var/lib/organism/artifacts /var/lib/organism/organisms /etc/organism \
+ && cp deploy/config/container_generic.yaml /etc/organism/container_generic.yaml \
  && cp deploy/config/cpu_only.yaml /etc/organism/cpu_only.yaml
 
 EXPOSE 8787
@@ -38,4 +43,4 @@ EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health')" || exit 1
 
-ENTRYPOINT ["python", "-m", "organism_sdk", "serve", "--config", "/etc/organism/cpu_only.yaml"]
+ENTRYPOINT ["python", "-m", "organism_sdk", "serve", "--config", "/etc/organism/container_generic.yaml"]

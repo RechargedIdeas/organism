@@ -291,3 +291,14 @@ category_bio:
     blocking: true
     status: green
     command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v19_generative_cli.py"
+
+
+  - id: v110:bare_sandbox
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v110_bare_sandbox.py"
+
+  - id: v110:desktop_ops_sandbox
+    blocking: true
+    status: green
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v110_ops_sandbox.py"

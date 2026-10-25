@@ -1,0 +1,27 @@
+# Organism VM deploy profile (v1.10)
+# Runs inside any hypervisor (KVM/VMware/Hyper-V/cloud VM). No Docker required.
+version: 1
+profile: vm
+host_kind: vm
+runtime:
+  prefer_gpu: false
+  enable_bio_digital: false
+  enable_neuro_sim: false
+  hybrid_root: null
+stack:
+  register_deterministic: true
+  register_learned: true
+  workspace_write_tags: ["*"]
+  workspace_read_tags: ["*"]
+  router_level: L0
+health:
+  host: "127.0.0.1"
+  port: 8787
+  path: "/health"
+  status_path: "/status"
+serve:
+  dry_run: false
+  bind_background: true
+sandbox:
+  self_sandbox: true
+  use_namespaces: true

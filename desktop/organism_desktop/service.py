@@ -62,7 +62,7 @@ from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
 
-DESKTOP_VERSION = "1.9.0"
+DESKTOP_VERSION = "1.10.0"
 
 CoreKind = Literal["deterministic", "learned"]
 
@@ -1609,6 +1609,11 @@ class DesktopService:
             "rust_runtime": self.rust_runtime_status(probe_cargo=False),
             "last_harness_result": self._last_harness_result,
             "drillbook_doc": str(self._repo_root / "docs" / "ops" / "DEGRADATION_DRILLBOOK.md"),
+            "docker_required": False,
+            "host": self.host_facts(),
+            "host_kind": self.host_facts().get("kind"),
+            "sandbox": self.sandbox_status(),
+            "bare_metal_doc": str(self._repo_root / "docs" / "v1.10" / "BARE_METAL_AND_SANDBOX.md"),
         }
 
     def refresh_bundle(self) -> dict[str, Any]:
@@ -1626,6 +1631,29 @@ class DesktopService:
             "ok": True,
         }
 
+
+
+    def host_facts(self) -> dict[str, Any]:
+        from organism_sdk.host import detect_host
+
+        return detect_host().as_dict()
+
+    def sandbox_status(self) -> dict[str, Any]:
+        from organism_sdk.sandbox import OrganismSandbox
+
+        return OrganismSandbox().status().as_dict()
+
+    def sandbox_self_check(self) -> dict[str, Any]:
+        from organism_sdk.sandbox import OrganismSandbox
+
+        return OrganismSandbox().self_check().as_dict()
+
+    def sandbox_run(self, argv: list[str], *, self_sandbox: bool = False) -> dict[str, Any]:
+        from organism_sdk.sandbox import OrganismSandbox, SandboxPolicy
+
+        sb = OrganismSandbox()
+        policy = SandboxPolicy.self_containment() if self_sandbox else SandboxPolicy.from_env(label="desktop")
+        return sb.run(argv, policy=policy).as_dict()
 
     def rust_runtime_status(self, *, probe_cargo: bool = True) -> dict[str, Any]:
         """Read-only Rust workspace parity probe (no build forced on every refresh)."""

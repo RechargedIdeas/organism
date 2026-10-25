@@ -22,7 +22,7 @@ def service():
 
 
 def test_desktop_version_19():
-    assert DESKTOP_VERSION.startswith("1.9")
+    assert DESKTOP_VERSION.startswith(('1.9', '1.10'))
 
 
 def test_physiology_snapshot_deep(service):

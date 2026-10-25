@@ -145,6 +145,22 @@ class V02TraceSink:
         self.entries.append(entry)
 
 
+
+@dataclass
+class SandboxTraceEntry:
+    """Native Organism sandbox audit (v1.10) — no v0.2 sink required."""
+    action: str
+    label: str = "default"
+    ok: bool = True
+    detail: str = ""
+    namespaces_used: list[str] = field(default_factory=list)
+    degraded: list[str] = field(default_factory=list)
+    policy_id: str | None = None
+    policy_digest: bytes | None = None
+    level: str | None = None
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class TraceEmitter:
     """SDK-6: auto-populates policy_id, policy_digest, level from router state.
 
@@ -238,6 +254,10 @@ class TraceEmitter:
 
     def emit_evolution(self, entry: EvolutionTraceEntry) -> None:
         """First-class generative evolution traces (no v0.2 sink required)."""
+        self._entries.append(self._stamp(entry))
+
+    def emit_sandbox(self, entry: SandboxTraceEntry) -> None:
+        """Native sandbox audit traces (no v0.2 sink required)."""
         self._entries.append(self._stamp(entry))
 
     def emit_autonomic(self, entry: AutonomicTraceEntry) -> None:

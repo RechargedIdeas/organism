@@ -3,6 +3,7 @@
 # so Desktop multi-profile switching shows a clear status_facts delta.
 version: 1
 profile: default
+host_kind: bare_metal
 runtime:
   prefer_gpu: false
   enable_bio_digital: false

@@ -21,6 +21,8 @@ generative evolve/promote/rollback soak.
 
 v1.9: HostedLLMBackend (env-gated), sandbox process jail, ImageBackend,
 generative CLI, richer physiology Desktop, audit closure.
+
+v1.10: composes with native organism_sdk.sandbox (Docker never required).
 """
 from __future__ import annotations
 

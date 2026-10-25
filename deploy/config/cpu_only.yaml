@@ -1,7 +1,8 @@
-# Organism single-device CPU-only profile (v1.4)
-# No GPU required. Hybrid / bio adapters optional.
+# Organism single-device CPU-only profile (alias of bare_metal defaults)
+# No GPU required. Hybrid / bio adapters optional. Docker NOT required.
 version: 1
 profile: cpu_only
+host_kind: bare_metal
 runtime:
   prefer_gpu: false
   enable_bio_digital: false

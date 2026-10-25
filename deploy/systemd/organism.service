@@ -1,23 +1,45 @@
 [Unit]
-Description=Organism substrate (CPU-only single-device)
-After=network.target
+Description=Organism substrate (bare metal / VM / container — CPU Everywhere)
+Documentation=file:///opt/organism/docs/v1.10/BARE_METAL_AND_SANDBOX.md
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=organism
 Group=organism
 WorkingDirectory=/opt/organism
-Environment=ORGANISM_CONFIG=/etc/organism/cpu_only.yaml
+Environment=ORGANISM_CONFIG=/etc/organism/bare_metal.yaml
 Environment=ORGANISM_PREFER_GPU=0
 Environment=ORGANISM_BIO_GPU_TWIN=0
 Environment=ORGANISM_NEURO_SIM=0
 Environment=ORGANISM_WETLAB_GPIO=0
+Environment=ORGANISM_LLM_ENABLED=0
+Environment=ORGANISM_SANDBOX_ISOLATE=1
+Environment=ORGANISM_JAIL_NAMESPACES=1
 Environment=ORGANISM_HEALTH_HOST=127.0.0.1
 Environment=ORGANISM_HEALTH_PORT=8787
 Environment=PYTHONPATH=/opt/organism/sdk/python:/opt/organism/modules:/opt/organism
-ExecStart=/opt/organism/.venv/bin/python -m organism_sdk serve --config /etc/organism/cpu_only.yaml
+# Native sandbox self-containment for children
+Environment=ORGANISM_SELF_JAIL_TIMEOUT_S=600
+ExecStartPre=/opt/organism/.venv/bin/python -m organism_sdk validate-config -c /etc/organism/bare_metal.yaml
+ExecStart=/opt/organism/.venv/bin/python -m organism_sdk serve --config /etc/organism/bare_metal.yaml
 Restart=on-failure
 RestartSec=5
+# Hardening (no Docker dependency)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/organism /tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=2G
+TasksMax=512
+LimitNOFILE=1024
 
 [Install]
 WantedBy=multi-user.target

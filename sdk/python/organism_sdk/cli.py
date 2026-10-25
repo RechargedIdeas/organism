@@ -1,4 +1,4 @@
-"""Organism CLI — serve / status / validate-config / generative evolve (v1.9)."""
+"""Organism CLI — serve / status / sandbox / validate-config / generative evolve (v1.10)."""
 from __future__ import annotations
 
 import argparse
@@ -319,6 +319,41 @@ def _cmd_list_drafts(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def _cmd_sandbox(args: argparse.Namespace) -> int:
+    """organism sandbox status|run|self-check"""
+    from organism_sdk.sandbox import OrganismSandbox, SandboxPolicy
+
+    sb = OrganismSandbox()
+    action = args.sandbox_action
+    if action == "status":
+        _print({"ok": True, **sb.status().as_dict()})
+        return 0
+    if action == "self-check":
+        result = sb.self_check()
+        _print(result.as_dict())
+        return 0 if result.ok else 1
+    if action == "run":
+        argv = list(args.argv or [])
+        if argv and argv[0] == "--":
+            argv = argv[1:]
+        if not argv:
+            _print({"ok": False, "error": "sandbox run requires a command after --"})
+            return 2
+        policy = SandboxPolicy.from_env(label=args.label or "cli_run")
+        if args.self_sandbox:
+            policy = SandboxPolicy.self_containment()
+        if args.timeout is not None:
+            policy.timeout_s = float(args.timeout)
+        if args.no_namespaces:
+            policy.use_namespaces = False
+        result = sb.run(argv, policy=policy)
+        _print({"ok": result.ok, **result.as_dict()})
+        return 0 if result.ok else 1
+    _print({"ok": False, "error": f"unknown sandbox action: {action}"})
+    return 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="organism", description="Organism substrate CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -418,6 +453,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     _add_data_root(p_rd)
     p_rd.add_argument("--entry-id", required=True)
     p_rd.set_defaults(func=_cmd_replay_draft)
+
+    # --- Native sandbox (v1.10) ---
+    p_sb = sub.add_parser("sandbox", help="Native Organism sandbox (status|run|self-check)")
+    sb_sub = p_sb.add_subparsers(dest="sandbox_action", required=True)
+    p_sbs = sb_sub.add_parser("status", help="Sandbox capabilities + policy")
+    p_sbs.set_defaults(func=_cmd_sandbox)
+    p_sbc = sb_sub.add_parser("self-check", help="Spawn/refuse/timeout self-check")
+    p_sbc.set_defaults(func=_cmd_sandbox)
+    p_sbr = sb_sub.add_parser("run", help="Run argv inside the native jail")
+    p_sbr.add_argument("argv", nargs=argparse.REMAINDER, help="Command after -- ")
+    p_sbr.add_argument("--label", default="cli_run")
+    p_sbr.add_argument("--timeout", type=float, default=None)
+    p_sbr.add_argument("--self-sandbox", action="store_true")
+    p_sbr.add_argument("--no-namespaces", action="store_true")
+    p_sbr.set_defaults(func=_cmd_sandbox)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:

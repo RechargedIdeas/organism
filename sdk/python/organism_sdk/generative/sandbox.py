@@ -1,8 +1,11 @@
-"""Restricted sandbox for generative code — AST forbid + optional OS process jail.
+"""Restricted sandbox for generative code — AST forbid + OS process jail.
 
-v1.9: wall-clock timeout + RSS cap via child process (default). AST whitelist
-remains the first line of defense. Set ORGANISM_SANDBOX_INPROCESS=1 to force
-in-process exec (tests / constrained environments). Bio may_actuate never set.
+v1.9: wall-clock timeout + RSS cap via child process (default).
+v1.10: composes with organism_sdk.sandbox.OrganismSandbox (native runtime
+containment). AST whitelist remains the first line of defense; ProcessJail
+provides rlimits / optional namespaces for broader child work. Set
+ORGANISM_SANDBOX_INPROCESS=1 to force in-process exec. Bio may_actuate never set.
+Docker is never required.
 """
 from __future__ import annotations
 
@@ -274,3 +277,11 @@ class SafeSandbox:
         result.max_rss_mb = self.max_rss_mb
         result.stdout_capture = f"fallback_inprocess:{note}"
         return result
+
+
+def run_under_organism_jail(argv: list[str], **kwargs):
+    """Delegate argv containment to the native OrganismSandbox ProcessJail."""
+    from organism_sdk.sandbox import OrganismSandbox, SandboxPolicy
+
+    policy = kwargs.pop("policy", None) or SandboxPolicy.generative()
+    return OrganismSandbox().run(argv, policy=policy, **kwargs)

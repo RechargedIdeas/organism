@@ -8,13 +8,14 @@ Organism is not a model. It is the **substrate** in which models live.
 
 | | |
 |---|---|
-| **Release** | **v1.9.0** — Audit closure · generative production bar · physiology Desktop depth · CI |
+| **Release** | **v1.10.0** — Bare metal first · native sandbox · Docker optional |
 | **Repo** | https://github.com/RechargedIdeas/organism (private) |
 | **API freeze** | [docs/API_FREEZE_v1.0.md](docs/API_FREEZE_v1.0.md) |
 | **Plan** | [docs/v1.0/PLAN.md](docs/v1.0/PLAN.md) |
 | **Hardening** | [docs/v1.0/HARDENING.md](docs/v1.0/HARDENING.md) |
 | **CPU Everywhere** | [docs/CPU_EVERYWHERE.md](docs/CPU_EVERYWHERE.md) |
-| **Deploy** | [deploy/README.md](deploy/README.md) |
+| **Deploy** | [deploy/README.md](deploy/README.md) — **Docker optional; bare metal first** |
+| **Bare metal + sandbox** | [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md) |
 | **Soak runbook** | [docs/ops/SOAK_RUNBOOK.md](docs/ops/SOAK_RUNBOOK.md) |
 | **Degradation drillbook** | [docs/ops/DEGRADATION_DRILLBOOK.md](docs/ops/DEGRADATION_DRILLBOOK.md) |
 | **Wet-lab safety** | [docs/ops/WETLAB_SAFETY_POLICY.md](docs/ops/WETLAB_SAFETY_POLICY.md) |
@@ -66,7 +67,12 @@ Promote gates remain mandatory. Hot-register caps at **EXPLORATION** /
 
 ## Run on any hardware (CPU-only, N steps)
 
-No GPU and no Hybrid checkout required. See [deploy/README.md](deploy/README.md).
+No GPU, no Hybrid checkout, and **no Docker** required. See [deploy/README.md](deploy/README.md) and [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md).
+
+```bash
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk sandbox self-check
+PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk status
+```
 
 ```bash
 python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev,desktop]"
@@ -77,7 +83,9 @@ PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
 organism-desktop   # PySide6 control plane
 ```
 
-Docker: `docker build -f deploy/Dockerfile -t organism:cpu .`
+Docker is **optional**. Prefer bare metal / VM (`deploy/bare/install.sh`).
+Container example (Podman or Docker):
+`podman build -f deploy/container/Containerfile -t organism:cpu .`
 
 ## Repository structure
 

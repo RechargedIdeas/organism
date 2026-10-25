@@ -47,19 +47,31 @@ class ServeConfig:
 
 
 @dataclass
+class SandboxDeployConfig:
+    """Native Organism sandbox knobs for a deploy profile (v1.10)."""
+    self_sandbox: bool = True
+    use_namespaces: bool = True
+    timeout_s: float = 30.0
+    max_rss_mb: int = 512
+
+
+@dataclass
 class DeployConfig:
     version: int = 1
     profile: str = "cpu_only"
+    host_kind: str = "bare_metal"  # bare_metal|vm|container|unknown
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     stack: StackConfig = field(default_factory=StackConfig)
     health: HealthConfig = field(default_factory=HealthConfig)
     serve: ServeConfig = field(default_factory=ServeConfig)
+    sandbox: SandboxDeployConfig = field(default_factory=SandboxDeployConfig)
     source_path: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "profile": self.profile,
+            "host_kind": self.host_kind,
             "runtime": {
                 "prefer_gpu": self.runtime.prefer_gpu,
                 "enable_bio_digital": self.runtime.enable_bio_digital,
@@ -82,6 +94,12 @@ class DeployConfig:
             "serve": {
                 "dry_run": self.serve.dry_run,
                 "bind_background": self.serve.bind_background,
+            },
+            "sandbox": {
+                "self_sandbox": self.sandbox.self_sandbox,
+                "use_namespaces": self.sandbox.use_namespaces,
+                "timeout_s": self.sandbox.timeout_s,
+                "max_rss_mb": self.sandbox.max_rss_mb,
             },
             "source_path": self.source_path,
         }
@@ -186,14 +204,27 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
     stack_raw = data.get("stack") or {}
     health_raw = data.get("health") or {}
     serve_raw = data.get("serve") or {}
+    sandbox_raw = data.get("sandbox") or {}
 
     hybrid = runtime_raw.get("hybrid_root")
     if hybrid is not None:
         hybrid = str(hybrid)
 
+    profile = str(data.get("profile", "cpu_only"))
+    host_kind = str(data.get("host_kind") or {
+        "bare_metal": "bare_metal",
+        "vm": "vm",
+        "container_generic": "container",
+        "cpu_only": "bare_metal",
+        "default": "bare_metal",
+        "cpu_with_bio": "bare_metal",
+        "research": "bare_metal",
+    }.get(profile, "bare_metal"))
+
     cfg = DeployConfig(
         version=int(data.get("version", 1)),
-        profile=str(data.get("profile", "cpu_only")),
+        profile=profile,
+        host_kind=host_kind,
         runtime=RuntimeConfig(
             prefer_gpu=_coerce_bool(runtime_raw.get("prefer_gpu"), False),
             enable_bio_digital=_coerce_bool(runtime_raw.get("enable_bio_digital"), False),
@@ -216,6 +247,12 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
         serve=ServeConfig(
             dry_run=_coerce_bool(serve_raw.get("dry_run"), False),
             bind_background=_coerce_bool(serve_raw.get("bind_background"), True),
+        ),
+        sandbox=SandboxDeployConfig(
+            self_sandbox=_coerce_bool(sandbox_raw.get("self_sandbox"), True),
+            use_namespaces=_coerce_bool(sandbox_raw.get("use_namespaces"), True),
+            timeout_s=float(sandbox_raw.get("timeout_s", 30.0)),
+            max_rss_mb=int(sandbox_raw.get("max_rss_mb", 512)),
         ),
         source_path=source_path,
     )
@@ -269,8 +306,10 @@ def validate_deploy_config(cfg: DeployConfig) -> list[str]:
     issues: list[str] = []
     if cfg.version != 1:
         issues.append(f"unsupported config version: {cfg.version}")
-    if cfg.profile not in {"cpu_only", "default", "cpu_with_bio", "research"}:
+    if cfg.profile not in {"cpu_only", "default", "cpu_with_bio", "research", "bare_metal", "vm", "container_generic"}:
         issues.append(f"unknown profile: {cfg.profile}")
+    if cfg.host_kind not in {"bare_metal", "vm", "container", "unknown"}:
+        issues.append(f"unknown host_kind: {cfg.host_kind}")
     if not (1 <= cfg.health.port <= 65535):
         issues.append(f"invalid health.port: {cfg.health.port}")
     if not cfg.health.path.startswith("/"):

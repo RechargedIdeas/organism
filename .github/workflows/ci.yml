@@ -48,7 +48,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m organism_desktop --smoke
-      - name: Gate subset from ci/gates.yaml (v17+v18+v19)
+      - name: Native sandbox self-check (no Docker)
+        env:
+          ORGANISM_SANDBOX_ISOLATE: "1"
+        run: |
+          PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk sandbox self-check
+      - name: Gate subset from ci/gates.yaml (v17+v18+v19+v110)
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
@@ -59,6 +64,7 @@ jobs:
             desktop/tests/test_v18_organism_surfaces.py \
             sdk/python/tests/test_v19_audit_closure.py \
             desktop/tests/test_v19_physiology_ops.py \
+            sdk/python/tests/test_v110_bare_sandbox.py \
             -m 'not slow'
 
   rust:
@@ -73,13 +79,16 @@ jobs:
       - name: cargo test --workspace --lib
         run: cargo test --workspace --lib
 
-  docker:
-    name: Docker CPU image build
+  # OPTIONAL — Docker is NOT required for Organism. Main gates never need Docker.
+  # This job is allow-fail so a registry/daemon flake cannot red the required checks.
+  docker_optional:
+    name: Optional container image (Docker example)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [gates]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Build CPU image
-        run: docker build -f deploy/Dockerfile -t organism:cpu .
+      - name: Build OCI image via Containerfile (Docker backend example)
+        run: docker build -f deploy/container/Containerfile -t organism:cpu .

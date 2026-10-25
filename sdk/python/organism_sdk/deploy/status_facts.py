@@ -24,15 +24,23 @@ PARITY_KEYS: tuple[str, ...] = (
     "health_port",
     "device_runtime",
     "device_backend",
+    "host_kind",
+    "docker_required",
 )
 
 
 def common_status_facts(stack: MinimalStack) -> dict[str, Any]:
     """Facts derived only from MinimalStack + device selection (no Desktop extras)."""
+    from organism_sdk.host import detect_host
+    from organism_sdk.sandbox import OrganismSandbox
+
     st = stack.status()
     device = st.get("device") or {}
     if not device:
         device = select_compute_backend().as_dict()
+    host = detect_host()
+    cfg = stack.config
+    sandbox_status = OrganismSandbox().status().as_dict()
     return {
         "ok": bool(st.get("ok", True)),
         "profile": st.get("profile"),
@@ -50,6 +58,12 @@ def common_status_facts(stack: MinimalStack) -> dict[str, Any]:
         "workspace_bindings": st.get("workspace_bindings"),
         "accelerator_summary": accelerator_selection_summary(),
         "registered_ids": list(st.get("registered_ids") or []),
+        "host_kind": host.kind,
+        "host": host.as_dict(),
+        "host_kind_config": getattr(cfg, "host_kind", None),
+        "deploy_profile_hint": host.deploy_profile_hint,
+        "docker_required": False,
+        "sandbox": sandbox_status,
     }
 
 
