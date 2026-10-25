@@ -14,8 +14,7 @@ generative evolve→promote→rollback soak (no registry leak). Bio/wet-lab
 actuation remains hard-refused. CPU Everywhere holds. Hybrid Studio still not
 imported. Naming is **Organism** only.
 
-Meaningful *software* gaps from the generative/Desktop wave are closed. Remaining
-items are true external deps (silicon / wet-lab HW / production WAN).
+Meaningful *software* gaps from the generative/Desktop wave are closed for that wave's scope. A fuller residual software backlog (CI, docs drift, generative production bar, Desktop/SDK depth) is in [docs/AUDIT_v1.8.md](docs/AUDIT_v1.8.md). Remaining **hard external** deps stay silicon / wet-lab HW / production WAN.
 
 ## v1.8.1 phase table
 
