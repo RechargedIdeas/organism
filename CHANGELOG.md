@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.1] — 2026-10-24
+
+### Added
+- Desktop panel deepenings: registry register/deregister, workspace bind/unbind,
+  physiology L0→L1 safe demo, structured traces + emit demo, HAL twin refresh.
+- `DesktopService.register_core_module` / `unbind_binding` / `simulate_l0_to_l1` /
+  `emit_demo_traces` / `refresh_bio_twin`.
+- Offscreen `--screenshot` → `desktop/screenshots/` (PNGs gitignored).
+- Expanded `desktop/tests/` (panel Qt clicks, registry/workspace, physiology/traces).
+
+### Changed
+- Package / SDK / Desktop versions **1.5.1**.
+- `BasePanel.refresh` documented as intentional no-op default; `set_json` helper.
+- Bio HAL init uses `PHYSARUM_LIMITS` stub backend (fixes empty twin).
+
+### Security / safety
+- Bio module deregister via Desktop refused; actuation refuse tests strengthened.
+- Physiology demo is virtual-clock only; never enables bio actuation.
+
+### Test baseline
+Default suite: **239 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.5.0] — 2026-10-24
 
 ### Added

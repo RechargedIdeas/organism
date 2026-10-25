@@ -40,3 +40,6 @@ Thumbs.db
 *.pem
 *.key
 .env
+
+# Desktop offscreen screenshots (generated)
+desktop/screenshots/*.png

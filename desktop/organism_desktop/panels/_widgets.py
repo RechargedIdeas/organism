@@ -1,6 +1,7 @@
 """Small shared Qt helpers."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from PySide6.QtGui import QColor, QFont
@@ -36,6 +37,11 @@ def badge(may_actuate: bool) -> QLabel:
     return lab
 
 
+def set_json(view: QTextEdit, payload: Any) -> None:
+    """Render a JSON-serializable payload into a mono text view."""
+    view.setPlainText(json.dumps(payload, indent=2, default=str))
+
+
 def fill_table(table: QTableWidget, headers: list[str], rows: list[list[Any]]) -> None:
     table.clear()
     table.setColumnCount(len(headers))
@@ -53,6 +59,8 @@ def fill_table(table: QTableWidget, headers: list[str], rows: list[list[Any]]) -
 
 
 class BasePanel(QWidget):
+    """Panel base. Subclasses override :meth:`refresh` to reload live data."""
+
     panel_id: str = ""
     panel_title: str = ""
 
@@ -63,4 +71,9 @@ class BasePanel(QWidget):
         self._root.addWidget(title_label(self.panel_title))
 
     def refresh(self) -> None:
-        pass
+        """Reload panel contents from DesktopService.
+
+        Default is a no-op so panels without live state (e.g. Docs) need not
+        override. Interactive panels must implement this.
+        """
+        return

@@ -1,14 +1,14 @@
 # Organism — Implementation Status
 
 **Date:** 2026-10-24 (America/New_York)  
-**Release:** **v1.5.0 — Organism Desktop**  
+**Release:** **v1.5.1 — Desktop deepenings**  
 **Corpus:** closed v0.1–v1.4 + v1.5 desktop  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.5.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.5.0)
+**Tag:** [v1.5.1](https://github.com/RechargedIdeas/organism/releases/tag/v1.5.1)
 
 ## Verdict
 
-**v1.5** ships a first-party **Organism Desktop** (PySide6): status, registry,
+**v1.5.1** deepens the first-party **Organism Desktop** (PySide6): status, registry,
 workspace, pipeline builder, physiology, metamodel, bio-digital (exploration-only),
 traces, ops, and docs. Bio/wet-lab actuation is hard-refused in the UI service layer.
 
@@ -22,10 +22,11 @@ traces, ops, and docs. Bio/wet-lab actuation is hard-refused in the UI service l
 | **D3** Pipeline + bio refuse | **green** | `v15:desktop` |
 | **D4** Packaging | **green** | `[desktop]` extra, `organism-desktop` |
 | **D5** Release | **green** | tag **v1.5.0** |
+| **D6** Panel deepen + tests | **green** | tag **v1.5.1** |
 
 **Stack:** PySide6 6.12 (primary). NiceGUI documented as fallback only.
 
-**Default pytest:** **223 passed**, 0 skipped, 2 slow deselected (includes desktop).
+**Default pytest:** **239 passed**, 0 skipped, 2 slow deselected (includes desktop).
 
 ## True external deps left
 

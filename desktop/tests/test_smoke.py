@@ -8,11 +8,12 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from organism_desktop import __version__, panel_ids
-from organism_desktop.service import DesktopService
+from organism_desktop.service import DESKTOP_VERSION, DesktopService
 
 
 def test_version():
-    assert __version__ == "1.5.0"
+    assert __version__ == "1.5.1"
+    assert DESKTOP_VERSION == "1.5.1"
 
 
 def test_service_home():
@@ -22,6 +23,7 @@ def test_service_home():
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
     assert st["degradation_level"] == "L0"
+    assert st["desktop_version"] == "1.5.1"
 
 
 def test_offscreen_app_smoke():

@@ -72,3 +72,25 @@ organism-desktop          # or: python -m organism_desktop
 ```
 
 Package root: `desktop/organism_desktop/`. Headless tests under `desktop/tests/`.
+
+## v1.5.1 deepenings
+
+Interactive panels now drive live SDK round-trips (not smoke-only):
+
+| Panel | Deepened behavior |
+|---|---|
+| **Registry** | `register_core_module(deterministic\|learned)`, deregister selected (bio deregister refused), refresh list |
+| **Workspace** | Live bind / unbind / list against `InMemoryWorkspace`; tag field; hypervector preview |
+| **Pipelines** | Full TaskDescriptor form (`task_id`, form, tier, deadline, flags) → `decide` → plan JSON + ranking_trace |
+| **Physiology** | Live `DegradationMachine` level; **Simulate L0→L1 (safe)** virtual-clock demo; reset |
+| **Traces** | Structured list (filter by kind); **Emit demo traces** (routing + degradation + hormone) |
+| **Bio-Digital** | HAL twin / telemetry refresh (`PHYSARUM_LIMITS` stub); actuation still hard-refused |
+
+`DesktopService` shares one `TraceEmitter` with the stack and degradation machine so physiology and routing appear in Traces.
+
+### Screenshots (optional)
+
+```bash
+QT_QPA_PLATFORM=offscreen python -m organism_desktop --screenshot
+# writes desktop/screenshots/<panel>.png (gitignored)
+```

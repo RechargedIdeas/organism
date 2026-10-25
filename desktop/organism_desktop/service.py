@@ -5,25 +5,39 @@ Safety: bio/wet-lab actuation is hard-refused here. Panels must not bypass.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
+from typing import Any, Literal
+from uuid import UUID, uuid4
 
 from organism_sdk import __version__ as sdk_version
 from organism_sdk.autonomic import AutonomicController
-from organism_sdk.degradation import DegradationMachine, HealthSignals
+from organism_sdk.degradation import (
+    T_DOWN_FAST,
+    T_UP_FAST,
+    DegradationMachine,
+    HealthSignals,
+)
 from organism_sdk.deploy.config import DeployConfig, default_cpu_only_config, load_deploy_config
 from organism_sdk.deploy.stack import MinimalStack, build_minimal_stack
 from organism_sdk.device import accelerator_selection_summary, select_compute_backend
-from organism_sdk.hormone import HormoneBus, HormoneLevels
+from organism_sdk.hormone import HormoneBus
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.immune import ImmuneLayer
 from organism_sdk.metamodel import MetamodelTracker
 from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
-from organism_sdk.trace import V02TraceSink
+from organism_sdk.trace import (
+    DegradationTraceEntry,
+    HormoneTraceEntry,
+    RoutingTraceEntry,
+    TraceEmitter,
+    V02TraceSink,
+)
 from organism_sdk.workspace import BindingRecord
+
+DESKTOP_VERSION = "1.5.1"
+
+CoreKind = Literal["deterministic", "learned"]
 
 
 class ActuationRefused(PermissionError):
@@ -47,17 +61,26 @@ class DesktopService:
     hormone: HormoneBus | None = None
     immune: ImmuneLayer | None = None
     autonomic: AutonomicController | None = None
-    metamodel: MetamodelTracker = field(default_factory=lambda: MetamodelTracker(enabled=True, exploration_mode=True))
+    metamodel: MetamodelTracker = field(
+        default_factory=lambda: MetamodelTracker(enabled=True, exploration_mode=True)
+    )
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     _last_plan: DispatchPlan | None = None
+    _bio_register_error: str | None = None
+    _hal: Any = None
 
     @classmethod
     def create(cls, cfg: DeployConfig | None = None) -> "DesktopService":
         stack = build_minimal_stack(cfg or default_cpu_only_config())
         stack.trace.attach_v02_sink(V02TraceSink())
-        svc = cls(stack=stack)
-        # Hormone bus needs a workspace; attach soft-fail if ctor signature differs
+        # Share TraceEmitter so physiology transitions appear in Traces panel.
+        degrade = DegradationMachine(
+            trace=stack.trace,
+            t_down=dict(T_DOWN_FAST),
+            t_up=dict(T_UP_FAST),
+        )
+        svc = cls(stack=stack, degrade=degrade)
         try:
             svc.hormone = HormoneBus(workspace=stack.workspace, trace=stack.trace)
         except TypeError:
@@ -80,9 +103,21 @@ class DesktopService:
             try:
                 stack.router.attach_hormone_bus(svc.hormone)
             except Exception:
-                pass
+                # Soft-fail: hormone attachment is optional for bare desktop.
+                svc._hormone_attach_error = "attach_hormone_bus unavailable"  # type: ignore[attr-defined]
         svc._register_bio_modules()
+        svc._init_hal()
         return svc
+
+    def _init_hal(self) -> None:
+        try:
+            from bio_digital.hal import BioDigitalHAL
+            from bio_digital.limits import PHYSARUM_LIMITS
+
+            self._hal = BioDigitalHAL(PHYSARUM_LIMITS, node_id="desktop-twin", backend="stub")
+        except Exception as exc:
+            self._hal = None
+            self._bio_register_error = (self._bio_register_error or "") + f";hal:{exc}"
 
     def _register_bio_modules(self) -> None:
         """Register exploration-only bio modules when importable."""
@@ -93,7 +128,6 @@ class DesktopService:
             for mod in (SlimeMoldModule(), MyceliumModule()):
                 c = mod.declare_contract()
                 mid = c.identity.module_id
-                # Contract is frozen; slime/mycelium already declare may_actuate=False
                 self.stack.registry.register(
                     c,
                     artifact_digest=c.identity.artifact_digest,
@@ -103,11 +137,10 @@ class DesktopService:
                 )
                 self.bio_modules[mid] = mod
         except Exception as exc:
-            # Bio package optional for bare desktop; keep desktop usable
-            self.bio_modules["_register_error"] = str(exc)  # type: ignore[assignment]
-            # Ensure dict remains str->module only for real modules
-            self.bio_modules = {k: v for k, v in self.bio_modules.items() if not str(k).startswith("_")}
             self._bio_register_error = str(exc)
+            self.bio_modules = {
+                k: v for k, v in self.bio_modules.items() if not str(k).startswith("_")
+            }
 
     # ----- Home / Status -----
 
@@ -116,19 +149,19 @@ class DesktopService:
         device = select_compute_backend().as_dict()
         return {
             "organism_version": sdk_version,
-            "desktop_version": "1.5.0",
+            "desktop_version": DESKTOP_VERSION,
             "profile": st.get("profile"),
             "cpu_everywhere": True,
             "device": device,
             "accelerator_summary": accelerator_selection_summary(),
-            "degradation_level": str(getattr(self.degrade, "level", "L0")),
+            "degradation_level": str(self.degrade.level),
             "router_level": st.get("router_level"),
             "module_count": st.get("module_count"),
             "modules": st.get("modules"),
             "workspace_bindings": st.get("workspace_bindings"),
             "health_host": st.get("health_host"),
             "health_port": st.get("health_port"),
-            "serve_hint": f"organism serve -c deploy/config/cpu_only.yaml",
+            "serve_hint": "organism serve -c deploy/config/cpu_only.yaml",
             "ok": True,
         }
 
@@ -137,11 +170,11 @@ class DesktopService:
     def list_modules(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for h in self.stack.registry.query(CapabilityFilter()):
-            contract = None
             may = False
             try:
-                # ModuleHandle may carry contract via registry internals
                 mod = self.stack.modules.get(h.module_id) or self.bio_modules.get(h.module_id)
+                if mod is None:
+                    mod = self.stack.registry.get_module(h.module_id)
                 if mod is not None and hasattr(mod, "declare_contract"):
                     contract = mod.declare_contract()
                     may = bool(getattr(getattr(contract, "safety", None), "may_actuate", False))
@@ -160,24 +193,89 @@ class DesktopService:
             )
         return out
 
+    def register_core_module(self, kind: CoreKind) -> dict[str, Any]:
+        """Register (or re-register) deterministic_engine / learned_module from the UI."""
+        if kind == "deterministic":
+            from deterministic_engine.engine import DeterministicEngine
+
+            mod: Any = DeterministicEngine()
+            promote = "DELIBERATION"
+        elif kind == "learned":
+            from learned_module.module import LearnedModule
+
+            mod = LearnedModule(precalibrate=True)
+            promote = "DELIBERATION"
+        else:
+            raise ValueError(f"unknown core kind: {kind}")
+
+        c = mod.declare_contract()
+        mid = c.identity.module_id
+        # Re-register overwrites existing entry (registry allows replace).
+        if mid in self.stack.modules or mid in {
+            h.module_id for h in self.stack.registry.query(CapabilityFilter())
+        }:
+            try:
+                self.stack.registry.deregister(mid, drain="immediate", timeout_s=1)
+            except Exception:
+                pass
+            self.stack.modules.pop(mid, None)
+
+        resp = self.stack.registry.register(
+            c,
+            artifact_digest=c.identity.artifact_digest,
+            author_signature=b"desktop",
+            module=mod,
+            test_bypass_promote=promote,  # type: ignore[arg-type]
+        )
+        self.stack.modules[mid] = mod
+        return {
+            "module_id": mid,
+            "state": resp.initial_state,
+            "kind": kind,
+            "registered": True,
+        }
+
+    def deregister_module(self, module_id: str) -> dict[str, Any]:
+        if module_id in self.bio_modules:
+            raise ActuationRefused(
+                f"Desktop refuses deregister of bio module {module_id!r} via destructive path "
+                f"that could confuse exploration safety; use registry lifecycle APIs offline."
+            )
+        self.stack.registry.deregister(module_id, drain="immediate", timeout_s=1)
+        self.stack.modules.pop(module_id, None)
+        return {"module_id": module_id, "deregistered": True}
+
     # ----- Workspace -----
 
+    def _all_bindings(self) -> list[Any]:
+        ws = self.stack.workspace
+        if hasattr(ws, "_bindings"):
+            return list(getattr(ws, "_bindings").values())
+        # Fallback: union common desktop tags
+        seen: dict[str, Any] = {}
+        for tag in ("desktop.demo", "desktop", "*"):
+            try:
+                for r in ws.read_by_tag([tag]):
+                    seen[str(r.binding_id)] = r
+            except Exception:
+                continue
+        return list(seen.values())
+
     def list_bindings(self, limit: int = 50) -> list[dict[str, Any]]:
-        recs = self.stack.workspace.read_by_tag(["*"]) if hasattr(self.stack.workspace, "read_by_tag") else []
-        # Fallback: use internal if tagged read empty
-        if not recs and hasattr(self.stack.workspace, "_bindings"):
-            recs = list(getattr(self.stack.workspace, "_bindings").values())
         rows = []
-        for r in list(recs)[:limit]:
+        for r in self._all_bindings()[:limit]:
+            role = getattr(r, "role", None)
+            filler = getattr(r, "filler", None)
             rows.append(
                 {
                     "binding_id": str(getattr(r, "binding_id", "")),
                     "tags": list(getattr(r, "tags", ()) or ()),
-                    "role_prefix": getattr(r, "role", Hypervector.zeros()).to_bytes_be()[:8].hex()
-                    if hasattr(getattr(r, "role", None), "to_bytes_be")
+                    "module_id": getattr(r, "module_id", "") or "",
+                    "role_prefix": role.to_bytes_be()[:8].hex()
+                    if hasattr(role, "to_bytes_be")
                     else "",
-                    "filler_prefix": getattr(r, "filler", Hypervector.zeros()).to_bytes_be()[:8].hex()
-                    if hasattr(getattr(r, "filler", None), "to_bytes_be")
+                    "filler_prefix": filler.to_bytes_be()[:8].hex()
+                    if hasattr(filler, "to_bytes_be")
                     else "",
                 }
             )
@@ -187,7 +285,9 @@ class DesktopService:
         role = Hypervector.random()
         filler = Hypervector.random()
         try:
-            rec = self.stack.workspace.bind_exact(role, filler, tags=(tag,))
+            rec = self.stack.workspace.bind_exact(
+                role, filler, tags=(tag,), module_id="organism.desktop"
+            )
         except TypeError:
             hv = role.bind(filler) if hasattr(role, "bind") else role
             rec = BindingRecord(
@@ -201,9 +301,18 @@ class DesktopService:
             self.stack.workspace.write(rec)
         return {"binding_id": str(rec.binding_id), "tags": list(rec.tags)}
 
+    def unbind_binding(self, binding_id: str) -> dict[str, Any]:
+        prior = self.stack.workspace.unbind(UUID(binding_id))
+        return {
+            "binding_id": binding_id,
+            "unbound": prior is not None,
+            "remaining": self.stack.workspace.binding_count
+            if hasattr(self.stack.workspace, "binding_count")
+            else len(self._all_bindings()),
+        }
+
     def hypervector_preview(self, seed: int = 0) -> dict[str, Any]:
         hv = Hypervector.random(seed=seed)
-        # First 16 packed words as a simple viz sample
         sample = [int(w) for w in hv.words[:16]]
         digest = hv.to_bytes_be()[:16].hex()
         return {"dim": Hypervector.dim(), "sample_words": sample, "digest_prefix": digest}
@@ -264,6 +373,8 @@ class DesktopService:
                 "form": form,
                 "safety_tier": safety_tier,
                 "deadline_ms": deadline_ms,
+                "requires_interpretability": requires_interpretability,
+                "requires_determinism": requires_determinism,
             },
             plan=plan_dict,
             ranking_trace=list(plan.ranking_trace or []),
@@ -273,7 +384,6 @@ class DesktopService:
     # ----- Physiology -----
 
     def physiology_snapshot(self) -> dict[str, Any]:
-        level = getattr(self.degrade, "level", "L0")
         hormones: dict[str, Any] = {}
         if self.hormone is not None:
             try:
@@ -285,29 +395,86 @@ class DesktopService:
                     hormones = levels
             except Exception as e:
                 hormones = {"error": str(e)}
-        immune = {"available": self.immune is not None}
+        immune: dict[str, Any] = {"available": self.immune is not None}
         if self.immune is not None:
             dlc = getattr(self.immune, "direct_lifecycle_calls", 0)
             immune["direct_lifecycle_calls"] = dlc() if callable(dlc) else dlc
-        auto = {"available": self.autonomic is not None}
+        auto: dict[str, Any] = {"available": self.autonomic is not None}
         if self.autonomic is not None:
-            try:
-                params = self.autonomic.force_mode  # type: ignore[attr-defined]
-                auto["has_force_mode"] = True
-            except Exception:
-                auto["has_force_mode"] = False
+            auto["has_force_mode"] = hasattr(self.autonomic, "force_mode")
         return {
-            "degradation_level": str(level or self.stack.router.current_level()),
+            "degradation_level": str(self.degrade.level),
             "router_level": self.stack.router.current_level(),
+            "degrade_now_s": self.degrade.now_s,
+            "transitions": list(self.degrade.transitions),
+            "signals": {
+                "thermal": self.degrade.signals.thermal,
+                "h_m": dict(self.degrade.signals.h_m),
+                "c_m": dict(self.degrade.signals.c_m),
+                "det_ok": self.degrade.signals.det_ok,
+                "trace_ok": self.degrade.signals.trace_ok,
+            },
             "hormones": hormones,
             "immune": immune,
             "autonomic": auto,
         }
 
     def set_degradation_level(self, level: str) -> str:
-        """Best-effort set router level (physiology display)."""
+        """Best-effort set router level (display / ops). Does not fake physiology."""
         self.stack.router.set_level(level)  # type: ignore[arg-type]
         return self.stack.router.current_level()
+
+    def simulate_l0_to_l1(self) -> dict[str, Any]:
+        """Safe physiology demo: drive DegradationMachine L0→L1 with FAST hysteresis.
+
+        Does not touch wet-lab / bio actuation. Emits degradation traces onto the
+        shared TraceEmitter. Uses virtual clock only.
+        """
+        if self.degrade.level != "L0":
+            # Reset machine for a clean demo (keep shared trace).
+            self.degrade = DegradationMachine(
+                trace=self.stack.trace,
+                t_down=dict(T_DOWN_FAST),
+                t_up=dict(T_UP_FAST),
+            )
+        self.degrade.signals = HealthSignals(
+            h_m={"learned_module_t2": "DEGRADED"},
+            c_m={"learned_module_t2": 0.5},
+            thermal=0.05,
+            det_ok=True,
+            trace_ok=True,
+        )
+        steps = 0
+        while self.degrade.level == "L0" and steps < 40:
+            self.degrade.advance(0.2)
+            steps += 1
+        # Mirror display level onto router for Home/Physiology consistency.
+        if self.degrade.level == "L1":
+            try:
+                self.stack.router.set_level("L1")  # type: ignore[arg-type]
+            except Exception:
+                pass
+        return {
+            "ok": self.degrade.level == "L1",
+            "level": self.degrade.level,
+            "steps": steps,
+            "now_s": self.degrade.now_s,
+            "transitions": list(self.degrade.transitions),
+            "safe": True,
+            "note": "Virtual-clock L0→L1 demo; no bio actuation.",
+        }
+
+    def reset_physiology_demo(self) -> dict[str, Any]:
+        self.degrade = DegradationMachine(
+            trace=self.stack.trace,
+            t_down=dict(T_DOWN_FAST),
+            t_up=dict(T_UP_FAST),
+        )
+        try:
+            self.stack.router.set_level("L0")  # type: ignore[arg-type]
+        except Exception:
+            pass
+        return {"level": self.degrade.level, "router_level": self.stack.router.current_level()}
 
     # ----- Metamodel -----
 
@@ -351,23 +518,41 @@ class DesktopService:
             c = mod.declare_contract()
             may = bool(getattr(getattr(c, "safety", None), "may_actuate", False))
             mods.append({"module_id": mid, "may_actuate": may, "exploration_only": True})
-        twin = {}
-        try:
-            from bio_digital.hal import BioDigitalHAL
-
-            hal = BioDigitalHAL()
-            twin = {"telemetry": hal.read_telemetry().__dict__ if hasattr(hal.read_telemetry(), "__dict__") else str(hal.read_telemetry())}
-            if hasattr(hal, "sample_twin"):
-                twin["sample"] = hal.sample_twin()
-        except Exception as e:
-            twin = {"error": str(e)}
+        twin = self.refresh_bio_twin()
         return {
             "modules": mods,
             "safety_policy": policy.as_dict(),
             "control_actuation_default": False,
             "twin": twin,
+            "hal_available": self._hal is not None,
+            "register_error": self._bio_register_error,
             "warning": "Bio-Digital panels are exploration-only. Actuation is refused.",
         }
+
+    def refresh_bio_twin(self) -> dict[str, Any]:
+        """Read HAL telemetry + twin sample (stub backend; CPU). Never actuates."""
+        if self._hal is None:
+            self._init_hal()
+        if self._hal is None:
+            return {"error": "HAL unavailable", "ok": False}
+        try:
+            tel = self._hal.read_telemetry()
+            twin: dict[str, Any] = {
+                "ok": True,
+                "backend": getattr(self._hal, "backend", "stub"),
+                "node_id": getattr(self._hal, "node_id", ""),
+            }
+            if hasattr(tel, "__dict__"):
+                twin["telemetry"] = {
+                    k: v for k, v in vars(tel).items() if not k.startswith("_")
+                }
+            else:
+                twin["telemetry"] = str(tel)
+            if hasattr(self._hal, "sample_twin"):
+                twin["sample"] = self._hal.sample_twin()
+            return twin
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def request_bio_actuation(
         self,
@@ -393,19 +578,82 @@ class DesktopService:
 
     # ----- Traces -----
 
-    def list_traces(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_traces(self, limit: int = 100, *, kind: str | None = None) -> list[dict[str, Any]]:
         raw = self.stack.trace.entries
         if callable(raw):
             raw = raw()
         entries = []
         for e in list(raw)[-limit:]:
-            entries.append(
-                {
-                    "type": type(e).__name__,
-                    "repr": repr(e)[:500],
-                }
-            )
+            tname = type(e).__name__
+            if kind and kind.lower() not in tname.lower():
+                continue
+            row: dict[str, Any] = {"type": tname}
+            for attr in (
+                "task_id",
+                "form",
+                "plan_type",
+                "primary_module_id",
+                "from_level",
+                "to_level",
+                "trigger_kind",
+                "operation",
+                "module_id",
+                "event",
+                "decision",
+                "cortisol",
+                "dopamine",
+                "oxytocin",
+                "source",
+                "level",
+            ):
+                if hasattr(e, attr):
+                    val = getattr(e, attr)
+                    if isinstance(val, (bytes, bytearray)):
+                        val = bytes(val)[:8].hex()
+                    row[attr] = val
+            if len(row) <= 1:
+                row["repr"] = repr(e)[:500]
+            entries.append(row)
         return entries
+
+    def emit_demo_traces(self) -> dict[str, Any]:
+        """Append routing + degradation + hormone sample entries for Traces panel."""
+        trace: TraceEmitter = self.stack.trace
+        before = len(trace.entries)
+        # Routing via real decide
+        result = self.run_pipeline(form="pattern_recognition", safety_tier="medium")
+        # Explicit degradation sample (does not change machine level)
+        trace.emit_degradation(
+            DegradationTraceEntry(
+                from_level="L0",
+                to_level="L0",
+                trigger_kind="desktop_demo_heartbeat",
+                diagnosis_code="DEMO",
+                event_class="heartbeat",
+            )
+        )
+        # Hormone sample (v02 sink attached in create)
+        try:
+            trace.emit_hormone(
+                HormoneTraceEntry(
+                    hormone_state_digest="desktop-demo",
+                    cortisol=0.1,
+                    dopamine=0.2,
+                    oxytocin=0.0,
+                    melatonin=0.0,
+                    staleness_ms=0.0,
+                    source="desktop_demo",
+                )
+            )
+        except NotImplementedError:
+            pass
+        after = len(trace.entries)
+        return {
+            "emitted": after - before,
+            "pipeline_disposition": result.disposition,
+            "count": after,
+            "kinds": sorted({e["type"] for e in self.list_traces(limit=after)}),
+        }
 
     # ----- Ops -----
 
@@ -429,6 +677,7 @@ class DesktopService:
             "wetlab_policy": SafetyPolicy.deny_all().as_dict(),
             "cpu_everywhere_doc": str(self._repo_root / "docs" / "CPU_EVERYWHERE.md"),
             "api_freeze": str(self._repo_root / "docs" / "API_FREEZE_v1.0.md"),
+            "desktop_version": DESKTOP_VERSION,
         }
 
     def docs_links(self) -> list[dict[str, str]]:

@@ -34,3 +34,20 @@ def test_registry_badges_for_bio():
     bio = [m for m in svc.list_modules() if m["module_id"].startswith("bio_digital.")]
     assert len(bio) >= 2
     assert all(m["may_actuate"] is False for m in bio)
+
+
+def test_bio_twin_refresh_ok():
+    svc = DesktopService.create()
+    twin = svc.refresh_bio_twin()
+    assert twin.get("ok") is True
+    assert "telemetry" in twin or "sample" in twin
+    status = svc.bio_status()
+    assert status["hal_available"] is True
+    assert status["twin"].get("ok") is True
+
+
+def test_panel_actuate_button_path_refuses():
+    """Mirror BioPanel._actuate path."""
+    svc = DesktopService.create()
+    result = svc.try_bio_actuation(module_id="bio_digital.slime_mold", voltage=0.5)
+    assert result["refused"] is True

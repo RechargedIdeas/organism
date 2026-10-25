@@ -1,6 +1,6 @@
 # Organism Desktop
 
-First-party **PySide6** control plane for Organism (v1.5).
+First-party **PySide6** control plane for Organism (v1.5.1).
 
 ```bash
 pip install -e '.[desktop]'
@@ -13,6 +13,7 @@ Headless / CI:
 
 ```bash
 QT_QPA_PLATFORM=offscreen python -m organism_desktop --smoke
+QT_QPA_PLATFORM=offscreen python -m organism_desktop --screenshot
 PYTHONPATH=sdk/python:modules:desktop:. pytest desktop/tests -q
 ```
 

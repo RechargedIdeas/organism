@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from PySide6.QtCore import Qt
@@ -72,14 +73,41 @@ class MainWindow(QMainWindow):
     def panel_ids(self) -> list[str]:
         return [p.id for p in PANELS]
 
+    def grab_panel_screenshots(self, out_dir: Path) -> list[Path]:
+        """Offscreen-friendly: show each panel and save a PNG."""
+        out_dir.mkdir(parents=True, exist_ok=True)
+        paths: list[Path] = []
+        app = QApplication.instance()
+        for i, spec in enumerate(PANELS):
+            self.nav.setCurrentRow(i)
+            if app is not None:
+                app.processEvents()
+            panel = self._panels[spec.id]
+            pix = panel.grab()
+            path = out_dir / f"{spec.id}.png"
+            pix.save(str(path), "PNG")
+            paths.append(path)
+        return paths
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="organism-desktop", description="Organism Desktop")
     parser.add_argument("--offscreen", action="store_true", help="Force QT_QPA_PLATFORM=offscreen")
     parser.add_argument("--smoke", action="store_true", help="Build UI and exit (CI)")
+    parser.add_argument(
+        "--screenshot",
+        action="store_true",
+        help="Save offscreen panel PNGs under desktop/screenshots/ and exit",
+    )
+    parser.add_argument(
+        "--screenshot-dir",
+        type=str,
+        default="",
+        help="Override screenshot output directory",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    if args.offscreen or args.smoke:
+    if args.offscreen or args.smoke or args.screenshot:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     app = QApplication.instance() or QApplication(sys.argv)
@@ -88,13 +116,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     service = DesktopService.create()
     win = MainWindow(service)
-    if args.smoke:
+    if args.smoke or args.screenshot:
         win.show()
         app.processEvents()
-        # Navigate every panel once
         for i in range(win.nav.count()):
             win.nav.setCurrentRow(i)
             app.processEvents()
+        if args.screenshot:
+            root = Path(__file__).resolve().parents[1]
+            out = Path(args.screenshot_dir) if args.screenshot_dir else root / "screenshots"
+            paths = win.grab_panel_screenshots(out)
+            print(f"wrote {len(paths)} screenshots to {out}")
         return 0
 
     win.show()
