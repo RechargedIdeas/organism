@@ -1,4 +1,4 @@
-"""v15:desktop — blocking gate for Organism Desktop control plane (deepened)."""
+"""v15/v16 desktop gate — blocking gate for Organism Desktop control plane."""
 from __future__ import annotations
 
 from organism_desktop.nav import panel_ids
@@ -6,49 +6,73 @@ from organism_desktop.service import ActuationRefused, DESKTOP_VERSION, DesktopS
 
 
 def test_v15_desktop_gate():
-    """Gate: ten panels, CPU home, pipeline, registry, physiology, traces, bio refuse."""
+    """Gate: twelve panels, CPU home, catalog, pipeline inspector, contracts, bio refuse."""
     assert panel_ids() == [
         "home",
         "registry",
+        "catalog",
         "workspace",
         "pipelines",
         "physiology",
         "metamodel",
         "bio",
         "traces",
+        "contracts",
         "ops",
         "docs",
     ]
-    assert DESKTOP_VERSION == "1.5.2"
+    assert DESKTOP_VERSION == "1.6.0"
     svc = DesktopService.create()
     st = svc.home_status()
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
-    assert st["desktop_version"] == "1.5.2"
+    assert st["desktop_version"] == "1.6.0"
 
     # Registry round-trip
     reg = svc.register_core_module("deterministic")
     assert reg["registered"] is True
     assert any(m["module_id"] == "deterministic_engine" for m in svc.list_modules())
 
+    # Catalog RESEARCH_TIER present
+    cat = svc.module_catalog()
+    assert any(c["research_tier"] for c in cat)
+    assert any(c["catalog_id"] == "physical_research" for c in cat)
+
     # Workspace bind/unbind
     wrote = svc.write_demo_binding()
     assert svc.unbind_binding(wrote["binding_id"])["unbound"] is True
 
-    # Pipeline
+    # Pipeline + plan inspector
     plan = svc.run_pipeline(task_id="gate-pipeline")
     assert plan.disposition
     assert plan.plan["plan_id"]
+    insp = svc.inspect_plan()
+    assert insp["ok"] is True
+    assert insp["summary"]["task_id"] == "gate-pipeline"
 
     # Physiology demo
     demo = svc.simulate_l0_to_l1()
     assert demo["ok"] is True and demo["level"] == "L1"
     svc.reset_physiology_demo()
 
-    # Traces
+    # Traces + export jump
     emit = svc.emit_demo_traces()
     assert emit["emitted"] >= 1
     assert svc.list_traces(kind="Routing")
+    jump = svc.traces_for_last_pipeline()
+    assert jump["ok"] is True
+
+    # Contracts
+    checks = svc.run_contract_checks()
+    assert checks
+    assert svc.last_contract_results()
+
+    # Multi-profile
+    profiles = {p["name"] for p in svc.list_deploy_profiles() if p.get("ok")}
+    assert "cpu_only" in profiles and "default" in profiles
+    switched = svc.switch_deploy_profile("default")
+    assert switched["profile"] == "default"
+    assert switched["after"]["health_port"] == 8788
 
     # Bio twin + refuse
     twin = svc.refresh_bio_twin()
@@ -63,6 +87,7 @@ def test_v15_desktop_gate():
     parity = svc.status_parity()
     assert parity["cpu_everywhere"] is True
     assert parity["device_runtime"] == "CPU_GENERAL"
+    assert parity["profile"] == "default"
     soak = svc.soak_snapshot()
     assert soak["runbook_exists"] is True
     assert svc.refresh_bundle()["ok"] is True

@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
 
         self._status = QStatusBar()
         self.setStatusBar(self._status)
-        self._status.showMessage("Ready · Ctrl+R refresh panel · Ctrl+Shift+R refresh all · Ctrl+1–0 panels")
+        self._status.showMessage("Ready · Ctrl+R refresh · Ctrl+Shift+R refresh-all · Ctrl+1–0 / Ctrl+Alt+N panels")
 
         self._install_shortcuts()
 
@@ -98,12 +98,16 @@ class MainWindow(QMainWindow):
         sc_ra.setObjectName("shortcut_refresh_all")
         sc_ra.activated.connect(self.refresh_all)
 
-        # Panel jump Ctrl+1 .. Ctrl+0 (10 panels)
+        # Panel jump: Ctrl+1..9, Ctrl+0 → index 9; Ctrl+Alt+1..9 → index 10+
         for i, spec in enumerate(PANELS):
-            key = f"Ctrl+{0 if i == 9 else i + 1}"
+            if i < 9:
+                key = f"Ctrl+{i + 1}"
+            elif i == 9:
+                key = "Ctrl+0"
+            else:
+                key = f"Ctrl+Alt+{i - 9}"
             sc = QShortcut(QKeySequence(key), self)
             sc.setObjectName(f"shortcut_panel_{spec.id}")
-            # Capture index by default-arg
             sc.activated.connect(lambda idx=i: self.nav.setCurrentRow(idx))
 
         # Also expose as QActions for menu-less discoverability in tests

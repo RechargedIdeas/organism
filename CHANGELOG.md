@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.6.0] — 2026-10-24
+
+### Added
+- **Trace explorer** — filterable table (`kind` / `task_id` / `emitted_at` / seq);
+  **Export JSON**; **Jump from last pipeline** (`traces_for_last_pipeline`).
+- **Router / plan inspector** — structured summary, ranking_trace steps, excluded
+  table in Pipelines; **Open result in Traces**.
+- **Multi-profile deploy** — `deploy/config/default.yaml` (profile `default`,
+  health port 8788); Ops profile combo + `switch_deploy_profile` with
+  status_facts delta; allowed profiles include `default`.
+- **Module catalog** panel — 10 substrates, **RESEARCH_TIER** badges
+  (`snn_sentinel`, `physical_research`), one-click `register_catalog_module`.
+- **Contracts / Assert** panel — `run_contract_checks` /
+  `last_contract_results` over registered + bio modules.
+- Packaging note: `desktop/docs/PACKAGING.md` (PyInstaller sketch);
+  `docs/v1.6/DESKTOP.md`.
+- Tests: trace explorer, plan inspector, multi-profile, catalog, contracts,
+  panel Qt interactions; deploy default.yaml.
+
+### Changed
+- Package / SDK / Desktop versions **1.6.0**.
+- Navigation: **12 panels** (Catalog + Contracts); shortcuts Ctrl+1–0 /
+  Ctrl+Alt+N for panels 11+.
+- `list_traces` adds `seq`, `kind`, `emitted_at`, optional `task_id` /
+  `since_iso` filters.
+
+### Security / safety
+- Bio actuation remains hard-refused (`ActuationRefused`).
+- RESEARCH_TIER catalog register refuses if contract declares `may_actuate=True`.
+- Profile switch stays CPU-first (`prefer_gpu: false` on both profiles).
+
+### Test baseline
+Default suite: **269 passed**, 0 skipped, 2 slow deselected.
+
 ## [1.5.2] — 2026-10-24
 
 ### Added

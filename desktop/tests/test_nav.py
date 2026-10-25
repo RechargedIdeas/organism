@@ -5,21 +5,23 @@ from organism_desktop.nav import PANELS, panel_ids
 from organism_desktop.panels import PANEL_CLASSES
 
 
-def test_ten_panels():
+def test_twelve_panels():
     ids = panel_ids()
     assert ids == [
         "home",
         "registry",
+        "catalog",
         "workspace",
         "pipelines",
         "physiology",
         "metamodel",
         "bio",
         "traces",
+        "contracts",
         "ops",
         "docs",
     ]
-    assert len(PANELS) == 10
+    assert len(PANELS) == 12
     assert set(PANEL_CLASSES) == set(ids)
 
 

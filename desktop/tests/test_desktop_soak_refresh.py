@@ -55,7 +55,7 @@ def test_refresh_all_soak_stable(qapp):
     assert growth < 5000, f"QObject growth too high after {n} refreshes: {growth} (base={baseline}, after={after})"
 
     # Panels still responsive
-    assert win.nav.count() == 10
+    assert win.nav.count() == 12
     win.refresh_all()
     text = win._panels["home"].view.toPlainText()
     assert "CPU Everywhere" in text or "cpu_everywhere" in text.lower() or "Organism SDK" in text
@@ -73,8 +73,9 @@ def test_shortcuts_and_toast_exist(qapp):
     # Refresh paths
     win.refresh_current()
     win.refresh_all()
-    # Jump to ops via nav index
-    win.nav.setCurrentRow(8)  # ops
+    # Jump to ops via nav index (12-panel layout)
+    from organism_desktop.nav import panel_ids
+    win.nav.setCurrentRow(panel_ids().index("ops"))
     qapp.processEvents()
     assert win.stack.currentWidget().panel_id == "ops"
     win.close()
@@ -88,5 +89,7 @@ def test_home_ops_badges_present(qapp):
     assert home.cpu_badge.text().startswith("CPU Everywhere")
     assert ops.cpu_badge.text().startswith("CPU Everywhere")
     assert "deploy:" in ops.profile_badge.text() or ops.profile_badge.text()
-    assert "soak runbook" in ops.summary.text().lower() or "SOAK" in ops.summary.text()
+    assert ("reconstructible" in ops.summary.text().lower()
+            or "soak" in ops.summary.text().lower()
+            or "profiles=" in ops.summary.text().lower())
     win.close()

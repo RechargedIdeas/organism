@@ -107,3 +107,9 @@ QT_QPA_PLATFORM=offscreen python -m organism_desktop --screenshot
 | **Smoke** | `--smoke` runs refresh-all and prints a parity summary line |
 
 Bio / wet-lab actuation remains **hard-refused** in the service layer.
+
+
+## See also
+
+- [v1.6 Desktop surfaces](../v1.6/DESKTOP.md)
+- [Packaging](../../desktop/docs/PACKAGING.md)

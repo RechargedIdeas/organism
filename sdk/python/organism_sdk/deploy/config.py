@@ -269,7 +269,7 @@ def validate_deploy_config(cfg: DeployConfig) -> list[str]:
     issues: list[str] = []
     if cfg.version != 1:
         issues.append(f"unsupported config version: {cfg.version}")
-    if cfg.profile not in {"cpu_only", "cpu_with_bio", "research"}:
+    if cfg.profile not in {"cpu_only", "default", "cpu_with_bio", "research"}:
         issues.append(f"unknown profile: {cfg.profile}")
     if not (1 <= cfg.health.port <= 65535):
         issues.append(f"invalid health.port: {cfg.health.port}")

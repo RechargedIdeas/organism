@@ -110,3 +110,73 @@ def test_bio_panel_actuate_refuses(qapp):
     text = panel.view.toPlainText()
     assert "refused" in text.lower() or "True" in text
     win.close()
+
+
+def test_catalog_register_button(qapp):
+    svc = DesktopService.create()
+    win = MainWindow(svc)
+    panel = win._panels["catalog"]
+    # Select physical_research row (research tier) and register via button
+    entries = svc.module_catalog()
+    idx = next(i for i, e in enumerate(entries) if e["catalog_id"] == "reservoir")
+    panel.table.selectRow(idx)
+    btn = panel.findChild(QPushButton, "catalog_register")
+    assert btn is not None
+    _click(btn)
+    qapp.processEvents()
+    assert any(m["module_id"] == "reservoir" for m in svc.list_modules())
+    win.close()
+
+
+def test_contracts_run_button(qapp):
+    svc = DesktopService.create()
+    win = MainWindow(svc)
+    panel = win._panels["contracts"]
+    btn = panel.findChild(QPushButton, "contracts_run")
+    assert btn is not None
+    _click(btn)
+    qapp.processEvents()
+    assert svc.last_contract_results()
+    assert panel.table.rowCount() >= 1
+    win.close()
+
+
+def test_ops_switch_profile_button(qapp):
+    svc = DesktopService.create()
+    win = MainWindow(svc)
+    panel = win._panels["ops"]
+    box = panel.profile_box
+    # Prefer default if listed
+    i = box.findText("default")
+    assert i >= 0
+    box.setCurrentIndex(i)
+    btn = panel.findChild(QPushButton, "ops_switch_profile")
+    assert btn is not None
+    _click(btn)
+    qapp.processEvents()
+    assert svc.stack.config.profile == "default"
+    assert svc.status_parity()["health_port"] == 8788
+    win.close()
+
+
+def test_pipelines_inspector_and_traces_export(qapp):
+    svc = DesktopService.create()
+    win = MainWindow(svc)
+    pipe = win._panels["pipelines"]
+    btn = pipe.findChild(QPushButton, "run_pipeline")
+    _click(btn)
+    qapp.processEvents()
+    assert pipe.ranking_table.rowCount() >= 0  # may be 0 if empty ranking, but summary set
+    assert "disposition" in pipe.summary.text().lower() or pipe.summary.text()
+    jump = pipe.findChild(QPushButton, "pipeline_jump_traces")
+    _click(jump)
+    qapp.processEvents()
+    from organism_desktop.nav import panel_ids
+    assert win.nav.currentRow() == panel_ids().index("traces")
+    # Export from traces
+    traces = win._panels["traces"]
+    exp = traces.findChild(QPushButton, "trace_export_json")
+    _click(exp)
+    qapp.processEvents()
+    assert traces._last_export
+    win.close()

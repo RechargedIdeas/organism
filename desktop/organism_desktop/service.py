@@ -36,9 +36,37 @@ from organism_sdk.trace import (
 )
 from organism_sdk.workspace import BindingRecord
 
-DESKTOP_VERSION = "1.5.2"
+from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
+
+DESKTOP_VERSION = "1.6.0"
 
 CoreKind = Literal["deterministic", "learned"]
+
+
+def _parse_ranking_line(line: str) -> dict[str, Any]:
+    """Best-effort parse of router ranking_trace strings into structured fields."""
+    text = str(line)
+    out: dict[str, Any] = {"raw": text}
+    if text.startswith("order=") or "order=" in text:
+        out["kind"] = "order"
+        # order=['a', 'b'] or order=["a"]
+        try:
+            start = text.index("[")
+            end = text.rindex("]") + 1
+            inner = text[start + 1 : end - 1]
+            parts = [p.strip().strip("'\"") for p in inner.split(",") if p.strip()]
+            out["modules"] = parts
+        except ValueError:
+            out["modules"] = []
+    elif "exclude" in text.lower():
+        out["kind"] = "exclude"
+    elif "constraint" in text.lower():
+        out["kind"] = "constraint"
+    else:
+        out["kind"] = "note"
+    return out
+
+
 
 
 class ActuationRefused(PermissionError):
@@ -68,12 +96,31 @@ class DesktopService:
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     _last_plan: DispatchPlan | None = None
+    _last_pipeline: PipelineResult | None = None
+    _last_contract_results: list[dict[str, Any]] = field(default_factory=list)
+    _active_config_path: Path | None = None
     _bio_register_error: str | None = None
     _hal: Any = None
 
     @classmethod
-    def create(cls, cfg: DeployConfig | None = None) -> "DesktopService":
-        stack = build_minimal_stack(cfg or default_cpu_only_config())
+    def create(
+        cls,
+        cfg: DeployConfig | None = None,
+        *,
+        config_path: Path | str | None = None,
+    ) -> "DesktopService":
+        path = Path(config_path) if config_path else None
+        if cfg is None and path is not None:
+            cfg = load_deploy_config(path)
+        elif cfg is None:
+            # Prefer on-disk cpu_only when present so profile path is real.
+            default_path = Path(__file__).resolve().parents[2] / "deploy" / "config" / "cpu_only.yaml"
+            if default_path.is_file():
+                path = default_path
+                cfg = load_deploy_config(default_path)
+            else:
+                cfg = default_cpu_only_config()
+        stack = build_minimal_stack(cfg)
         stack.trace.attach_v02_sink(V02TraceSink())
         # Share TraceEmitter so physiology transitions appear in Traces panel.
         degrade = DegradationMachine(
@@ -81,7 +128,7 @@ class DesktopService:
             t_down=dict(T_DOWN_FAST),
             t_up=dict(T_UP_FAST),
         )
-        svc = cls(stack=stack, degrade=degrade)
+        svc = cls(stack=stack, degrade=degrade, _active_config_path=path)
         try:
             svc.hormone = HormoneBus(workspace=stack.workspace, trace=stack.trace)
         except TypeError:
@@ -418,7 +465,7 @@ class DesktopService:
             "hold_reason": plan.hold_reason,
             "candidate_roles": list(plan.candidate_roles or []),
         }
-        return PipelineResult(
+        result = PipelineResult(
             task={
                 "task_id": tid,
                 "form": form,
@@ -431,6 +478,8 @@ class DesktopService:
             ranking_trace=list(plan.ranking_trace or []),
             disposition=plan.disposition,
         )
+        self._last_pipeline = result
+        return result
 
     # ----- Physiology -----
 
@@ -629,16 +678,30 @@ class DesktopService:
 
     # ----- Traces -----
 
-    def list_traces(self, limit: int = 100, *, kind: str | None = None) -> list[dict[str, Any]]:
+    def list_traces(
+        self,
+        limit: int = 100,
+        *,
+        kind: str | None = None,
+        task_id: str | None = None,
+        since_iso: str | None = None,
+    ) -> list[dict[str, Any]]:
         raw = self.stack.trace.entries
         if callable(raw):
             raw = raw()
+        all_raw = list(raw)
         entries = []
-        for e in list(raw)[-limit:]:
+        # Walk full buffer for seq; then filter + tail limit
+        for seq, e in enumerate(all_raw):
             tname = type(e).__name__
-            if kind and kind.lower() not in tname.lower():
+            kind_label = tname.replace("TraceEntry", "") or tname
+            if kind and kind.lower() not in tname.lower() and kind.lower() not in kind_label.lower():
                 continue
-            row: dict[str, Any] = {"type": tname}
+            row: dict[str, Any] = {
+                "seq": seq,
+                "type": tname,
+                "kind": kind_label,
+            }
             for attr in (
                 "task_id",
                 "form",
@@ -656,16 +719,25 @@ class DesktopService:
                 "oxytocin",
                 "source",
                 "level",
+                "emitted_at",
             ):
                 if hasattr(e, attr):
                     val = getattr(e, attr)
                     if isinstance(val, (bytes, bytearray)):
                         val = bytes(val)[:8].hex()
+                    elif hasattr(val, "isoformat"):
+                        val = val.isoformat()
                     row[attr] = val
-            if len(row) <= 1:
+            if task_id and str(row.get("task_id") or "") != task_id:
+                continue
+            if since_iso:
+                emitted = str(row.get("emitted_at") or "")
+                if emitted and emitted < since_iso:
+                    continue
+            if len(row) <= 3:
                 row["repr"] = repr(e)[:500]
             entries.append(row)
-        return entries
+        return entries[-limit:]
 
     def emit_demo_traces(self) -> dict[str, Any]:
         """Append routing + degradation + hormone sample entries for Traces panel."""
@@ -706,6 +778,351 @@ class DesktopService:
             "kinds": sorted({e["type"] for e in self.list_traces(limit=after)}),
         }
 
+    def export_traces_json(
+        self,
+        path: str | Path,
+        *,
+        kind: str | None = None,
+        task_id: str | None = None,
+        limit: int = 10_000,
+    ) -> dict[str, Any]:
+        """Write filtered traces to a JSON file; returns summary metadata."""
+        import json
+
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        entries = self.list_traces(limit=limit, kind=kind, task_id=task_id)
+        payload = {
+            "organism_desktop": DESKTOP_VERSION,
+            "count": len(entries),
+            "filter": {"kind": kind, "task_id": task_id, "limit": limit},
+            "entries": entries,
+        }
+        p.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        return {"ok": True, "path": str(p.resolve()), "count": len(entries)}
+
+    def traces_for_last_pipeline(self, limit: int = 200) -> dict[str, Any]:
+        """Jump helper: traces tied to the last pipeline decide task_id."""
+        if self._last_pipeline is None:
+            return {"ok": False, "error": "no pipeline result yet", "entries": []}
+        tid = self._last_pipeline.task.get("task_id")
+        entries = self.list_traces(limit=limit, task_id=str(tid) if tid else None)
+        # Also include recent routing if task filter empty
+        if not entries:
+            entries = self.list_traces(limit=limit, kind="Routing")
+        return {
+            "ok": True,
+            "task_id": tid,
+            "disposition": self._last_pipeline.disposition,
+            "count": len(entries),
+            "entries": entries,
+        }
+
+    def inspect_plan(self) -> dict[str, Any]:
+        """Structured router/plan inspector for the last DispatchPlan (not raw-only)."""
+        if self._last_pipeline is None:
+            return {"ok": False, "error": "no plan yet — run decide first"}
+        plan = self._last_pipeline.plan
+        ranking = list(self._last_pipeline.ranking_trace or plan.get("ranking_trace") or [])
+        steps: list[dict[str, Any]] = []
+        for i, line in enumerate(ranking):
+            steps.append({"step": i, "text": line, "parsed": _parse_ranking_line(line)})
+        primary = plan.get("primary") or {}
+        return {
+            "ok": True,
+            "task": self._last_pipeline.task,
+            "disposition": self._last_pipeline.disposition,
+            "summary": {
+                "plan_id": plan.get("plan_id"),
+                "task_id": plan.get("task_id"),
+                "level": plan.get("level"),
+                "plan_type": plan.get("plan_type"),
+                "primary_module": primary.get("module_id"),
+                "primary_role": primary.get("role"),
+                "primary_tier": primary.get("tier"),
+                "fallbacks": list(plan.get("fallbacks") or []),
+                "excluded_count": len(plan.get("excluded") or []),
+                "cross_check_required": plan.get("cross_check_required"),
+                "hold_reason": plan.get("hold_reason"),
+                "constraints_applied": list(plan.get("constraints_applied") or []),
+                "candidate_roles": list(plan.get("candidate_roles") or []),
+            },
+            "excluded": list(plan.get("excluded") or []),
+            "ranking_steps": steps,
+            "ranking_trace": ranking,
+            "plan": plan,
+        }
+
+    # ----- Deploy profiles -----
+
+    def list_deploy_profiles(self) -> list[dict[str, Any]]:
+        cfg_dir = self._repo_root / "deploy" / "config"
+        out: list[dict[str, Any]] = []
+        active = self.stack.config.profile
+        active_path = str(self._active_config_path) if self._active_config_path else None
+        for p in sorted(cfg_dir.glob("*.yaml")):
+            try:
+                cfg = load_deploy_config(p)
+                issues = []
+                try:
+                    from organism_sdk.deploy.config import validate_deploy_config
+
+                    issues = validate_deploy_config(cfg)
+                except Exception as exc:
+                    issues = [str(exc)]
+                out.append(
+                    {
+                        "name": cfg.profile,
+                        "path": str(p),
+                        "prefer_gpu": cfg.runtime.prefer_gpu,
+                        "health_port": cfg.health.port,
+                        "router_level": cfg.stack.router_level,
+                        "ok": not issues,
+                        "issues": issues,
+                        "active": cfg.profile == active and (
+                            active_path is None or str(p) == active_path
+                        ),
+                    }
+                )
+            except Exception as exc:
+                out.append(
+                    {
+                        "name": p.stem,
+                        "path": str(p),
+                        "ok": False,
+                        "issues": [str(exc)],
+                        "active": False,
+                    }
+                )
+        return out
+
+    def switch_deploy_profile(self, profile: str) -> dict[str, Any]:
+        """Rebuild Desktop stack under a named deploy profile (cpu_only / default / …).
+
+        Preserves shared TraceEmitter entries by copying after rebuild is not
+        attempted — a clean stack is intentional so status_facts reflect the
+        new profile. Bio modules re-register. Actuation remains refused.
+        """
+        profiles = {p["name"]: p for p in self.list_deploy_profiles() if p.get("ok")}
+        # Also match by path stem
+        if profile not in profiles:
+            for p in self.list_deploy_profiles():
+                if Path(p["path"]).stem == profile and p.get("ok"):
+                    profiles[profile] = p
+                    break
+        if profile not in profiles:
+            raise ValueError(
+                f"unknown or invalid deploy profile {profile!r}; "
+                f"known={[p['name'] for p in self.list_deploy_profiles()]}"
+            )
+        meta = profiles[profile]
+        path = Path(meta["path"])
+        before = self.status_parity()
+        new_svc = DesktopService.create(config_path=path)
+        # Transplant rebuilt state into this instance (panels hold self.service ref).
+        self.stack = new_svc.stack
+        self.degrade = new_svc.degrade
+        self.hormone = new_svc.hormone
+        self.immune = new_svc.immune
+        self.autonomic = new_svc.autonomic
+        self.metamodel = new_svc.metamodel
+        self.bio_modules = new_svc.bio_modules
+        self._hal = new_svc._hal
+        self._bio_register_error = new_svc._bio_register_error
+        self._active_config_path = new_svc._active_config_path
+        self._last_plan = None
+        self._last_pipeline = None
+        after = self.status_parity()
+        return {
+            "ok": True,
+            "profile": self.stack.config.profile,
+            "path": str(path),
+            "before": before,
+            "after": after,
+            "delta": {
+                k: {"before": before.get(k), "after": after.get(k)}
+                for k in sorted(set(before) | set(after))
+                if before.get(k) != after.get(k)
+            },
+            "cpu_everywhere": True,
+        }
+
+    # ----- Module catalog -----
+
+    def module_catalog(self) -> list[dict[str, Any]]:
+        registered = {m["module_id"] for m in self.list_modules()}
+        return catalog_as_dicts(registered_ids=registered)
+
+    def register_catalog_module(self, catalog_id: str) -> dict[str, Any]:
+        """One-click register from the substrate catalog.
+
+        RESEARCH_TIER modules register with exploration promote; Desktop never
+        flips may_actuate to True for research entries.
+        """
+        entry = find_entry(catalog_id)
+        if entry is None:
+            raise KeyError(f"unknown catalog_id: {catalog_id}")
+        # Reuse core path for deterministic / learned
+        if catalog_id == "deterministic_engine":
+            return self.register_core_module("deterministic")
+        if catalog_id == "learned_module":
+            return self.register_core_module("learned")
+
+        _entry, mod = instantiate(catalog_id)
+        # Special-case learned already handled; physical/snn always may_actuate False
+        c = mod.declare_contract()
+        mid = c.identity.module_id
+        may = bool(getattr(getattr(c, "safety", None), "may_actuate", False))
+        if entry.research_tier and may:
+            raise ActuationRefused(
+                f"REFUSE: RESEARCH_TIER catalog entry {catalog_id!r} declared may_actuate=True"
+            )
+        if mid in self.stack.modules or mid in {
+            h.module_id for h in self.stack.registry.query(CapabilityFilter())
+        }:
+            try:
+                self.stack.registry.deregister(mid, drain="immediate", timeout_s=1)
+            except Exception:
+                pass
+            self.stack.modules.pop(mid, None)
+
+        promote = "EXPLORATION" if entry.research_tier else entry.promote
+        resp = self.stack.registry.register(
+            c,
+            artifact_digest=c.identity.artifact_digest,
+            author_signature=b"desktop-catalog",
+            module=mod,
+            test_bypass_promote=promote,  # type: ignore[arg-type]
+        )
+        self.stack.modules[mid] = mod
+        return {
+            "module_id": mid,
+            "catalog_id": catalog_id,
+            "state": resp.initial_state,
+            "research_tier": entry.research_tier,
+            "research_badge": "RESEARCH_TIER" if entry.research_tier else "",
+            "may_actuate": may,
+            "registered": True,
+        }
+
+    # ----- Contract / assert -----
+
+    def run_contract_checks(self, *, module_ids: list[str] | None = None) -> list[dict[str, Any]]:
+        """Validate SubstrateContracts for registered modules; store last results."""
+        want = set(module_ids) if module_ids else None
+        results: list[dict[str, Any]] = []
+        for mid, mod in list(self.stack.modules.items()):
+            if want is not None and mid not in want:
+                continue
+            if not hasattr(mod, "declare_contract"):
+                results.append(
+                    {
+                        "module_id": mid,
+                        "ok": False,
+                        "error": "no declare_contract",
+                        "issues": [],
+                        "issue_count": 0,
+                        "may_actuate": False,
+                        "research_tier": False,
+                    }
+                )
+                continue
+            try:
+                contract = mod.declare_contract()
+                issues = contract.validate() if hasattr(contract, "validate") else []
+                issue_rows = [
+                    {
+                        "severity": str(getattr(i, "severity", "")),
+                        "code": getattr(i, "code", ""),
+                        "field_path": getattr(i, "field_path", ""),
+                        "message": getattr(i, "message", str(i)),
+                    }
+                    for i in issues
+                ]
+                may = bool(getattr(getattr(contract, "safety", None), "may_actuate", False))
+                tier = str(
+                    getattr(getattr(contract, "safety", None), "reliability_tier", "")
+                    or getattr(getattr(contract, "identity", None), "role", "")
+                )
+                max_safety = str(
+                    getattr(getattr(contract, "safety", None), "max_safety_tier", "")
+                )
+                research = "RESEARCH" in max_safety.upper() or mid == "physical_research"
+                errors = [i for i in issue_rows if "ERROR" in str(i.get("severity", "")).upper()]
+                results.append(
+                    {
+                        "module_id": mid,
+                        "ok": len(errors) == 0,
+                        "issue_count": len(issue_rows),
+                        "error_count": len(errors),
+                        "issues": issue_rows,
+                        "may_actuate": may,
+                        "reliability_tier": tier,
+                        "max_safety_tier": max_safety,
+                        "research_tier": research,
+                        "research_badge": "RESEARCH_TIER" if research else "",
+                    }
+                )
+            except Exception as exc:
+                results.append(
+                    {
+                        "module_id": mid,
+                        "ok": False,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "issues": [],
+                        "issue_count": 0,
+                        "may_actuate": False,
+                        "research_tier": False,
+                    }
+                )
+        # Include bio modules not copied into stack.modules
+        for mid, mod in self.bio_modules.items():
+            if mid in {r["module_id"] for r in results}:
+                continue
+            if want is not None and mid not in want:
+                continue
+            try:
+                contract = mod.declare_contract()
+                issues = contract.validate() if hasattr(contract, "validate") else []
+                issue_rows = [
+                    {
+                        "severity": str(getattr(i, "severity", "")),
+                        "code": getattr(i, "code", ""),
+                        "field_path": getattr(i, "field_path", ""),
+                        "message": getattr(i, "message", str(i)),
+                    }
+                    for i in issues
+                ]
+                may = bool(getattr(getattr(contract, "safety", None), "may_actuate", False))
+                results.append(
+                    {
+                        "module_id": mid,
+                        "ok": not any("ERROR" in str(i.get("severity", "")).upper() for i in issue_rows),
+                        "issue_count": len(issue_rows),
+                        "issues": issue_rows,
+                        "may_actuate": may,
+                        "research_tier": True,
+                        "research_badge": "RESEARCH_TIER",
+                        "bio_exploration": True,
+                    }
+                )
+            except Exception as exc:
+                results.append(
+                    {
+                        "module_id": mid,
+                        "ok": False,
+                        "error": str(exc),
+                        "issues": [],
+                        "may_actuate": False,
+                        "research_tier": True,
+                    }
+                )
+        self._last_contract_results = results
+        return results
+
+    def last_contract_results(self) -> list[dict[str, Any]]:
+        return list(self._last_contract_results)
+
     # ----- Ops -----
 
     def validate_deploy_config(self, path: str | Path | None = None) -> dict[str, Any]:
@@ -723,12 +1140,17 @@ class DesktopService:
         runbook = self._repo_root / "docs" / "ops" / "SOAK_RUNBOOK.md"
         script = self._repo_root / "scripts" / "soak_target.sh"
         cfg_path = self._repo_root / "deploy" / "config" / "cpu_only.yaml"
+        profiles = self.list_deploy_profiles()
+        active_path = str(self._active_config_path) if self._active_config_path else str(cfg_path)
         return {
             "cpu_everywhere": True,
             "cpu_everywhere_badge": "CPU Everywhere ●",
-            "deploy_profile": validate.get("profile") or self.stack.config.profile,
-            "deploy_config_path": str(cfg_path),
-            "deploy_config_exists": cfg_path.is_file(),
+            "deploy_profile": self.stack.config.profile,
+            "deploy_config_path": active_path,
+            "deploy_config_exists": Path(active_path).is_file() if active_path else cfg_path.is_file(),
+            "profiles": profiles,
+            "active_profile": self.stack.config.profile,
+            "status_parity": self.status_parity(),
             "validate": validate,
             "soak_runbook": str(runbook),
             "soak_runbook_exists": runbook.is_file(),
@@ -753,6 +1175,9 @@ class DesktopService:
             "modules": len(self.list_modules()),
             "bindings": len(self.list_bindings()),
             "traces": len(self.list_traces(limit=500)),
+            "catalog": len(self.module_catalog()),
+            "contracts": len(self._last_contract_results),
+            "profile": self.stack.config.profile,
             "ok": True,
         }
 
@@ -764,5 +1189,7 @@ class DesktopService:
             {"title": "Wet-lab Safety Policy", "path": str(root / "ops" / "WETLAB_SAFETY_POLICY.md")},
             {"title": "API Freeze v1.0", "path": str(root / "API_FREEZE_v1.0.md")},
             {"title": "Desktop Design", "path": str(root / "v1.5" / "DESKTOP.md")},
+            {"title": "Desktop v1.6", "path": str(root / "v1.6" / "DESKTOP.md")},
+            {"title": "Packaging", "path": str(self._repo_root / "desktop" / "docs" / "PACKAGING.md")},
             {"title": "Deploy README", "path": str(self._repo_root / "deploy" / "README.md")},
         ]

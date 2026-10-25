@@ -107,3 +107,11 @@ def test_cli_status_enrichment(capsys):
     assert out["cpu_everywhere"] is True
     assert out["device_runtime"] == "CPU_GENERAL"
     assert out["profile"] == "cpu_only"
+
+
+def test_load_default_yaml():
+    cfg = load_deploy_config(ROOT / "deploy" / "config" / "default.yaml")
+    assert cfg.profile == "default"
+    assert cfg.runtime.prefer_gpu is False
+    assert cfg.health.port == 8788
+    assert validate_deploy_config(cfg) == []
