@@ -1,9 +1,10 @@
-"""Bio-Digital Hybrid Cluster adapters for Organism (v1.1).
+"""Bio-Digital Hybrid Cluster adapters for Organism (v1.2).
 
 Maps Physarum / Mycelium RESEARCH_TIER substrates from
 https://github.com/Recharged-Ideas/Bio-Digital_Hybrid_Cluster
 into Organism SubstrateContracts. Exploration-only; never control actuation.
 
+Live import via BIO_DIGITAL_HYBRID_ROOT (see vendor_loader / VENDOR.md).
 See docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ from bio_digital.hal import BioDigitalHAL, research_sim_enabled, RUNTIME_RESEARC
 from bio_digital.bus_adapter import BioDigitalBusAdapter, ClusterMessageView
 from bio_digital.twin_bridge import TwinBridge
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
+from bio_digital.vendor_loader import load_hybrid, resolve_hybrid_root, hybrid_root_present
 
 __all__ = [
     "SlimeMoldModule",
@@ -28,4 +30,7 @@ __all__ = [
     "TwinBridge",
     "DrainPolicy",
     "HypervisorMapper",
+    "load_hybrid",
+    "resolve_hybrid_root",
+    "hybrid_root_present",
 ]

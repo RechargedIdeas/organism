@@ -142,6 +142,18 @@ Phases I1–I8 are implemented in this release line.
 
 ---
 
+## 8b. Live import (v1.2)
+
+`BIO_DIGITAL_HYBRID_ROOT` (default `/workspace/Bio-Digital_Hybrid_Cluster` when present) loads real Hybrid HAL / slime_mold / mycelium via `bio_digital.vendor_loader`. Missing path → Organism stubs. See `modules/bio_digital/VENDOR.md`.
+
+| Env | Effect |
+|---|---|
+| `BIO_DIGITAL_HYBRID_ROOT` | Checkout path; unset uses default if directory exists |
+| `ORGANISM_BIO_DIGITAL_REAL_DELAYS=1` | Keep Hybrid wall-clock biology sleeps (default: zeroed for RESEARCH_SIM) |
+| Module `backend=` | `"auto"` (default) / `"live"` / `"stub"` |
+
+---
+
 ## 9. Axiom checklist (must stay green)
 
 1. No undeclared Hybrid bus reads that affect decisions.  

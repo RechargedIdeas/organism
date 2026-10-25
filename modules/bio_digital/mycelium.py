@@ -1,10 +1,11 @@
 """Pleurotus ostreatus mycelium substrate — exploration RESEARCH_TIER."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
-from dataclasses import replace
 import json
-from typing import Any
+from dataclasses import replace
+from typing import Any, Literal
 
 from organism_sdk.contract import (
     BudgetClass,
@@ -35,18 +36,44 @@ from bio_digital.limits import (
     MYCELIUM_SYNAPTIC_WEIGHT,
     SPECIES_MYCELIUM,
 )
+from bio_digital.vendor_loader import load_hybrid
 
 MODULE_ID = "bio_digital.mycelium"
-MODULE_VERSION = "1.1.0"
+MODULE_VERSION = "1.2.0"
 FMT = "typed-json:bio-mycelium/v1"
+
+BackendKind = Literal["stub", "live"]
 
 
 class MyceliumModule(OrganismModule):
     """Hyphal spike-train network memory twin. Never actuates."""
 
-    def __init__(self, *, node_id: str = "mycelium-0", hal: BioDigitalHAL | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        node_id: str = "mycelium-0",
+        hal: BioDigitalHAL | None = None,
+        backend: BackendKind | Literal["auto"] = "auto",
+    ) -> None:
         self.node_id = node_id
-        self.hal = hal or BioDigitalHAL(MYCELIUM_LIMITS, node_id=node_id)
+        self._live_node: Any = None
+        self.backend: BackendKind = "stub"
+
+        want_live = backend == "live" or backend == "auto"
+        if want_live and backend != "stub":
+            bundle = load_hybrid()
+            if bundle.is_live and bundle.MyceliumNode is not None:
+                self._live_node = bundle.MyceliumNode(node_id)
+                self.backend = "live"
+
+        if hal is not None:
+            self.hal = hal
+        else:
+            self.hal = BioDigitalHAL(
+                MYCELIUM_LIMITS,
+                node_id=node_id,
+                backend="live" if self.backend == "live" else ("stub" if backend == "stub" else "auto"),
+            )
         self._status = "HEALTHY"
         self._score = 1.0
         self._invocations = 0
@@ -113,9 +140,30 @@ class MyceliumModule(OrganismModule):
         else:
             self._status = "HEALTHY"
             self._score = 1.0
-        return HealthReport(module_id=MODULE_ID, status=self._status, score=self._score)
+        return HealthReport(
+            module_id=MODULE_ID,
+            status=self._status,
+            score=self._score,
+            probes={
+                "backend": self.backend,
+                "hal_backend": getattr(self.hal, "backend", "stub"),
+                "temp_c": env.temp_c,
+                "humidity_pct": env.humidity_pct,
+                "co2_ppm": env.co2_ppm,
+                "is_healthy": env.is_healthy,
+                "affects_control": False,
+            },
+        )
 
     def process_spike_train(self, spikes: list[float]) -> list[float]:
+        if self.backend == "live" and self._live_node is not None:
+            env = self.hal.read_telemetry()
+            if hasattr(self._live_node, "sensors"):
+                self._live_node.sensors._current_temp = env.temp_c
+                self._live_node.sensors._current_hum = env.humidity_pct
+                self._live_node.sensors._current_co2 = env.co2_ppm
+            out = asyncio.run(self._live_node.process_spike_train([float(s) for s in spikes]))
+            return [float(x) for x in out]
         env = self.hal.read_telemetry()
         if not env.is_healthy:
             raise RuntimeError("life_support_compromised")
@@ -135,6 +183,7 @@ class MyceliumModule(OrganismModule):
                     "reason": "bio_digital_never_control_path",
                     "species": SPECIES_MYCELIUM,
                     "research_sim": True,
+                    "backend": self.backend,
                 },
                 sort_keys=True,
             ).encode()
@@ -155,6 +204,7 @@ class MyceliumModule(OrganismModule):
             "spikes_in": spikes,
             "spikes_out": result,
             "twin": twin,
+            "backend": self.backend,
             "exploration_only": True,
             "hypothesis_id": hashlib.sha256(
                 f"{self._invocations}:{input.task_descriptor.task_id}".encode()
@@ -163,5 +213,5 @@ class MyceliumModule(OrganismModule):
         return Emission(
             action_class="exploration",
             payload=json.dumps(body_obj, sort_keys=True).encode(),
-            metadata={"module_id": MODULE_ID, "research_sim": "True"},
+            metadata={"module_id": MODULE_ID, "research_sim": "True", "backend": self.backend},
         )

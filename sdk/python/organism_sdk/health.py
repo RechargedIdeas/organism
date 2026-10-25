@@ -19,6 +19,7 @@ class HealthReport:
     status: str  # HEALTHY | DEGRADED | FAILED
     score: float = 1.0
     active_failures: list[dict[str, Any]] = field(default_factory=list)
+    probes: dict[str, Any] = field(default_factory=dict)
     observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_json(self) -> bytes:
@@ -27,6 +28,7 @@ class HealthReport:
             "status": self.status,
             "score": self.score,
             "active_failures": self.active_failures,
+            "probes": self.probes,
             "observed_at": self.observed_at.isoformat(),
         }
         return json.dumps(payload).encode("utf-8")
