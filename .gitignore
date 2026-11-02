@@ -54,3 +54,9 @@ organism_data/assets/**
 !organism_data/assets/.gitkeep
 organism_data/organisms/**
 !organism_data/organisms/.gitkeep
+
+.venv/
+.pipcache/
+.gradle/
+build/
+.kotlin/

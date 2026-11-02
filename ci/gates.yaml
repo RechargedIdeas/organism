@@ -302,3 +302,7 @@ category_bio:
     blocking: true
     status: green
     command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v110_ops_sandbox.py"
+
+  - id: conformance:kotlin
+    blocking: true
+    command: "cd sdk/kotlin && ./gradlew test"

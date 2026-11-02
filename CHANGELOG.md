@@ -1,3 +1,10 @@
+## [Unreleased] - 1.11.0-dev (branch feat/kotlin-parity)
+
+### Added
+- **Conformance vectors** (`conformance/`): language-neutral behaviour contract generated from the Python reference.
+- **Kotlin SDK** (`sdk/kotlin`): dependency-free Kotlin/JVM port; hypervector and degradation machine bit-exact against the vectors.
+- `docs/INTEROP.md`, `docs/KOTLIN_PARITY_PLAN.md`, `docs/KOTMOE_SUBSTRATE.md`, `docs/design/IDEA.txt` (design corpus).
+
 ## [1.10.0] — 2026-10-25
 
 ### Added
