@@ -1,8 +1,8 @@
 # organism as a substrate for the next-generation KotMoE agent framework and RAMA
 
 Date: 2026-11-01. Analysis only. Nothing in the KotMoE repo was edited, and nothing from organism was run or installed.
-Sources: a shallow clone of `RechargedIdeas/organism` at a local clone (336 tracked files, 1 commit, v1.10.0),
-the KotMoE repository on `p0-stabilise` (read-only), and the sibling report the KotMoE mapping report.
+Sources: a shallow clone of `RechargedIdeas/organism` (336 tracked files, 1 commit, v1.10.0),
+the KotMoE repository on `p0-stabilise` (read-only), and the sibling KotMoE mapping report.
 This file lives outside the (public) KotMoE repo on purpose.
 
 ---------------------------------------------------------------------------------------------------------------
