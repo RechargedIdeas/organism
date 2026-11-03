@@ -216,3 +216,10 @@ def test_hook_files_exist_and_use_lf_endings():
         data = (ROOT / "ci" / "hooks" / name).read_bytes()
         assert b"\r\n" not in data, name
         assert data.startswith(b"#!/bin/sh"), name
+
+
+def test_hook_wrapper_does_not_forward_git_arguments():
+    # git passes the remote name and URL to pre-push. Forwarding them made run.py reject the
+    # push ("unrecognized arguments"), so the wrapper must not pass "$@" on.
+    text = (ROOT / "ci" / "hooks" / "_resolve.sh").read_text(encoding="utf-8")
+    assert '"$@"' not in text
