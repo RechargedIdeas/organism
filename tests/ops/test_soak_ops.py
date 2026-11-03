@@ -1,7 +1,10 @@
 """v1.4 soak ops: runbook present + reconstructibility helper + script."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+import pytest
 
 from harness.scenarios.v04_soak import (
     run_soak,
@@ -19,6 +22,10 @@ def test_soak_runbook_exists():
     assert "PERF.md" in text
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX execute bits do not exist on Windows; checked on Linux CI",
+)
 def test_soak_target_script_executable():
     s = ROOT / "scripts" / "soak_target.sh"
     assert s.is_file()

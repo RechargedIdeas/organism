@@ -24,6 +24,7 @@ Organism is not a model. It is the **substrate** in which models live.
 | **Audit** | [docs/AUDIT_v1.8.md](docs/AUDIT_v1.8.md) · [docs/v1.9/AUDIT_CLOSURE.md](docs/v1.9/AUDIT_CLOSURE.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Implementation** | [STATUS.md](STATUS.md) |
+| **MoA layer (v1.11)** | [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md) · Phases 0 to 3 done |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) · [`ci/gates.yaml`](ci/gates.yaml) |
 
 Stable surface = Python SDK core + proto `organism.v1` + substrate ecology modules + Rust registry/workspace/router/degradation/control-loop + Desktop + generative pipelines. Neuromorphic/physical without hardware remain **RESEARCH_SIM** / exploration-only.

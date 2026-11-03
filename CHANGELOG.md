@@ -1,3 +1,23 @@
+## [Unreleased] - v1.11 MoA layer (in progress)
+
+### Added
+- **MoA layer** (`organism_sdk.moa`): experts with capability descriptors that register as
+  `SubstrateContract`s, a capability scorer with a shadow precision gate, VSA-backed
+  aggregation with clean-up recovery, tiers T0 to T4 with recovery hysteresis, and a per-query pipeline.
+- **Reference experts**: `intent_classifier` and `extractor`. Rule-based, CPU-only, deterministic.
+- **Synthetic routing set** (`sdk/python/tests/data/moa_routing_synthetic.json`) and four `v111:moa_*` gates in `ci/gates.yaml`.
+- **Design record**: `docs/v1.11/MOA_LAYER.md`. Records corrections to the upgrade plan.
+
+### Changed
+- `tests/ops/test_soak_ops.py`: the POSIX executable-bit check is skipped on Windows. It still runs on Linux.
+
+### Known issues
+- Four evolution tests fail on Windows on the `evolve_ms` wall-clock budget: about 434 ms measured against 250 ms. Budgets are unchanged. See `docs/v1.11/MOA_LAYER.md`, section 8.
+- The Rust workspace is not verified here. `organism-proto` needs `protoc` on `PATH`.
+
+### Test baseline
+- `pytest -m 'not slow'`: 447 passed, 4 skipped, 4 failed. All four failures are the evolve budget issue above.
+
 ## [1.10.0] — 2026-10-25
 
 ### Added

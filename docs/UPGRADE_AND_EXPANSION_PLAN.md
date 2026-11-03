@@ -1,13 +1,13 @@
 # Organism Upgrade and Expansion Plan
 
-- **Status:** Draft for review. Not approved.
+- **Status:** Phases 0 to 3 implemented in v1.11 (see [docs/v1.11/MOA_LAYER.md](v1.11/MOA_LAYER.md)). Phases 4 and 5 not started. Phase 6 optional.
 - **Date:** 2026-11-03
 - **Baseline:** Organism v1.10.0 (see [CHANGELOG.md](../CHANGELOG.md)); 377 tests passing under `-m 'not slow'`.
 - **Source:** DeepSeek share `https://chat.deepseek.com/share/06or3m42rv9g0raup0`. 96 messages, 2026-10-31 to 2026-11-03. Archived locally at `chat_archive/Provide_comprehensive_in_depth_and_detailed_suggestions_for.md`. That archive is untracked and not committed.
 
 ## 1. Summary
 
-The thread proposes a **mixture-of-SLMs layer built on Organism**, not beside it. Each purpose-built small model becomes an Organism module. A capability-aware routing stage sits on top of the existing structural router. Expert outputs are aggregated in the VSA workspace instead of by an LLM. Degradation tiers map onto the existing `DegradationMachine`. Every change to an expert or router goes through the existing promote gate.
+The thread proposes a **mixture-of-SLMs layer built on Organism**, not beside it. Each purpose-built small model becomes an Organism module. A capability-aware routing stage sits on top of the existing structural router. Expert outputs are aggregated in the VSA workspace instead of by an LLM. Degradation tiers are chosen per request. They are not mapped onto the global `DegradationMachine`, which tracks levels L1 to L4 over time. Every change to an expert or router goes through the existing promote gate.
 
 Organism already has most of the substrate the thread needs. The new work is:
 
@@ -87,7 +87,7 @@ Week numbers are the thread's estimates. They are not validated.
 ### Phase 3: VSA aggregation and tiers T0 to T4 (weeks 6 to 10)
 
 - Encode each expert output as a role-bound hypervector. Start with the simplest rule: pick the highest-confidence schema-valid binding by role cue. No generative synthesis yet.
-- Map tiers T0 to T4 onto `DegradationMachine`, with hysteresis so the tier does not oscillate.
+- Tiers T0 to T4, with hysteresis so the tier does not oscillate. **Correction:** tiers are not mapped onto `DegradationMachine`, which tracks global levels L1 to L4. The global level is an input: L4 forces T4. See the design record.
 - Run fault-injection drills: kill an expert, corrupt routing scores, remove workspace bindings. Verify tier transitions and trace completeness. Update `docs/ops/DEGRADATION_DRILLBOOK.md`.
 - Add MoA tier-transition budgets to `ci/gates.yaml` as blocking gates.
 - **Exit:** Every tier is exercised by the harness and every transition leaves a complete trace.
@@ -149,7 +149,7 @@ Some chapters are written in Chinese. Translate before any of them is used as a 
 | Risk | Why it matters here | Mitigation |
 |---|---|---|
 | Router promote gate never clears | Aggregate accuracy may stay below the bar with many experts | Gate on per-domain precision and coverage. Promote one domain at a time. |
-| VSA capacity | Superposing many bindings degrades retrieval | Cap simultaneous bindings. Use clean-up memory and role-cue unbinding. |
+| VSA capacity | Superposing many bindings could degrade retrieval. **Measured:** recovery with clean-up memory held for up to 64 experts per request, so capacity is not the binding limit at these sizes. The 8-expert cap is a latency policy. | Use clean-up memory and role-cue unbinding. Re-measure if the fact count per expert grows. |
 | Tier thrashing | Physiological routing and MoA routing can interact | Hysteresis. Require a sustained condition before a tier change. |
 | Contract explosion | Every expert and router revision adds surface | Freeze the contract. Version capability descriptors, not contracts. |
 | Evolution drift | Routers may optimize shadow metrics that diverge from production value | Put production-outcome metrics into the promote gate. |

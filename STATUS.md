@@ -17,6 +17,21 @@ Bio/wet-lab actuation remains hard-refused. CPU Everywhere holds. Naming is
 
 See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md).
 
+## v1.11 in progress: MoA layer
+
+Phases 0 to 3 of the [upgrade plan](docs/UPGRADE_AND_EXPANSION_PLAN.md) are implemented
+and tested. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
+
+| Phase | Status | Notes |
+|---|---|---|
+| 0 Design record | done | Corrections to the plan recorded |
+| 1 Experts and registration | done | Two reference experts; registry health works |
+| 2 Capability scorer and shadow gate | done | Gate passes on the synthetic set (extraction 12/13, one known false positive) |
+| 3 VSA aggregation, tiers T0 to T4, drills | done | Hysteresis and failure drills tested |
+| 4 Synthesizer and router evolution | not started | Needs a routing-policy artifact and a learned backend |
+| 5 Judge, guardrails, red team | not started | |
+| 6 Lifecycle and provenance | optional | Decision D4 |
+
 ## Soak / wall-clock cadence
 
 - Default CI / pytest: `-m 'not slow'` (fast soak + budgets).

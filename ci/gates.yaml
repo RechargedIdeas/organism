@@ -302,3 +302,23 @@ category_bio:
     blocking: true
     status: green
     command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v110_ops_sandbox.py"
+
+  - id: v111:moa_experts
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v111_moa_experts.py"
+
+  - id: v111:moa_routing_gate
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v111_moa_routing.py"
+
+  - id: v111:moa_aggregation
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v111_moa_aggregate.py sdk/python/tests/test_v111_moa_tiers.py"
+
+  - id: v111:moa_pipeline_drills
+    blocking: true
+    status: green
+    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v111_moa_pipeline.py"
