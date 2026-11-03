@@ -27,6 +27,7 @@ from organism_sdk.generative.backends import (
     GeneratorBackend,
     TemplateDraftBackend,
 )
+from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 from organism_sdk.generative.sandbox import SafeSandbox, SandboxResult
 from organism_sdk.generative.stages import PromoteGate
 
@@ -249,7 +250,7 @@ class CodePipeline:
         self._last_promoted: str | None = None
         self._last_timings: dict[str, float] = {}
         # Wall-clock budgets (ms) — see EvolutionRuntime constants
-        self.evolve_budget_ms: float = 250.0
+        self.evolve_budget_ms: float = EVOLVE_BUDGET_MS
         self.promote_budget_ms: float = 100.0
 
     def start(

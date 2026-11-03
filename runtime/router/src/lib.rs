@@ -232,8 +232,16 @@ impl Router {
             candidates.push(h.clone());
         }
         candidates.sort_by(|a, b| {
-            let ha = self.health.get(&a.module_id).map(|s| s.as_str()).unwrap_or("HEALTHY");
-            let hb = self.health.get(&b.module_id).map(|s| s.as_str()).unwrap_or("HEALTHY");
+            let ha = self
+                .health
+                .get(&a.module_id)
+                .map(|s| s.as_str())
+                .unwrap_or("HEALTHY");
+            let hb = self
+                .health
+                .get(&b.module_id)
+                .map(|s| s.as_str())
+                .unwrap_or("HEALTHY");
             let ra = if ha == "HEALTHY" { 0 } else { 1 };
             let rb = if hb == "HEALTHY" { 0 } else { 1 };
             ra.cmp(&rb)

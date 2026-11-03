@@ -81,16 +81,24 @@ Found while building. These change the plan in
 | Measure | Result |
 |---|---|
 | Intent precision | 17 / 17 (1.00) |
-| Extraction precision | 12 / 13 (0.92) |
-| Unsure correct | 5 / 6 |
+| Extraction precision | 10 / 10 (1.00) |
+| Unsure correct | 6 / 6 |
 | Structural baseline | 16 / 16 (1.00) |
 | Gate | passes |
 
-Known weakness: the bare verb "find" routes a generic query ("Find the best coffee shop
-nearby") to the extractor. One more such false positive would drop extraction below 0.90.
-The gate passes today by one item. The set is synthetic. Passing it does not establish
-precision on real traffic. Options for the weakness: require two keyword matches for
-generic verbs, or add a stop-keyword list.
+**Result on the held-out set** (`sdk/python/tests/data/moa_routing_heldout.json`, 24 items). Labels were fixed from each query's meaning before any scorer change was measured.
+
+| Measure | Result |
+|---|---|
+| Intent precision | 8 / 8 (1.00) |
+| Extraction precision | 7 / 7 (1.00) |
+| Unsure correct | 8 / 8 |
+| Structural baseline | 3 / 3 (1.00) |
+| Gate | passes |
+
+**Fixed weakness.** The bare verb "find" routed generic queries ("Find a good recipe for dinner") to the extractor. Held-out extraction precision was 0.78. The verb is no longer an extractor keyword; its targets ("dates", "numbers", "emails") carry the signal. The held-out set exposed this flaw, so it is no longer an untouched holdout. Measure any further change on a new labeled set.
+
+**Known recall gap.** The noun "email" is not an extractor keyword, so extraction queries built around "email address" go unsure. The strict `xfail` test in `test_v111_moa_routing.py` pins one case. Adding "email address" and "email addresses" as keywords was measured and rejected. On the fresh set `sdk/python/tests/data/moa_routing_email_recall.json` (13 items, labels fixed before the trial), recall rose from 1/7 to 7/7, but the four negatives such as "Set up a new email address for the new hire" also routed to the extractor. Extraction precision fell to 7/11, below the 0.90 gate. Closing the gap needs a context rule: a keyword that counts only when a source reference such as "in this" or "out of" is present. That is a scorer design change, not a keyword edit. `sdk/python/tests/test_v111_moa_email_routing.py` keeps the four negatives unsure in the meantime. The fresh set has now been used for one measurement, so it is no longer untouched.
 
 ## 5. Aggregation (Phase 3)
 
@@ -121,23 +129,28 @@ generic verbs, or add a stop-keyword list.
 
 ## 7. Verification
 
-- Fast suite: 447 passed, 4 skipped, 4 failed. The 78 new v1.11 tests pass. The four
-  failures existed before this work and share one cause. See section 8.
-- `ruff check` is clean on the new code.
-- Rust workspace: not run. `organism-proto` needs `protoc`, which is not installed here.
+- Fast tier (`python ci/run.py run --tier fast`): 58 of 58 gates pass in 166 s. This includes
+  `suite:fast`, the `v17:*` budgets, `v18:desktop_polish`, `v10:rust` and `rust:clippy`.
+- `suite:fast` (`pytest -m 'not slow'`): 510 passed, 4 skipped, 1 xfailed, 0 failed.
+- `tests/ci` (the local pipeline's own tests): 57 passed.
+- `ruff` and `mypy` pass their ratchets against the recorded baselines. `rustfmt` and `clippy`
+  report zero findings.
+- Nightly tier, run before the Rust clean-up: 60 of 60 pass in 589 s. `slow:wall_clock_full`
+  takes 462 s. `slow:soak_full` runs the extended 240-window soak and passes.
 
 ## 8. Known issues
 
-- **Evolve wall-clock budget fails on this Windows machine.** Four tests:
+- **Evolve wall-clock budget is now per platform.** Four tests failed on Windows:
   `test_v17_generative::test_evolution_runtime_hot_register`,
   `test_v17_generative::test_wall_clock_budgets_recorded`, and two desktop evolution tests.
-  All four check `within_wall_clock_budgets()`. `evolve_ms` measures about 434 ms against a 250 ms budget. The sandbox runs its child with the `spawn` start method,
-  which costs about 100 ms per child on Windows before any imports. The budget was set for
-  a platform where `fork` is cheap. Budgets are unchanged. A per-platform budget is a
-  decision for the maintainer (see the upgrade plan).
+  They checked `within_wall_clock_budgets()` against 250 ms, but `evolve_ms` measured about 434 ms.
+  The sandbox runs its child with the `spawn` start method, which costs about 100 ms per child on
+  Windows before any imports. `EVOLVE_BUDGET_MS` in `sdk/python/organism_sdk/generative/budgets.py`
+  is 1000 ms on Windows and 250 ms elsewhere. Windows measured median 440 ms, p95 452 ms, max 501 ms
+  over 15 runs. Linux has not been measured and keeps 250 ms. All four tests pass in the fast tier.
 - **Soak executable-bit test** is skipped on Windows. It still runs on Linux, and the
   git index records mode `100755` for `scripts/soak_target.sh`.
-- **Rust workspace tests** need `protoc` on `PATH`, or `PROTOC` set to its path.
+- **Rust workspace tests** need `protoc`. The local pipeline resolves it from the `PROTOC` variable, then `.venv/Scripts/protoc.exe`, then `PATH`.
 
 ## 9. Not started
 

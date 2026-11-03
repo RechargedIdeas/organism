@@ -95,7 +95,9 @@ class Extractor(BaseExpert):
                 expert_id="extractor",
                 domain="extraction",
                 task_forms=("feature_extraction",),
-                keywords=("extract", "find", "dates", "emails", "numbers"),
+                # "find" is not a keyword: it is too generic and routed "find me a hiking trail"
+                # to this expert (held-out precision 0.78). Targets such as "dates" carry the signal.
+                keywords=("extract", "dates", "emails", "numbers"),
                 role=ModuleRole.FEATURE_EXTRACTOR,
                 expected_latency_ms=4.0,
             )

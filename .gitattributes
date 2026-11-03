@@ -1,0 +1,2 @@
+# Shell hooks must keep LF endings to run under Git for Windows.
+ci/hooks/* text eol=lf

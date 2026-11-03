@@ -3,7 +3,7 @@
 - **Status:** Phases 0 to 3 implemented in v1.11 (see [docs/v1.11/MOA_LAYER.md](v1.11/MOA_LAYER.md)). Phases 4 and 5 not started. Phase 6 optional.
 - **Date:** 2026-11-03
 - **Baseline:** Organism v1.10.0 (see [CHANGELOG.md](../CHANGELOG.md)); 377 tests passing under `-m 'not slow'`.
-- **Source:** DeepSeek share `https://chat.deepseek.com/share/06or3m42rv9g0raup0`. 96 messages, 2026-10-31 to 2026-11-03. Archived locally at `chat_archive/Provide_comprehensive_in_depth_and_detailed_suggestions_for.md`. That archive is untracked and not committed.
+- **Source:** DeepSeek share `https://chat.deepseek.com/share/06or3m42rv9g0raup0`. 96 messages, 2026-10-31 to 2026-11-03. The full transcript is archived outside this repo, in `H:\Projects\ChatGrabber\organism-chats\`. It is not committed here.
 
 ## 1. Summary
 
@@ -160,7 +160,7 @@ Some chapters are written in Chinese. Translate before any of them is used as a 
 - **D2.** Is CPU-only the first target? (Current default under CPU Everywhere.)
 - **D3.** May a hosted LLM serve as `llm_fallback`? It is off by default.
 - **D4.** Include Phase 6 (lifecycle and provenance) in scope?
-- **D5.** Should `chat_archive/` be committed, gitignored, or moved out of the repo? It holds the full chat text.
+- **D5.** Resolved: the chat archive is kept out of this repo, in `H:\Projects\ChatGrabber\organism-chats\`. The repo's hygiene gate blocks `chat_archive/` and `organism-chats/` from being committed.
 
 ## 8. What was checked and what was not
 

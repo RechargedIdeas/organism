@@ -98,12 +98,29 @@ def test_shadow_gate_passes_on_synthetic_set():
     assert report.structural_precision == 1.0
 
 
-def test_shadow_gate_reports_the_known_false_positive():
-    # The bare verb "find" routes a generic query to the extractor. The gate
-    # tolerates it, and the report must still show it.
-    report = shadow.evaluate(shadow.load_labeled(DATA), reference_experts(), LexicalScorer())
-    assert report.unsure_correct == report.unsure_total - 1
-    assert report.domains["extraction"].correct == report.domains["extraction"].predicted - 1
+def test_bare_find_does_not_route_generic_queries_to_the_extractor() -> None:
+    # Before the fix, "find" alone sent generic queries to the extractor (held-out precision 0.78).
+    decision = LexicalScorer().decide("Find a good recipe for dinner", reference_experts())
+    assert decision.route == ROUTE_UNSURE
+
+
+def test_shadow_gate_passes_on_held_out_set() -> None:
+    # Written with labels fixed from each query's meaning, before any scorer change was measured.
+    heldout = Path(__file__).parent / "data" / "moa_routing_heldout.json"
+    report = shadow.evaluate(shadow.load_labeled(heldout), reference_experts(), LexicalScorer())
+    assert report.passed, report.failures
+    assert (report.domains["extraction"].precision or 0.0) >= shadow.PRECISION_GATE
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="recall gap: singular 'email' is not a keyword, so 'email addresses' queries go unsure. "
+    "Precision is unaffected. See docs/v1.11/MOA_LAYER.md, section 4.",
+)
+def test_known_recall_gap_singular_email_is_routed_to_extractor() -> None:
+    decision = LexicalScorer().decide("Pull the email addresses out of this list", reference_experts())
+    assert decision.route == ROUTE_EXPERT
+    assert decision.expert_id == "extractor"
 
 
 class _AlwaysFirst:

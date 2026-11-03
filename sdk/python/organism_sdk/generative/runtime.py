@@ -27,6 +27,7 @@ from organism_sdk.contract import (
     ReliabilityTier,
     UncertaintyKind,
 )
+from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 from organism_sdk.generative.code_pipeline import CodeBundle, CodePipeline, CodeStage, PromoteRefused
 from organism_sdk.generative.skills import SkillDescriptor
 from organism_sdk.health import HealthReport
@@ -40,7 +41,8 @@ from organism_sdk.registry import RegistryClient, ShadowValidationRecord
 from organism_sdk.trace import EvolutionTraceEntry, LifecycleTraceEntry, TraceEmitter
 
 # Wall-clock budgets (ms) for generative pipeline gates — CPU Everywhere.
-EVOLVE_P95_MS = 250.0
+# Evolve is platform-specific; see organism_sdk/generative/budgets.py.
+EVOLVE_P95_MS = EVOLVE_BUDGET_MS
 PROMOTE_P95_MS = 100.0
 HOT_REGISTER_P95_MS = 80.0
 QUARANTINE_P95_MS = 50.0

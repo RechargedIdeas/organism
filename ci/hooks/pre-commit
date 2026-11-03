@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed by: python ci/run.py hooks install. Fast checks on every commit.
+# Bypass for one commit only: git commit --no-verify (use sparingly).
+exec sh "$(git rev-parse --show-toplevel)/ci/hooks/_resolve.sh" precommit pre-commit "$@"

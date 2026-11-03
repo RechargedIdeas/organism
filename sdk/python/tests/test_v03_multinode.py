@@ -22,7 +22,9 @@ def test_default_gate_still_fail_closed():
 def test_mirror_lag_slo():
     cluster = MultiNodeCluster(["a", "b"], default_lag_ms=5.0, lag_slo_ms=40.0)
     cluster.release_and_mirror("a", lag_ms=5.0, stress_load=0.7, viability_score=0.5)
-    applied = cluster.advance(wait_ms=8.0)
+    # 25 ms, not 8. The lag is 5 ms, but Windows clocks tick about every 15.6 ms, so an 8 ms wait
+    # missed the delivery in 25 of 60 runs. 25 ms missed none. It stays under the 40 ms SLO.
+    applied = cluster.advance(wait_ms=25.0)
     assert applied >= 1
     cluster.assert_lag_slo()
     assert cluster.max_observed_lag_ms() >= 4.0  # roughly configured lag

@@ -1,5 +1,4 @@
 //! In-memory Substrate Registry — M2 register/query/promote.
-use chrono::{DateTime, Utc};
 use organism_client::OrganismError;
 use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
@@ -59,7 +58,6 @@ struct Entry {
     contract: ContractRecord,
     state: LifecycleState,
     contract_digest: [u8; 32],
-    registered_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug)]
@@ -85,9 +83,7 @@ impl Registry {
         initial: LifecycleState,
     ) -> Result<ModuleHandle, OrganismError> {
         if contract.module_id.is_empty() || contract.version.is_empty() {
-            return Err(OrganismError::ValidationRejected(
-                "identity_missing".into(),
-            ));
+            return Err(OrganismError::ValidationRejected("identity_missing".into()));
         }
         let mut h = Sha256::new();
         h.update(contract.module_id.as_bytes());
@@ -110,7 +106,6 @@ impl Registry {
                 contract,
                 state: initial,
                 contract_digest,
-                registered_at: Utc::now(),
             },
         );
         Ok(handle)

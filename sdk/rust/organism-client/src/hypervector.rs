@@ -30,11 +30,7 @@ impl Hypervector {
     }
 
     pub fn bind(&self, other: &Self) -> Self {
-        let mut out = [0u64; WORD_COUNT];
-        for i in 0..WORD_COUNT {
-            out[i] = self.0[i] ^ other.0[i];
-        }
-        Self(out)
+        Self(std::array::from_fn(|i| self.0[i] ^ other.0[i]))
     }
 
     pub fn unbind(&self, role: &Self) -> Self {
@@ -78,11 +74,11 @@ impl Hypervector {
         let mut padded = [0u8; WORD_COUNT * 8];
         padded[..BYTES_LEN].copy_from_slice(bytes);
         let mut words = [0u64; WORD_COUNT];
-        for i in 0..WORD_COUNT {
+        for (i, word) in words.iter_mut().enumerate() {
             let start = i * 8;
             let mut arr = [0u8; 8];
             arr.copy_from_slice(&padded[start..start + 8]);
-            words[i] = u64::from_le_bytes(arr);
+            *word = u64::from_le_bytes(arr);
         }
         // Mask unused high bits of last word
         let unused = WORD_COUNT * 64 - DIM;
@@ -99,18 +95,18 @@ impl Hypervector {
         }
         let n = hvs.len();
         let mut out = [0u64; WORD_COUNT];
-        for wi in 0..WORD_COUNT {
+        for (wi, word) in out.iter_mut().enumerate() {
             for bit in 0..64 {
                 let ones = hvs.iter().filter(|hv| ((hv.0[wi] >> bit) & 1) == 1).count();
                 if ones * 2 > n {
-                    out[wi] |= 1u64 << bit;
+                    *word |= 1u64 << bit;
                 } else if ones * 2 == n {
                     let mut parity = 0u64;
                     for hv in hvs {
                         parity ^= (hv.0[wi] >> bit) & 1;
                     }
                     if parity == 1 {
-                        out[wi] |= 1u64 << bit;
+                        *word |= 1u64 << bit;
                     }
                 }
             }
@@ -127,8 +123,8 @@ impl Hypervector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     #[test]
     fn bind_unbind_exact() {
