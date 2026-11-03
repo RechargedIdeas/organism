@@ -1,7 +1,8 @@
 # Local CI pipeline
 
-The pipeline runs on this machine. It replaces nothing in `.github/workflows/`, which
-still runs the same fast suite on Linux. The local pipeline is the place where every
+The pipeline runs on this machine. The `pipeline` job in `.github/workflows/ci.yml` runs
+the same fast tier on Linux for pushes and pull requests to `main`, so the gates apply even
+in clones without hooks. The local pipeline is the place where every
 gate in [gates.yaml](gates.yaml) actually runs, with preflight checks, caching, lint
 ratchets, and hooks.
 
