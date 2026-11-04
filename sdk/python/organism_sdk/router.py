@@ -207,7 +207,7 @@ class Router:
         # IMP-17: no neuromorphic on this box by default
         from organism_sdk.neuro_sim import hardware_caps_with_sim
         self._available_hardware = hardware_caps_with_sim(available_hardware or {"NONE"})
-        self._last_sentinel_escalation: dict | None = None
+        self._last_sentinel_escalation: dict[str, Any] | None = None
 
     def set_level(self, level: Level) -> None:
         self._level = level
@@ -235,7 +235,7 @@ class Router:
         }
 
     @property
-    def last_sentinel_escalation(self) -> dict | None:
+    def last_sentinel_escalation(self) -> dict[str, Any] | None:
         return self._last_sentinel_escalation
 
     @property
@@ -338,7 +338,7 @@ class Router:
         # Step 5 re-rank
         ranking_trace: list[str] = []
 
-        def sort_key(h: ModuleHandle) -> tuple:
+        def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
             tier = h.tier.value if hasattr(h.tier, "value") else str(h.tier)
             hs = self._health.get(h.module_id, "HEALTHY")
             health_rank = 0 if hs == "HEALTHY" else 1

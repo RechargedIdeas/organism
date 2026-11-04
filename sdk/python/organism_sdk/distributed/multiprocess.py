@@ -5,11 +5,14 @@ Faithful software sim — not WAN BFT; marks RESEARCH_SIM for physical clocks/TP
 """
 from __future__ import annotations
 
+import logging
 import multiprocessing as mp
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,6 +95,7 @@ def _worker(
         try:
             msg = ctrl_q.get(timeout=2.0)
         except Exception:
+            logger.debug("_worker failed", exc_info=True)
             break
         if msg == "stop":
             break
@@ -155,13 +159,13 @@ class ProcessCluster:
 
     def run(self, *, bft: bool = False, wait_s: float = 0.05) -> ProcessClusterResult:
         ctx = mp.get_context("spawn")
-        vote_q: mp.Queue = ctx.Queue()
-        mirror_q: mp.Queue = ctx.Queue()
-        result_q: mp.Queue = ctx.Queue()
-        ctrls: list[mp.Queue] = []
+        vote_q: mp.Queue[Any] = ctx.Queue()
+        mirror_q: mp.Queue[Any] = ctx.Queue()
+        result_q: mp.Queue[Any] = ctx.Queue()
+        ctrls: list[mp.Queue[Any]] = []
         procs: list[mp.Process] = []
         for i, nid in enumerate(self.node_ids):
-            cq: mp.Queue = ctx.Queue()
+            cq: mp.Queue[Any] = ctx.Queue()
             ctrls.append(cq)
             accept = self.accept_map.get(nid, True)
             # Inject skew on odd nodes if cluster-level skew set
@@ -192,12 +196,12 @@ class ProcessCluster:
                 while True:
                     votes.append(vote_q.get_nowait())
             except Exception:
-                pass
+                logger.debug("run failed", exc_info=True)
             try:
                 while True:
                     mirrors.append(mirror_q.get_nowait())
             except Exception:
-                pass
+                logger.debug("run failed", exc_info=True)
             time.sleep(0.01)
 
         # Measure lag
@@ -246,7 +250,7 @@ class ProcessCluster:
             try:
                 cq.put("stop")
             except Exception:
-                pass
+                logger.debug("run failed", exc_info=True)
         for p in procs:
             p.join(timeout=2.0)
             if p.is_alive():

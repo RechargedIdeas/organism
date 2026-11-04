@@ -148,7 +148,7 @@ class LearnedISE:
         self.agree_threshold = agree_threshold
         self.last_allostatic: AllostaticSignal | None = None
         self._shadow_agreements: list[bool] = []
-        self._revoke_log: list[dict] = []
+        self._revoke_log: list[dict[str, Any]] = []
         self._train_history: list[float] = []
 
     @property
@@ -282,7 +282,7 @@ class LearnedISE:
         self.gate.shadow_validated = False
         self._control_path_active = False
 
-    def revoke(self, *, reason: str = "manual_revoke") -> dict:
+    def revoke(self, *, reason: str = "manual_revoke") -> dict[str, Any]:
         """Revoke control-path authority (alias of demote with audit record)."""
         was_active = self._control_path_active
         self.demote()
@@ -297,7 +297,7 @@ class LearnedISE:
         epochs: int = 5,
         lr: float = 0.1,
         replay_mix: float = 0.25,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Full RL-DCA online training loop over a batch (not a single nudge).
 
         Each epoch: SGD residual update + Danger/PAMP/Safe label refinement,

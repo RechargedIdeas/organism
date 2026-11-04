@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -11,6 +12,8 @@ from typing import Any, Literal
 
 from organism_sdk.generative.assets import AppearanceProfile
 from organism_sdk.generative.skills import SkillDescriptor
+
+logger = logging.getLogger(__name__)
 
 EvolutionKind = Literal[
     "code_draft",
@@ -105,7 +108,7 @@ class OrganismStore:
                     self._active_id = aid
                     return
             except Exception:
-                pass
+                logger.warning("_load_active failed", exc_info=True)
         if self._profiles and self._active_id is None:
             self._active_id = next(iter(self._profiles))
             self._persist_active()
@@ -126,6 +129,7 @@ class OrganismStore:
                 p = OrganismProfile(**{k: raw[k] for k in OrganismProfile.__dataclass_fields__ if k in raw})
                 self._profiles[p.organism_id] = p
             except Exception:
+                logger.warning("_load_all failed", exc_info=True)
                 continue
 
     def create(self, *, display_name: str = "Organism", organism_id: str | None = None, make_active: bool = False) -> OrganismProfile:

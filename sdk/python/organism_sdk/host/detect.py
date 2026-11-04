@@ -5,12 +5,15 @@ macOS/Windows return conservative guesses. CPU Everywhere: no GPU dependency.
 """
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 HostKind = Literal["bare_metal", "vm", "container", "unknown"]
 
@@ -86,29 +89,27 @@ def _detect_container() -> tuple[bool, str | None, list[str]]:
         runtime = "podman"
 
     cgroup = _read_text(Path("/proc/1/cgroup")) or ""
-    if cgroup:
-        if re.search(
-            r"docker|containerd|kubepods|libpod|crio|podman|/pod-[a-z0-9]|pod.slice",
-            cgroup,
-            re.IGNORECASE,
-        ):
-            evidence.append("cgroup:container_marker")
-            if "docker" in cgroup.lower():
-                runtime = runtime or "docker"
-            elif "libpod" in cgroup.lower() or "podman" in cgroup.lower():
-                runtime = "podman"
-            elif "crio" in cgroup.lower():
-                runtime = "cri-o"
-            elif "containerd" in cgroup.lower() or "kubepods" in cgroup.lower() or "/pod-" in cgroup.lower():
-                runtime = runtime or "containerd"
+    if cgroup and re.search(
+        r"docker|containerd|kubepods|libpod|crio|podman|/pod-[a-z0-9]|pod.slice",
+        cgroup,
+        re.IGNORECASE,
+    ):
+        evidence.append("cgroup:container_marker")
+        if "docker" in cgroup.lower():
+            runtime = runtime or "docker"
+        elif "libpod" in cgroup.lower() or "podman" in cgroup.lower():
+            runtime = "podman"
+        elif "crio" in cgroup.lower():
+            runtime = "cri-o"
+        elif "containerd" in cgroup.lower() or "kubepods" in cgroup.lower() or "/pod-" in cgroup.lower():
+            runtime = runtime or "containerd"
 
     # PID 1 is often not init/systemd inside containers
     cmdline = _read_text(Path("/proc/1/cmdline")) or ""
     cmd = cmdline.replace("\x00", " ").strip()
-    if cmd and not re.search(r"(systemd|init|launchd|wininit)", cmd, re.IGNORECASE):
-        # weak signal — only count with other evidence
-        if evidence:
-            evidence.append(f"pid1:{cmd.split()[0] if cmd.split() else cmd[:40]}")
+    # weak signal — only count with other evidence
+    if cmd and not re.search(r"(systemd|init|launchd|wininit)", cmd, re.IGNORECASE) and evidence:
+        evidence.append(f"pid1:{cmd.split()[0] if cmd.split() else cmd[:40]}")
 
     # cgroup namespace hint via /proc/self/cgroup mountinfo
     mountinfo = _read_text(Path("/proc/self/mountinfo")) or ""
@@ -171,7 +172,7 @@ def _detect_vm() -> tuple[bool, str | None, list[str]]:
                 evidence.append("sysctl:vmm")
                 hypervisor = hypervisor or "unknown"
         except Exception:
-            pass
+            logger.debug("_detect_vm failed", exc_info=True)
         try:
             model = subprocess.check_output(
                 ["sysctl", "-n", "hw.model"],
@@ -183,7 +184,7 @@ def _detect_vm() -> tuple[bool, str | None, list[str]]:
                 evidence.append(f"hw.model:{model}")
                 hypervisor = hypervisor or "unknown"
         except Exception:
-            pass
+            logger.debug("_detect_vm failed", exc_info=True)
 
     return bool(evidence), hypervisor, evidence
 

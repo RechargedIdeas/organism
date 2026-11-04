@@ -12,12 +12,15 @@ minimal QColor shim so core (HAL, slime, mycelium, models, metrics) can import.
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HYBRID_ROOT = Path("/workspace/Bio-Digital_Hybrid_Cluster")
 
@@ -77,6 +80,7 @@ def _patch_hybrid_delays(root: Path) -> None:
         const.PHYSARUM_WAVE_PROPAGATION_DELAY = 0.0
         const.MYCELIUM_PROPAGATION_DELAY = 0.0
     except Exception:
+        logger.debug("_patch_hybrid_delays failed", exc_info=True)
         return
     for mod_name in ("src.core.slime_mold", "src.core.mycelium"):
         try:
@@ -86,6 +90,7 @@ def _patch_hybrid_delays(root: Path) -> None:
             if hasattr(mod, "MYCELIUM_PROPAGATION_DELAY"):
                 mod.MYCELIUM_PROPAGATION_DELAY = 0.0
         except Exception:
+            logger.debug("_patch_hybrid_delays failed", exc_info=True)
             continue
 
 
@@ -145,6 +150,7 @@ def load_hybrid(*, force_reload: bool = False) -> HybridBundle:
         from src.core.slime_mold import SlimeMoldNode  # type: ignore
         from src.shared.models import BioLimits, EnvironmentState, NodeStatus  # type: ignore
     except Exception as exc:
+        logger.debug("load_hybrid failed", exc_info=True)
         _CACHE = HybridBundle(
             mode="stub",
             root=root,

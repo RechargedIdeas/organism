@@ -66,6 +66,7 @@ __all__ = [
     "HealthSignals",
     "HealthVector",
     "HormoneBus",
+    "HormoneCoefficients",
     "HormoneLevels",
     "Hypervector",
     "Identity",

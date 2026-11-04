@@ -7,6 +7,7 @@ JSON from a Hybrid /health or /metrics sidecar when available.
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -17,6 +18,8 @@ from organism_sdk.hormone import HormoneBus
 from organism_sdk.workspace import WorkspaceClient
 
 from bio_digital.vendor_loader import load_hybrid
+
+logger = logging.getLogger(__name__)
 
 TELEMETRY_TAG = "bio_telemetry"
 
@@ -191,7 +194,7 @@ class TelemetryBridge:
                 try:
                     snap = MetricsSnapshot.from_mapping(bundle.metrics_mod.get_all_metrics())
                 except Exception:
-                    pass
+                    logger.warning("ingest_metrics failed", exc_info=True)
         probes = {
             "source": "api_metrics",
             "metrics": snap.as_dict(),

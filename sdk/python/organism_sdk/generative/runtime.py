@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -44,6 +45,8 @@ from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
 from organism_sdk.registry import RegistryClient, ShadowValidationRecord
 from organism_sdk.trace import EvolutionTraceEntry, LifecycleTraceEntry, TraceEmitter
+
+logger = logging.getLogger(__name__)
 
 # Wall-clock budgets (ms) for generative pipeline gates — CPU Everywhere.
 # Evolve is platform-specific; see organism_sdk/generative/budgets.py.
@@ -101,9 +104,7 @@ class PipelineTiming:
             return False
         if self.hot_register_ms and self.p95("hot_register") > HOT_REGISTER_P95_MS:
             return False
-        if self.quarantine_ms and self.p95("quarantine") > QUARANTINE_P95_MS:
-            return False
-        return True
+        return not (self.quarantine_ms and self.p95("quarantine") > QUARANTINE_P95_MS)
 
 
 def _make_generated_contract(module_id: str, version: str = "0.1.0"):
@@ -333,7 +334,7 @@ class EvolutionRuntime:
                 try:
                     self.registry.deregister(module_id, drain="immediate", timeout_s=1)
                 except Exception:
-                    pass
+                    logger.debug("hot_register_promoted failed", exc_info=True)
                 self.modules.pop(module_id, None)
 
             mod = GeneratedSkillModule(
@@ -534,7 +535,7 @@ class EvolutionRuntime:
                 try:
                     code_pipeline.demote(bundle.bundle_id, reason=f"immune_{decision.decision.lower()}")
                 except Exception:
-                    pass
+                    logger.warning("_quarantine_with_antigen failed", exc_info=True)
         elapsed = (time.perf_counter() - t0) * 1000.0
         self.timings.record("quarantine", elapsed)
         self.emit_evolution(
@@ -600,6 +601,7 @@ class EvolutionRuntime:
                     self.registry.deregister(module_id, drain="immediate", timeout_s=1)
                     deregistered = True
                 except Exception as exc:
+                    logger.warning("deregister_promoted failed", exc_info=True)
                     return {
                         "deregistered": False,
                         "module_id": module_id,

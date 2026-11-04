@@ -1,9 +1,12 @@
 """Sandbox audit log — optional TraceEmitter integration."""
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 class TraceLike(Protocol):
@@ -60,7 +63,7 @@ class SandboxAuditLog:
                     )
                 )
             except Exception:
-                pass
+                logger.warning("record failed", exc_info=True)
         return event
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:

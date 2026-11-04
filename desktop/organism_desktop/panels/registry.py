@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTextEdit
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, set_json
+
+logger = logging.getLogger(__name__)
 
 
 class RegistryPanel(BasePanel):
@@ -62,6 +66,7 @@ class RegistryPanel(BasePanel):
             result = self.service.register_core_module(kind)  # type: ignore[arg-type]
             set_json(self.detail, result)
         except Exception as e:
+            logger.warning("_register failed", exc_info=True)
             self.detail.setPlainText(f"ERROR: {type(e).__name__}: {e}")
         self.refresh()
 
@@ -78,5 +83,6 @@ class RegistryPanel(BasePanel):
             result = self.service.deregister_module(mid)
             set_json(self.detail, result)
         except Exception as e:
+            logger.warning("_deregister_selected failed", exc_info=True)
             self.detail.setPlainText(f"ERROR: {type(e).__name__}: {e}")
         self.refresh()

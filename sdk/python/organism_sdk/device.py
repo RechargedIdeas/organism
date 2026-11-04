@@ -8,9 +8,12 @@ See ``docs/CPU_EVERYWHERE.md``.
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class RuntimeId(str, Enum):
@@ -100,6 +103,7 @@ def cuda_available() -> bool:
 
         return bool(torch.cuda.is_available())
     except Exception:
+        logger.debug("cuda_available failed", exc_info=True)
         return False
 
 
@@ -135,7 +139,7 @@ def probe_accelerators() -> set[str]:
         if cuda_available():
             found.add(RuntimeId.GPU_CUDA.value)
     except Exception:
-        pass
+        logger.debug("probe_accelerators failed", exc_info=True)
     # ROCm / Metal / NPU: probe softly; absence is fine
     try:
         if torch_available():
@@ -144,7 +148,7 @@ def probe_accelerators() -> set[str]:
             if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
                 found.add(RuntimeId.GPU_METAL.value)
     except Exception:
-        pass
+        logger.debug("probe_accelerators failed", exc_info=True)
     # Neuromorphic silicon: only via ORGANISM_NEURO_SIM (software) or real HW flag
     if os.environ.get("ORGANISM_NEURO_HW", "").strip() in {"1", "true", "TRUE", "yes"}:
         found.add(RuntimeId.NEUROMORPHIC.value)

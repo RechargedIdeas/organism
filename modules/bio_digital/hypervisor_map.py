@@ -6,6 +6,7 @@ control actuation.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -15,6 +16,8 @@ from organism_sdk.module import OrganismModule
 from organism_sdk.registry import RegistryClient
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
+
+logger = logging.getLogger(__name__)
 
 Role = Literal["ACTIVE", "STANDBY", "DEAD", "PROMOTED"]
 
@@ -252,7 +255,7 @@ class HypervisorMapper:
             try:
                 self.drain_module(active_mod)
             except Exception:
-                pass
+                logger.debug("kill_active_mid_flight failed", exc_info=True)
 
         if use_apoptosis and active_mod is not None:
             contract = active_mod.declare_contract()

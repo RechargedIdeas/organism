@@ -66,7 +66,7 @@ class OpsLog:
             self._conn.commit()
             return int(cur.lastrowid)
 
-    def range(self, start: int, end: int | None = None) -> list[tuple]:
+    def range(self, start: int, end: int | None = None) -> list[tuple[Any, ...]]:
         with self._lock:
             if end is None:
                 rows = self._conn.execute(

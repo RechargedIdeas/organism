@@ -1,6 +1,7 @@
 """Process jail — rlimits + optional Linux namespaces; graceful degrade elsewhere."""
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import signal
@@ -12,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from organism_sdk.sandbox.policy import SandboxPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class JailRefused(PermissionError):
@@ -58,6 +61,7 @@ def has_resource_module() -> bool:
 
         return True
     except Exception:
+        logger.debug("has_resource_module failed", exc_info=True)
         return False
 
 
@@ -73,6 +77,7 @@ def capabilities() -> dict[str, Any]:
             libc = ctypes.CDLL("libc.so.6", use_errno=True)
             has_unshare = hasattr(libc, "unshare")
         except Exception:
+            logger.debug("capabilities failed", exc_info=True)
             has_unshare = False
     return {
         "platform": platform.system(),
@@ -101,6 +106,8 @@ def _check_shell_escape(argv: Sequence[str], policy: SandboxPolicy) -> None:
 
 
 def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
+    # Runs in the forked child before exec. Logging there can deadlock on a lock another
+    # thread held at fork time, so a limit that cannot be applied is skipped silently.
     def _preexec() -> None:
         if ns_flags and sys.platform.startswith("linux"):
             try:
@@ -108,7 +115,7 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
 
                 libc = ctypes.CDLL("libc.so.6", use_errno=True)
                 libc.unshare(ns_flags)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if not has_resource_module():
             return
@@ -118,25 +125,25 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
             try:
                 limit = int(policy.max_rss_mb) * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.cpu_time_s and policy.cpu_time_s > 0:
             try:
                 soft = int(policy.cpu_time_s)
                 resource.setrlimit(resource.RLIMIT_CPU, (soft, soft + 1))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_fds and policy.max_fds > 0:
             try:
                 n = int(policy.max_fds)
                 resource.setrlimit(resource.RLIMIT_NOFILE, (n, n))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_nproc and policy.max_nproc > 0 and hasattr(resource, "RLIMIT_NPROC"):
             try:
                 n = int(policy.max_nproc)
                 resource.setrlimit(resource.RLIMIT_NPROC, (n, n))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     return _preexec
@@ -233,10 +240,11 @@ class ProcessJail:
                 stderr=subprocess.PIPE,
                 cwd=workdir,
                 env=child_env,
-                preexec_fn=preexec,
+                preexec_fn=preexec,  # noqa: PLW1509 -- rlimits apply before exec
                 start_new_session=True,
             )
         except Exception as e:
+            logger.warning("run failed", exc_info=True)
             return JailResult(
                 ok=False,
                 stderr=f"spawn_failed:{type(e).__name__}:{e}",
@@ -255,13 +263,15 @@ class ProcessJail:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
             except Exception:
+                logger.debug("run failed", exc_info=True)
                 try:
                     proc.kill()
                 except Exception:
-                    pass
+                    logger.debug("run failed", exc_info=True)
             try:
                 stdout_b, stderr_b = proc.communicate(timeout=2)
             except Exception:
+                logger.debug("run failed", exc_info=True)
                 stdout_b, stderr_b = b"", b""
         duration_ms = (time.perf_counter() - t0) * 1000.0
 

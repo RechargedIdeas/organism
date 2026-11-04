@@ -5,7 +5,7 @@ import hashlib
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
 
 from organism_sdk.contract import (
     ModuleRole,
@@ -43,11 +43,6 @@ _PROMOTE_ORDER = [
     "RETIRED",
 ]
 _EXTENDED_STATES = frozenset({"DEVELOPMENT", "SELF_TERMINATING", "SUCCEEDED", "DEGRADED"})
-
-
-class _Healthable(Protocol):
-    def health(self) -> HealthReport: ...
-    def on_drain(self, deadline: datetime) -> None: ...
 
 
 @dataclass
@@ -177,9 +172,11 @@ class RegistryClient:
             for mid, e in self._modules.items():
                 if filter.roles and e.contract.identity.role not in filter.roles:
                     continue
-                if filter.min_reliability is not None:
-                    if _TIER_RANK[e.contract.safety.reliability_tier] > _TIER_RANK[filter.min_reliability]:
-                        continue
+                if filter.min_reliability is not None and (
+                    _TIER_RANK[e.contract.safety.reliability_tier]
+                    > _TIER_RANK[filter.min_reliability]
+                ):
+                    continue
                 if filter.min_lifecycle_state is not None:
                     def _rank(s: str) -> int:
                         if s == "DEVELOPMENT":
@@ -247,19 +244,17 @@ class RegistryClient:
             fi = _PROMOTE_ORDER.index(from_state)
             ti = _PROMOTE_ORDER.index(to_state)
             if ti != fi + 1 and not test_bypass_validation:
-                if not (from_state == "SHADOW_VALIDATED" and to_state == "DELIBERATION" and test_bypass_validation):
-                    if not test_bypass_validation:
-                        return PromoteResponse(
-                            accepted=False,
-                            validation_issues=[
-                                ValidationIssue(
-                                    Severity.ERROR,
-                                    "invalid_promotion",
-                                    "to_state",
-                                    f"cannot promote {from_state} -> {to_state}",
-                                )
-                            ],
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[
+                        ValidationIssue(
+                            Severity.ERROR,
+                            "invalid_promotion",
+                            "to_state",
+                            f"cannot promote {from_state} -> {to_state}",
                         )
+                    ],
+                )
             entry.state = to_state
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=module_id, from_state=from_state, to_state=to_state, event="promote")

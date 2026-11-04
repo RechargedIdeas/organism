@@ -4,6 +4,7 @@ Safety: bio/wet-lab actuation is hard-refused here. Panels must not bypass.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC
 from pathlib import Path
@@ -57,6 +58,8 @@ from organism_sdk.trace import (
 from organism_sdk.workspace import BindingRecord
 
 from organism_desktop.catalog import catalog_as_dicts, find_entry, instantiate
+
+logger = logging.getLogger(__name__)
 
 DESKTOP_VERSION = "1.10.0"
 
@@ -172,6 +175,7 @@ class DesktopService:
             try:
                 svc.hormone = HormoneBus(stack.workspace)
             except Exception:
+                logger.warning("create failed", exc_info=True)
                 svc.hormone = None
         try:
             svc.immune = ImmuneLayer(workspace=stack.workspace, trace=stack.trace)
@@ -179,6 +183,7 @@ class DesktopService:
             try:
                 svc.immune = ImmuneLayer(stack.workspace)
             except Exception:
+                logger.warning("create failed", exc_info=True)
                 svc.immune = None
         try:
             svc.autonomic = AutonomicController(trace=stack.trace)
@@ -186,12 +191,15 @@ class DesktopService:
             try:
                 svc.autonomic = AutonomicController()
             except Exception:
+                logger.warning("create failed", exc_info=True)
                 svc.autonomic = None
         except Exception:
+            logger.warning("create failed", exc_info=True)
             svc.autonomic = None
         try:
             svc.circadian = CircadianClock()
         except Exception:
+            logger.warning("create failed", exc_info=True)
             svc.circadian = None
         try:
             svc.apoptosis = ApoptosisService(workspace=stack.workspace, trace=stack.trace)
@@ -199,22 +207,27 @@ class DesktopService:
             try:
                 svc.apoptosis = ApoptosisService(workspace=stack.workspace)
             except Exception:
+                logger.warning("create failed", exc_info=True)
                 svc.apoptosis = None
         except Exception:
+            logger.warning("create failed", exc_info=True)
             svc.apoptosis = None
         try:
             svc.learned_ise = LearnedISE()
         except Exception:
+            logger.warning("create failed", exc_info=True)
             svc.learned_ise = None
         try:
             svc.morphogenesis = MorphogenesisTracker()
         except Exception:
+            logger.warning("create failed", exc_info=True)
             svc.morphogenesis = None
         if svc.hormone is not None:
             try:
                 stack.router.attach_hormone_bus(svc.hormone)
             except Exception:
                 # Soft-fail: hormone attachment is optional for bare desktop.
+                logger.warning("create failed", exc_info=True)
                 svc._hormone_attach_error = "attach_hormone_bus unavailable"  # type: ignore[attr-defined]
         svc._register_bio_modules()
         svc._init_hal()
@@ -249,6 +262,7 @@ class DesktopService:
 
             self._hal = BioDigitalHAL(PHYSARUM_LIMITS, node_id="desktop-twin", backend="stub")
         except Exception as exc:
+            logger.debug("_init_hal failed", exc_info=True)
             self._hal = None
             self._bio_register_error = (self._bio_register_error or "") + f";hal:{exc}"
 
@@ -270,6 +284,7 @@ class DesktopService:
                 )
                 self.bio_modules[mid] = mod
         except Exception as exc:
+            logger.debug("_register_bio_modules failed", exc_info=True)
             self._bio_register_error = str(exc)
             self.bio_modules = {
                 k: v for k, v in self.bio_modules.items() if not str(k).startswith("_")
@@ -336,6 +351,7 @@ class DesktopService:
                 "levels_seen": list(result.levels_seen),
             }
         except Exception as exc:
+            logger.warning("soak_snapshot failed", exc_info=True)
             soak_body = {"ok": False, "error": str(exc)}
         soak_body.update(
             {
@@ -362,6 +378,7 @@ class DesktopService:
                     contract = mod.declare_contract()
                     may = bool(getattr(getattr(contract, "safety", None), "may_actuate", False))
             except Exception:
+                logger.debug("list_modules failed", exc_info=True)
                 may = False
             out.append(
                 {
@@ -400,7 +417,7 @@ class DesktopService:
             try:
                 self.stack.registry.deregister(mid, drain="immediate", timeout_s=1)
             except Exception:
-                pass
+                logger.debug("register_core_module failed", exc_info=True)
             self.stack.modules.pop(mid, None)
 
         resp = self.stack.registry.register(
@@ -441,6 +458,7 @@ class DesktopService:
                 for r in ws.read_by_tag([tag]):
                     seen[str(r.binding_id)] = r
             except Exception:
+                logger.warning("_all_bindings failed", exc_info=True)
                 continue
         return list(seen.values())
 
@@ -509,8 +527,9 @@ class DesktopService:
                 as_list = list(raw)[:16]
                 summary["prefix16"] = as_list
                 summary["dim"] = len(list(raw))
-                summary["popcount_prefix"] = sum(bin(int(x)).count("1") for x in as_list[:8])
+                summary["popcount_prefix"] = sum(int(x).bit_count() for x in as_list[:8])
             except Exception as e:
+                logger.warning("hypervector_preview failed", exc_info=True)
                 summary["raw_error"] = str(e)
         digest = hashlib.sha256(str(summary.get("prefix16") or seed).encode()).digest()
         bars = "▁▂▃▄▅▆▇█"
@@ -597,6 +616,7 @@ class DesktopService:
                 elif isinstance(levels, dict):
                     hormones = levels
             except Exception as e:
+                logger.warning("physiology_snapshot failed", exc_info=True)
                 hormones = {"error": str(e)}
         immune: dict[str, Any] = {"available": self.immune is not None}
         if self.immune is not None:
@@ -607,6 +627,7 @@ class DesktopService:
                 try:
                     immune["memory_cells"] = len(mem)
                 except Exception:
+                    logger.warning("physiology_snapshot failed", exc_info=True)
                     immune["memory_cells"] = None
             immune["quarantine_hint"] = "Use Immune demo to ingress antigen → QUARANTINE/SURVEIL"
         auto: dict[str, Any] = {"available": self.autonomic is not None}
@@ -700,7 +721,7 @@ class DesktopService:
             try:
                 self.stack.router.set_level("L1")  # type: ignore[arg-type]
             except Exception:
-                pass
+                logger.warning("simulate_l0_to_l1 failed", exc_info=True)
         return {
             "ok": self.degrade.level == "L1",
             "level": self.degrade.level,
@@ -720,7 +741,7 @@ class DesktopService:
         try:
             self.stack.router.set_level("L0")  # type: ignore[arg-type]
         except Exception:
-            pass
+            logger.warning("reset_physiology_demo failed", exc_info=True)
         return {"level": self.degrade.level, "router_level": self.stack.router.current_level()}
 
 
@@ -779,7 +800,7 @@ class DesktopService:
                     )
                 )
             except Exception:
-                pass
+                logger.warning("run_hormone_timeline failed", exc_info=True)
             row = {
                 "t_s": round(t_s, 3),
                 "window_id": levels.window_id,
@@ -918,7 +939,7 @@ class DesktopService:
         try:
             self.stack.router.set_level(self.degrade.level)  # type: ignore[arg-type]
         except Exception:
-            pass
+            logger.warning("run_degradation_drillbook failed", exc_info=True)
 
         result = {
             "ok": self.degrade.level == target,
@@ -1075,6 +1096,7 @@ class DesktopService:
                 twin["sample"] = self._hal.sample_twin()
             return twin
         except Exception as e:
+            logger.warning("refresh_bio_twin failed", exc_info=True)
             return {"ok": False, "error": str(e)}
 
     def request_bio_actuation(
@@ -1298,6 +1320,7 @@ class DesktopService:
 
                     issues = validate_deploy_config(cfg)
                 except Exception as exc:
+                    logger.warning("list_deploy_profiles failed", exc_info=True)
                     issues = [str(exc)]
                 out.append(
                     {
@@ -1314,6 +1337,7 @@ class DesktopService:
                     }
                 )
             except Exception as exc:
+                logger.warning("list_deploy_profiles failed", exc_info=True)
                 out.append(
                     {
                         "name": p.stem,
@@ -1421,7 +1445,7 @@ class DesktopService:
             try:
                 self.stack.registry.deregister(mid, drain="immediate", timeout_s=1)
             except Exception:
-                pass
+                logger.debug("register_catalog_module failed", exc_info=True)
             self.stack.modules.pop(mid, None)
 
         promote = "EXPLORATION" if entry.research_tier else entry.promote
@@ -1502,6 +1526,7 @@ class DesktopService:
                     }
                 )
             except Exception as exc:
+                logger.warning("run_contract_checks failed", exc_info=True)
                 results.append(
                     {
                         "module_id": mid,
@@ -1545,6 +1570,7 @@ class DesktopService:
                     }
                 )
             except Exception as exc:
+                logger.warning("run_contract_checks failed", exc_info=True)
                 results.append(
                     {
                         "module_id": mid,
@@ -1569,6 +1595,7 @@ class DesktopService:
             cfg = load_deploy_config(p)
             return {"ok": True, "path": str(p), "profile": cfg.profile, "version": cfg.version}
         except Exception as e:
+            logger.warning("validate_deploy_config failed", exc_info=True)
             return {"ok": False, "path": str(p), "error": str(e)}
 
     def ops_info(self) -> dict[str, Any]:
@@ -1715,6 +1742,7 @@ class DesktopService:
                 else:
                     meta["stderr"] = (proc.stderr or "")[:500]
             except Exception as exc:
+                logger.debug("rust_runtime_status failed", exc_info=True)
                 meta["probed"] = True
                 meta["error"] = str(exc)
 
@@ -1722,11 +1750,10 @@ class DesktopService:
         ws_version = None
         if cargo_toml.is_file():
             for line in cargo_toml.read_text(encoding="utf-8", errors="replace").splitlines():
-                if line.strip().startswith("version"):
-                    # first version= under [workspace.package] typically
-                    if '"' in line:
-                        ws_version = line.split('"')[1]
-                        break
+                # first version= under [workspace.package] typically
+                if line.strip().startswith("version") and '"' in line:
+                    ws_version = line.split('"')[1]
+                    break
 
         result = {
             "ok": cargo_toml.is_file() and present > 0,
@@ -2448,6 +2475,7 @@ class DesktopService:
                 try:
                     rows.append(asdict(state))
                 except Exception:
+                    logger.debug("circadian_demo failed", exc_info=True)
                     rows.append({"step": i, "repr": repr(state)})
         out = {"ok": True, "steps": len(rows), "trajectory": rows, "final": rows[-1] if rows else None}
         self._last_circadian = out

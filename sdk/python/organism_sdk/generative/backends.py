@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -263,6 +266,7 @@ class DraftReplayLog:
                     )
                 )
         except Exception:
+            logger.warning("_load failed", exc_info=True)
             self._entries = []
 
     def _save(self) -> None:

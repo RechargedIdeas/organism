@@ -75,11 +75,15 @@ class WorkspaceReader:
 
     def read_by_tag(self, tags: list[str]) -> list[BindingRecord]:
         # IMP-21: requesting tags entirely outside capability scope is a violation
-        if self._read_tags and self._read_tags != {"*"}:
-            if tags and not (set(tags) & self._read_tags):
-                raise CapabilityScopeMissing(
-                    f"read tags {tags} not in capability scope {sorted(self._read_tags)}"
-                )
+        if (
+            self._read_tags
+            and self._read_tags != {"*"}
+            and tags
+            and not (set(tags) & self._read_tags)
+        ):
+            raise CapabilityScopeMissing(
+                f"read tags {tags} not in capability scope {sorted(self._read_tags)}"
+            )
         return self._client.read_by_tag(tags, _scoped_tags=self._read_tags)
 
     def read_by_binding_id(self, binding_id: UUID) -> BindingRecord | None:
@@ -115,22 +119,25 @@ class WorkspaceClient:
 
     def _check_write(self, binding: BindingRecord) -> None:
         # Role cue check is soft in M1: require write_roles non-empty permission if declared
-        if self._write_tags and binding.tags:
-            if not set(binding.tags) & self._write_tags and self._write_tags != {"*"}:
-                raise CapabilityScopeMissing(f"write tags {binding.tags} not in {self._write_tags}")
+        if (
+            self._write_tags
+            and binding.tags
+            and not set(binding.tags) & self._write_tags
+            and self._write_tags != {"*"}
+        ):
+            raise CapabilityScopeMissing(f"write tags {binding.tags} not in {self._write_tags}")
         # IMP-21: immune_decision quarantine/control bindings cannot be forged
         immune_tags = [t for t in binding.tags if t == "immune_decision" or t.startswith("immune_decision/")]
-        if immune_tags:
-            if (
-                binding.fidelity != "FULL"
-                or not binding.affects_control
-                or binding.module_id != "immune_layer"
-                or binding.salience < 1.0
-            ):
-                raise CapabilityScopeMissing(
-                    "immune_forgery: immune_decision requires module_id=immune_layer, "
-                    "fidelity=FULL, affects_control=True, salience>=1.0"
-                )
+        if immune_tags and (
+            binding.fidelity != "FULL"
+            or not binding.affects_control
+            or binding.module_id != "immune_layer"
+            or binding.salience < 1.0
+        ):
+            raise CapabilityScopeMissing(
+                "immune_forgery: immune_decision requires module_id=immune_layer, "
+                "fidelity=FULL, affects_control=True, salience>=1.0"
+            )
 
     def write(self, binding: BindingRecord) -> BindingWriteResult:
         return self.write_batch([binding])[0]

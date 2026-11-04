@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from organism_desktop.panels._widgets import BasePanel, mono_text, set_json
+
+logger = logging.getLogger(__name__)
 
 
 class OpsPanel(BasePanel):
@@ -132,6 +135,7 @@ class OpsPanel(BasePanel):
         try:
             info = self.service.ops_info()
         except Exception as exc:
+            logger.warning("refresh failed", exc_info=True)
             self.view.setPlainText(f"ERROR refreshing ops:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):
@@ -187,6 +191,7 @@ class OpsPanel(BasePanel):
             else:
                 self.refresh()
         except Exception as exc:
+            logger.warning("_switch_profile failed", exc_info=True)
             self.view.setPlainText(f"ERROR switching profile:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):
@@ -200,6 +205,7 @@ class OpsPanel(BasePanel):
             if hasattr(win, "toast"):
                 win.toast(f"Soak OK → {result.get('result_path')}")
         except Exception as exc:
+            logger.warning("_run_soak failed", exc_info=True)
             self.view.setPlainText(f"ERROR soak:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):
@@ -213,6 +219,7 @@ class OpsPanel(BasePanel):
             if hasattr(win, "toast"):
                 win.toast(f"Fuzz OK → {result.get('result_path')}")
         except Exception as exc:
+            logger.warning("_run_fuzz failed", exc_info=True)
             self.view.setPlainText(f"ERROR fuzz:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):
@@ -233,6 +240,7 @@ class OpsPanel(BasePanel):
                     f"packages={meta.get('package_count', '?')}"
                 )
         except Exception as exc:
+            logger.warning("_probe_rust failed", exc_info=True)
             self.view.setPlainText(f"ERROR rust probe:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):
@@ -257,4 +265,5 @@ class OpsPanel(BasePanel):
             if hasattr(win, "toast"):
                 win.toast("Sandbox self-check OK" if ok else "Sandbox self-check failed", error=not ok)
         except Exception as exc:
+            logger.warning("_sandbox_check failed", exc_info=True)
             self.view.setPlainText(f"ERROR sandbox self-check:\n{exc}")

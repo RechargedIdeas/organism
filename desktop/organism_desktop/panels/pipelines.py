@@ -25,7 +25,7 @@ class PipelinesPanel(BasePanel):
     panel_id = "pipelines"
     panel_title = "Router / Pipelines"
 
-    FORMS = [
+    FORMS = (
         "pattern_recognition",
         "temporal_prediction",
         "anomaly_detection",
@@ -39,7 +39,7 @@ class PipelinesPanel(BasePanel):
         "calibration",
         "verification",
         "control_actuation",
-    ]
+    )
 
     def __init__(self, service, parent=None):
         super().__init__(service, parent)
@@ -47,7 +47,7 @@ class PipelinesPanel(BasePanel):
         self.task_id = QLineEdit()
         self.task_id.setPlaceholderText("auto if empty")
         self.form_box = QComboBox()
-        self.form_box.addItems(self.FORMS)
+        self.form_box.addItems(list(self.FORMS))
         self.tier_box = QComboBox()
         self.tier_box.addItems(["research", "low", "medium", "high", "critical"])
         self.tier_box.setCurrentText("medium")

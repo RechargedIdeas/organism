@@ -1,6 +1,11 @@
 """Organism SDK exceptions (A3.1, A3.3, Amendment 3.1)."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from organism_sdk.contract import ValidationIssue
+
 
 class OrganismSDKError(Exception):
     """Base SDK error."""
@@ -42,7 +47,7 @@ class CapabilityScopeMissing(OrganismSDKError):
 class RegistrationRejected(OrganismSDKError):
     """Contract validation failed with ERROR severity."""
 
-    def __init__(self, issues: list) -> None:
+    def __init__(self, issues: list[ValidationIssue]) -> None:
         self.issues = issues
         codes = [getattr(i, "code", str(i)) for i in issues]
         super().__init__(f"registration rejected: {codes}")

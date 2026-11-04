@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from collections.abc import Sequence
@@ -26,6 +27,8 @@ from organism_desktop import __version__
 from organism_desktop.nav import PANELS
 from organism_desktop.panels import PANEL_CLASSES
 from organism_desktop.service import DesktopService
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -143,6 +146,7 @@ class MainWindow(QMainWindow):
             badge.setProperty("organism_id", oid)
             badge.setProperty("display_name", name)
         except Exception as exc:
+            logger.warning("update_organism_badge failed", exc_info=True)
             badge.setText("Active: —")
             badge.setToolTip(f"Organism snapshot unavailable: {exc}")
 
@@ -157,6 +161,7 @@ class MainWindow(QMainWindow):
                     palette = theme.get("palette")
                     qss = theme.get("qss")
                 except Exception:
+                    logger.warning("apply_organism_theme failed", exc_info=True)
                     palette = None
                     qss = None
             if qss is None:
@@ -202,6 +207,7 @@ class MainWindow(QMainWindow):
                 panel.refresh()
             self.toast(f"Refreshed {getattr(panel, 'panel_id', 'panel')}")
         except Exception as exc:
+            logger.warning("refresh_current failed", exc_info=True)
             self.toast(f"Refresh failed: {exc}", error=True)
 
     def refresh_all(self) -> None:
@@ -209,12 +215,14 @@ class MainWindow(QMainWindow):
         try:
             self.service.refresh_bundle()
         except Exception as exc:
+            logger.warning("refresh_all failed", exc_info=True)
             errors.append(f"bundle:{exc}")
         for pid, panel in self._panels.items():
             try:
                 if hasattr(panel, "refresh"):
                     panel.refresh()
             except Exception as exc:
+                logger.warning("refresh_all failed", exc_info=True)
                 errors.append(f"{pid}:{exc}")
         app = QApplication.instance()
         if app is not None:
@@ -282,7 +290,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             win.apply_organism_theme()
         except Exception:
-            pass
+            logger.warning("main failed", exc_info=True)
         if args.screenshot:
             root = Path(__file__).resolve().parents[1]
             out = Path(args.screenshot_dir) if args.screenshot_dir else root / "screenshots"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -178,7 +179,7 @@ class MetamodelTracker:
             raise ValueError(f"cannot sandbox from stage {organ.stage}")
         # Sandbox: run adapter on zero input — must be finite
         s = sum(organ.adapter_weights.values())
-        if not (s == s):  # NaN check
+        if math.isnan(s):
             organ.stage = SynthesisStage.REJECTED
             organ.rejection_reason = "sandbox_nan"
             raise ValueError("sandbox failed: nan weights")

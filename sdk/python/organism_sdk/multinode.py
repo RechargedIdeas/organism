@@ -243,9 +243,8 @@ class MultiNodeCluster:
         live = [n for n in self.nodes.values() if not n.partitioned]
         if len(live) < 2:
             for n in self.nodes.values():
-                if n.partitioned or True:
-                    # All nodes enter quorum-lost safe degrade; partitioned stay isolated
-                    n.degrade = "QUORUM_LOST" if not n.partitioned else "PARTITION_SAFE"
+                # All nodes enter quorum-lost safe degrade; partitioned stay isolated
+                n.degrade = "QUORUM_LOST" if not n.partitioned else "PARTITION_SAFE"
             return OxytocinQuorumResult(
                 agreed=False,
                 oxytocin=0.0,

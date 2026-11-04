@@ -16,7 +16,7 @@ def test_contract_may_actuate_false():
     c = mod.declare_contract()
     assert c.identity.module_id == MODULE_ID
     assert c.safety.may_actuate is False
-    assert MODULE_VERSION.startswith("1.9") or MODULE_VERSION.startswith("1.")
+    assert MODULE_VERSION.startswith(("1.9", "1."))
     c.validate()
 
 

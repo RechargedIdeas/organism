@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import zipfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -21,6 +22,8 @@ from organism_sdk.generative.assets import (
 )
 from organism_sdk.generative.organism import OrganismProfile, OrganismStore
 from organism_sdk.generative.skills import SkillDescriptor, SkillRegistry
+
+logger = logging.getLogger(__name__)
 
 BUNDLE_FORMAT = "organism_bundle_v1"
 BUNDLE_VERSION = "1.8.1"
@@ -89,6 +92,7 @@ def export_organism_bundle(
             try:
                 a = asset_pipeline.assets.get(aid)
             except Exception:
+                logger.warning("export_organism_bundle failed", exc_info=True)
                 a = None
             if a is None:
                 continue
@@ -242,7 +246,7 @@ def import_organism_bundle(
             if isinstance(theme_body.get("palette"), dict):
                 app.palette = dict(theme_body["palette"])
         except Exception:
-            pass
+            logger.warning("import_organism_bundle failed", exc_info=True)
     asset_pipeline.appearance = app
     organism_store.sync_appearance(oid, app)
     organism_store.sync_skills(oid, skill_registry.list_skills())

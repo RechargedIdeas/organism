@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _add_config(p: argparse.ArgumentParser) -> None:
@@ -474,6 +477,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except Exception as e:
+        logger.warning("main failed", exc_info=True)
         _print({"ok": False, "error": f"{type(e).__name__}: {e}"})
         return 1
 

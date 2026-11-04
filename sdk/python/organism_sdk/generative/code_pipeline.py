@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import logging
 import re
 import threading
 import time
@@ -30,6 +31,8 @@ from organism_sdk.generative.backends import (
 from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 from organism_sdk.generative.sandbox import SafeSandbox, SandboxResult
 from organism_sdk.generative.stages import PromoteGate
+
+logger = logging.getLogger(__name__)
 
 
 class CodeStage(str, Enum):
@@ -221,14 +224,14 @@ def _shadow_score(sandbox: SandboxResult) -> tuple[float, ShadowMetrics]:
 class CodePipeline:
     """Production generative code evolution path for Organisms."""
 
-    STAGE_ORDER = [
+    STAGE_ORDER = (
         CodeStage.DRAFT,
         CodeStage.STATIC_OK,
         CodeStage.CONTRACT_OK,
         CodeStage.SANDBOXED,
         CodeStage.SHADOW_SCORED,
         CodeStage.PROMOTED,
-    ]
+    )
 
     def __init__(
         self,
@@ -509,6 +512,7 @@ class CodePipeline:
         try:
             known = json.loads(idx.read_text(encoding="utf-8"))
         except Exception:
+            logger.warning("_reload_promote_stack failed", exc_info=True)
             return
         for bid in known:
             path = self._bundle_state_path(bid)
@@ -517,6 +521,7 @@ class CodePipeline:
             try:
                 raw = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
+                logger.warning("_reload_promote_stack failed", exc_info=True)
                 continue
             if raw.get("promote_stack"):
                 self._promote_stack = list(raw["promote_stack"])
@@ -560,6 +565,7 @@ class CodePipeline:
         try:
             known = json.loads(idx.read_text(encoding="utf-8")) if idx.is_file() else []
         except Exception:
+            logger.warning("_persist failed", exc_info=True)
             known = []
         if b.bundle_id not in known:
             known.append(b.bundle_id)
@@ -574,6 +580,7 @@ class CodePipeline:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
+            logger.warning("_hydrate_bundle failed", exc_info=True)
             return None
         gate_raw = raw.get("gate") or {}
         gate = PromoteGate(
@@ -588,6 +595,7 @@ class CodePipeline:
         try:
             stage = CodeStage(raw.get("stage") or "DRAFT")
         except Exception:
+            logger.warning("_hydrate_bundle failed", exc_info=True)
             stage = CodeStage.DRAFT
         b = CodeBundle(
             bundle_id=bundle_id,
@@ -648,6 +656,4 @@ class CodePipeline:
         p = self._last_timings.get("promote_ms")
         if e is not None and e > self.evolve_budget_ms:
             return False
-        if p is not None and p > self.promote_budget_ms:
-            return False
-        return True
+        return not (p is not None and p > self.promote_budget_ms)
