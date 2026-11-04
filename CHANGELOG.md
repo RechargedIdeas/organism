@@ -1,6 +1,10 @@
 ## [Unreleased] - v1.11 MoA layer (in progress)
 
 ### Added
+- **Work agent design record and pure domain** (v1.12, W0 and W1): `docs/v1.12/WORK_AGENT.md` records the decisions and the
+  principles. `organism_sdk.work` holds the domain types, the admission gate (`admit`), the Ticket stage table
+  (`stage_of`) and the versioned Policy (`policy_version`). The package does no I/O. Gate `work:domain`. The comparison
+  with dsh-superagent and the build-out plan are in `docs/SUPERAGENT_COMPARISON.md`.
 - **MoA layer** (`organism_sdk.moa`): experts with capability descriptors that register as
   `SubstrateContract`s, a capability scorer with a shadow precision gate, VSA-backed
   aggregation with clean-up recovery, tiers T0 to T4 with recovery hysteresis, and a per-query pipeline.

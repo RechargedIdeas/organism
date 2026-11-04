@@ -296,6 +296,11 @@ gates:
     blocking: false
     command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_redteam.py"
 
+  # The work agent's pure domain (v1.12 W1): stage table, admission table, Policy digest and purity.
+  - id: work:domain
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_stage.py sdk/python/tests/test_v112_work_gate.py sdk/python/tests/test_v112_work_policy.py"
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   - id: desktop:smoke
     tier: full
