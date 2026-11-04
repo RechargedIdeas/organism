@@ -15,8 +15,8 @@ model line is designed on this substrate. See the KotMoE pointers in section 7.
 
 ## Current state (2026-11-04)
 
-- **Branch `feat/kotlin-parity`** (committed, **not yet pushed** to `origin`, the owner's private repository. The push was
-  blocked on 2026-11-04 and needs the owner's go. Commits `34c25a2` and `83aac21`):
+- **Branch `feat/kotlin-parity`** (pushed to `origin`, the owner's private repository, at `0a84692`. The first push attempt
+  on 2026-11-04 was blocked, and the retry succeeded):
   - K0 done: Kotlin hypervector and degradation, conformant to the vectors.
   - K1 partly done (commit `34c25a2`): contract validation, lifecycle ladder, synchronized registry, and vectors
     `contract.json` and `lifecycle.json`. K1b is open (section 5).
