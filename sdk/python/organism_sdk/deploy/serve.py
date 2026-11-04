@@ -38,7 +38,7 @@ class StackServer:
         bind_port = stack.config.health.port if port is None else port
 
         class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 parsed = urlparse(self.path)
                 if parsed.path == health_path:
                     body = stack.health_report().to_json()

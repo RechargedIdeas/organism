@@ -136,14 +136,14 @@ def load_hybrid(*, force_reload: bool = False) -> HybridBundle:
 
     shimmed = _ensure_pyside6_shim()
     try:
+        from src.api import metrics as metrics_mod  # type: ignore
         from src.core.hal import (  # type: ignore
             SimulatedGalvanicActuator,
             SimulatedSensorSubsystem,
         )
-        from src.core.slime_mold import SlimeMoldNode  # type: ignore
         from src.core.mycelium import MyceliumNode  # type: ignore
+        from src.core.slime_mold import SlimeMoldNode  # type: ignore
         from src.shared.models import BioLimits, EnvironmentState, NodeStatus  # type: ignore
-        from src.api import metrics as metrics_mod  # type: ignore
     except Exception as exc:
         _CACHE = HybridBundle(
             mode="stub",

@@ -1,2 +1,3 @@
-from reservoir.module import ReservoirModule, MODULE_ID, MODULE_VERSION
-__all__ = ["ReservoirModule", "MODULE_ID", "MODULE_VERSION"]
+from reservoir.module import MODULE_ID, MODULE_VERSION, ReservoirModule
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "ReservoirModule"]

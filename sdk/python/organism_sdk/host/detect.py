@@ -90,7 +90,7 @@ def _detect_container() -> tuple[bool, str | None, list[str]]:
         if re.search(
             r"docker|containerd|kubepods|libpod|crio|podman|/pod-[a-z0-9]|pod.slice",
             cgroup,
-            re.I,
+            re.IGNORECASE,
         ):
             evidence.append("cgroup:container_marker")
             if "docker" in cgroup.lower():
@@ -105,7 +105,7 @@ def _detect_container() -> tuple[bool, str | None, list[str]]:
     # PID 1 is often not init/systemd inside containers
     cmdline = _read_text(Path("/proc/1/cmdline")) or ""
     cmd = cmdline.replace("\x00", " ").strip()
-    if cmd and not re.search(r"(systemd|init|launchd|wininit)", cmd, re.I):
+    if cmd and not re.search(r"(systemd|init|launchd|wininit)", cmd, re.IGNORECASE):
         # weak signal — only count with other evidence
         if evidence:
             evidence.append(f"pid1:{cmd.split()[0] if cmd.split() else cmd[:40]}")

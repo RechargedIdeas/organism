@@ -1,2 +1,3 @@
-from physical_research.module import PhysicalResearchModule, MODULE_ID, MODULE_VERSION
-__all__ = ["PhysicalResearchModule", "MODULE_ID", "MODULE_VERSION"]
+from physical_research.module import MODULE_ID, MODULE_VERSION, PhysicalResearchModule
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "PhysicalResearchModule"]

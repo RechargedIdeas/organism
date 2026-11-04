@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.immune import ImmuneLayer
 from organism_sdk.trace import ImmuneTraceEntry, TraceEmitter, V02TraceSink

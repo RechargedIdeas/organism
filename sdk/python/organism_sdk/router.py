@@ -8,14 +8,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from organism_sdk.contract import ModuleRole, ReliabilityTier
-from organism_sdk.registry import ModuleHandle, RegistryClient
 from organism_sdk.autonomic import RouterExposedParams
 from organism_sdk.hormone import HormoneBus, HormoneReading
+from organism_sdk.registry import ModuleHandle, RegistryClient
 from organism_sdk.trace import RoutingTraceEntry, TraceEmitter
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
@@ -104,7 +103,7 @@ class RouterTask:
     requires_uncertainty: bool = False
     requires_interpretability: bool = False
     requires_determinism: bool = False
-    submitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    submitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, str] = field(default_factory=dict)
 
 

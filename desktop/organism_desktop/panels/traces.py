@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QTableWidget,
-    QVBoxLayout,
 )
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, mono_text, set_json

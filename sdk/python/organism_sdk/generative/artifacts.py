@@ -10,10 +10,9 @@ import os
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
-
 
 ArtifactKind = Literal["code", "asset", "skill", "manifest", "pack"]
 
@@ -132,7 +131,7 @@ class ArtifactStore:
                 parent_digest=parent_digest,
                 backend=backend,
                 stage=stage,
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
                 metadata={**(metadata or {}), "path": str(path), "content_hash": digest},
             )
             self._index.setdefault(aid, []).append(rec)

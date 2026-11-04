@@ -1,2 +1,3 @@
-from neurosymbolic.module import NeurosymbolicVerifier, MODULE_ID, MODULE_VERSION
-__all__ = ["NeurosymbolicVerifier", "MODULE_ID", "MODULE_VERSION"]
+from neurosymbolic.module import MODULE_ID, MODULE_VERSION, NeurosymbolicVerifier
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "NeurosymbolicVerifier"]

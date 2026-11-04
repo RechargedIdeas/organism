@@ -4,8 +4,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QStatusBar,
     QStackedWidget,
+    QStatusBar,
     QVBoxLayout,
     QWidget,
 )

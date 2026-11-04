@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.errors import DimensionMismatch
 from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.snapshot import DurableWorkspace, query_digest

@@ -1,9 +1,9 @@
 """hdc_module — T1 MEMORY: HDC workspace helper / fingerprint beyond Hypervector primitives."""
 from __future__ import annotations
 
-import hashlib
 import json
 
+from _common.contract_factory import make_contract
 from organism_sdk.contract import (
     Determinism,
     JustificationKind,
@@ -18,7 +18,6 @@ from organism_sdk.hypervector import Hypervector
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
-from _common.contract_factory import make_contract
 
 MODULE_ID = "hdc_module"
 MODULE_VERSION = "1.0.0"

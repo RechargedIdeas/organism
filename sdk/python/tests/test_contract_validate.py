@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.contract import (
     CapabilityScopes,
     DataType,

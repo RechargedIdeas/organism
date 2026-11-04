@@ -45,7 +45,7 @@ class SandboxPolicy:
         return d
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> "SandboxPolicy":
+    def from_env(cls, **overrides: Any) -> SandboxPolicy:
         def _f(name: str, default: float) -> float:
             raw = os.environ.get(name)
             return float(raw) if raw not in (None, "") else default
@@ -78,7 +78,7 @@ class SandboxPolicy:
         return base
 
     @classmethod
-    def generative(cls) -> "SandboxPolicy":
+    def generative(cls) -> SandboxPolicy:
         """Tight policy for generative code drafts."""
         return cls.from_env(
             timeout_s=float(os.environ.get("ORGANISM_SANDBOX_TIMEOUT_S", "2") or 2),
@@ -92,7 +92,7 @@ class SandboxPolicy:
         )
 
     @classmethod
-    def self_containment(cls) -> "SandboxPolicy":
+    def self_containment(cls) -> SandboxPolicy:
         """Policy for Organism wrapping its own worker pool / soak / federation children."""
         return cls.from_env(
             timeout_s=float(os.environ.get("ORGANISM_SELF_JAIL_TIMEOUT_S", "600") or 600),

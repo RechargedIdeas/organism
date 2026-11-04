@@ -5,19 +5,15 @@ Safety: bio/wet-lab actuation is hard-refused here. Panels must not bypass.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from organism_sdk import __version__ as sdk_version
-from organism_sdk.autonomic import AutonomicController
-
 from organism_sdk.apoptosis import ApoptosisService
+from organism_sdk.autonomic import AutonomicController
 from organism_sdk.circadian import CircadianClock
-from organism_sdk.learned_ise import LearnedISE
-from organism_sdk.interoceptive import HealthVector
-from organism_sdk.morphogenesis import MorphogenesisTracker
-from organism_sdk.distributed import run_multiprocess_oxytocin
 from organism_sdk.degradation import (
     T_DOWN_FAST,
     T_UP_FAST,
@@ -27,40 +23,40 @@ from organism_sdk.degradation import (
 from organism_sdk.deploy.config import DeployConfig, default_cpu_only_config, load_deploy_config
 from organism_sdk.deploy.stack import MinimalStack, build_minimal_stack
 from organism_sdk.deploy.status_facts import PARITY_KEYS, common_status_facts
-from organism_sdk.device import accelerator_selection_summary, select_compute_backend
-from organism_sdk.hormone import HormoneBus
-from organism_sdk.hypervector import Hypervector
-from organism_sdk.immune import ImmuneLayer
-from organism_sdk.metamodel import MetamodelTracker
+from organism_sdk.device import select_compute_backend
+from organism_sdk.distributed import run_multiprocess_oxytocin
 from organism_sdk.generative import (
     ArtifactStore,
     AssetPipeline,
     CodePipeline,
     DraftReplayLog,
     EvolutionRuntime,
-    LLMStubBackend,
     OrganismStore,
     PromoteRefused,
     SkillRegistry,
-    TemplateDraftBackend,
     export_organism_bundle,
     import_organism_bundle,
     resolve_backend,
     theme_apply_payload,
 )
+from organism_sdk.hormone import HormoneBus
+from organism_sdk.hypervector import Hypervector
+from organism_sdk.immune import ImmuneLayer
+from organism_sdk.interoceptive import HealthVector
+from organism_sdk.learned_ise import LearnedISE
+from organism_sdk.metamodel import MetamodelTracker
+from organism_sdk.morphogenesis import MorphogenesisTracker
 from organism_sdk.registry import CapabilityFilter
 from organism_sdk.router import DispatchPlan, RouterTask
 from organism_sdk.trace import (
     DegradationTraceEntry,
-    EvolutionTraceEntry,
     HormoneTraceEntry,
-    RoutingTraceEntry,
     TraceEmitter,
     V02TraceSink,
 )
 from organism_sdk.workspace import BindingRecord
 
-from organism_desktop.catalog import CATALOG, catalog_as_dicts, find_entry, instantiate
+from organism_desktop.catalog import catalog_as_dicts, find_entry, instantiate
 
 DESKTOP_VERSION = "1.10.0"
 
@@ -149,7 +145,7 @@ class DesktopService:
         cfg: DeployConfig | None = None,
         *,
         config_path: Path | str | None = None,
-    ) -> "DesktopService":
+    ) -> DesktopService:
         path = Path(config_path) if config_path else None
         if cfg is None and path is not None:
             cfg = load_deploy_config(path)
@@ -259,8 +255,8 @@ class DesktopService:
     def _register_bio_modules(self) -> None:
         """Register exploration-only bio modules when importable."""
         try:
-            from bio_digital.slime_mold import SlimeMoldModule
             from bio_digital.mycelium import MyceliumModule
+            from bio_digital.slime_mold import SlimeMoldModule
 
             for mod in (SlimeMoldModule(), MyceliumModule()):
                 c = mod.declare_contract()
@@ -437,7 +433,7 @@ class DesktopService:
     def _all_bindings(self) -> list[Any]:
         ws = self.stack.workspace
         if hasattr(ws, "_bindings"):
-            return list(getattr(ws, "_bindings").values())
+            return list(ws._bindings.values())
         # Fallback: union common desktop tags
         seen: dict[str, Any] = {}
         for tag in ("desktop.demo", "desktop", "*"):
@@ -1757,7 +1753,7 @@ class DesktopService:
     def run_short_soak_harness(self, *, windows: int = 8) -> dict[str, Any]:
         """Trigger a short virtual-clock soak; write JSON under desktop/artifacts/."""
         import json
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from harness.scenarios.v04_soak import run_soak, soak_reconstructibility_ok
 
@@ -1766,7 +1762,7 @@ class DesktopService:
         recon = soak_reconstructibility_ok(result)
         out_dir = self._repo_root / "desktop" / "artifacts"
         out_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         path = out_dir / f"soak_{stamp}.json"
         payload = {
             "kind": "soak",
@@ -1781,7 +1777,7 @@ class DesktopService:
             "hormone_windows": result.hormone_windows,
             "flapping": result.flapping,
             "reconstructible": recon,
-            "written_at": datetime.now(timezone.utc).isoformat(),
+            "written_at": datetime.now(UTC).isoformat(),
         }
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         out = {
@@ -1805,7 +1801,7 @@ class DesktopService:
     def run_short_fuzz_harness(self, *, trials: int = 16) -> dict[str, Any]:
         """Trigger short security fuzz helpers; write JSON under desktop/artifacts/."""
         import json
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from harness.scenarios.v04_security_fuzz import (
             fuzz_immune_forgeries,
@@ -1817,7 +1813,7 @@ class DesktopService:
         forgeries = fuzz_immune_forgeries(trials=trials)
         out_dir = self._repo_root / "desktop" / "artifacts"
         out_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         path = out_dir / f"fuzz_{stamp}.json"
         payload = {
             "kind": "fuzz",
@@ -1830,7 +1826,7 @@ class DesktopService:
                 "trials": forgeries.trials,
                 "rejected_forgeries": forgeries.rejected_forgeries,
             },
-            "written_at": datetime.now(timezone.utc).isoformat(),
+            "written_at": datetime.now(UTC).isoformat(),
         }
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         out = {

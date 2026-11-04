@@ -9,39 +9,41 @@ See docs/integrations/BIO_DIGITAL_HYBRID_CLUSTER.md.
 """
 from __future__ import annotations
 
-from bio_digital.slime_mold import SlimeMoldModule, MODULE_ID as SLIME_MOLD_ID
-from bio_digital.mycelium import MyceliumModule, MODULE_ID as MYCELIUM_ID
-from bio_digital.hal import BioDigitalHAL, research_sim_enabled, RUNTIME_RESEARCH_SIM
 from bio_digital.bus_adapter import BioDigitalBusAdapter, ClusterMessageView
-from bio_digital.twin_bridge import TwinBridge
+from bio_digital.gpu_twin import GpuTwinSimulator, gpu_twin_enabled, run_numpy_wave, torch_available
+from bio_digital.hal import RUNTIME_RESEARCH_SIM, BioDigitalHAL, research_sim_enabled
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
-from bio_digital.vendor_loader import load_hybrid, resolve_hybrid_root, hybrid_root_present
-from bio_digital.telemetry_bridge import TelemetryBridge, NodeStatusView, EnvironmentStateView
-from bio_digital.gpu_twin import GpuTwinSimulator, torch_available, gpu_twin_enabled, run_numpy_wave
+from bio_digital.mycelium import MODULE_ID as MYCELIUM_ID
+from bio_digital.mycelium import MyceliumModule
+from bio_digital.slime_mold import MODULE_ID as SLIME_MOLD_ID
+from bio_digital.slime_mold import SlimeMoldModule
+from bio_digital.telemetry_bridge import EnvironmentStateView, NodeStatusView, TelemetryBridge
+from bio_digital.twin_bridge import TwinBridge
+from bio_digital.vendor_loader import hybrid_root_present, load_hybrid, resolve_hybrid_root
 
 __all__ = [
-    "SlimeMoldModule",
-    "MyceliumModule",
-    "SLIME_MOLD_ID",
     "MYCELIUM_ID",
-    "BioDigitalHAL",
-    "research_sim_enabled",
     "RUNTIME_RESEARCH_SIM",
+    "SLIME_MOLD_ID",
     "BioDigitalBusAdapter",
+    "BioDigitalHAL",
     "ClusterMessageView",
-    "TwinBridge",
     "DrainPolicy",
-    "HypervisorMapper",
-    "load_hybrid",
-    "resolve_hybrid_root",
-    "hybrid_root_present",
-    "TelemetryBridge",
-    "NodeStatusView",
     "EnvironmentStateView",
     "GpuTwinSimulator",
-    "torch_available",
+    "HypervisorMapper",
+    "MyceliumModule",
+    "NodeStatusView",
+    "SlimeMoldModule",
+    "TelemetryBridge",
+    "TwinBridge",
     "gpu_twin_enabled",
+    "hybrid_root_present",
+    "load_hybrid",
+    "research_sim_enabled",
+    "resolve_hybrid_root",
     "run_numpy_wave",
+    "torch_available",
 ]
 
 # v1.4 wet-lab stub (import bio_digital.wetlab explicitly)

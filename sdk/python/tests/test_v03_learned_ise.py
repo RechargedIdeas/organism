@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.interoceptive import HealthVector, viability_f
 from organism_sdk.learned_ise import LearnedISE

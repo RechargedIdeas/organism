@@ -4,8 +4,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
+from _common.contract_factory import make_contract
 from organism_sdk.contract import (
     Determinism,
     JustificationKind,
@@ -19,7 +20,6 @@ from organism_sdk.health import HealthReport
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission, JustificationToken
 from organism_sdk.module import OrganismModule
-from _common.contract_factory import make_contract
 
 MODULE_ID = "energy_hopfield"
 MODULE_VERSION = "1.0.0"

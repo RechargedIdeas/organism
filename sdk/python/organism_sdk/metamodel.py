@@ -11,7 +11,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -32,7 +32,7 @@ class SynthesisStage(str, Enum):
 @dataclass
 class SynthesisRequest:
     spec: dict[str, Any]
-    requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    requested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -67,7 +67,7 @@ class SynthesizedOrgan:
     may_actuate: bool = False
     shadow_pass_rate: float = 0.0
     rejection_reason: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -134,7 +134,7 @@ class MetamodelTracker:
         self.attempts.append(
             {
                 "spec": spec,
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
                 "accepted": False,
                 "reason": "pending",
             }

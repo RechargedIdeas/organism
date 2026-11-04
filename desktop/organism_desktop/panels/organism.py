@@ -8,13 +8,13 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QTableWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, mono_text, set_json
-from PySide6.QtWidgets import QTableWidget
 
 
 class OrganismPanel(BasePanel):

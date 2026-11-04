@@ -6,14 +6,12 @@ import os
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.cli import main
 from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
 from organism_sdk.deploy.stack import build_minimal_stack
 from organism_sdk.deploy.status_facts import enrich_cli_status
 from organism_sdk.host import HOST_KINDS, detect_host
 from organism_sdk.sandbox import (
-    JailRefused,
     OrganismSandbox,
     ProcessJail,
     SandboxPolicy,

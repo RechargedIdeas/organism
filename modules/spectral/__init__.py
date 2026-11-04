@@ -1,2 +1,3 @@
-from spectral.module import SpectralModule, MODULE_ID, MODULE_VERSION
-__all__ = ["SpectralModule", "MODULE_ID", "MODULE_VERSION"]
+from spectral.module import MODULE_ID, MODULE_VERSION, SpectralModule
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "SpectralModule"]

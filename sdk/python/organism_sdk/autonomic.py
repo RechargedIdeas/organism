@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from organism_sdk.trace import AutonomicTraceEntry, TraceEmitter
@@ -58,7 +58,7 @@ class AutonomicController:
     ) -> None:
         self._trace = trace
         self.config = config or AutonomicConfig()
-        self._clock = clock or (lambda: datetime.now(timezone.utc).timestamp())
+        self._clock = clock or (lambda: datetime.now(UTC).timestamp())
         self._lock = threading.RLock()
         self.mode: AutonomicMode = "PARASYMPATHETIC"
         self.params = _params_for_mode(self.mode)

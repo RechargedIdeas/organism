@@ -3,13 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from organism_sdk.contract import DataType, Modality
 from organism_sdk.errors import ModalityUnavailable
-
-if TYPE_CHECKING:
-    from organism_sdk.workspace import WorkspaceReader
 
 
 @dataclass(frozen=True)

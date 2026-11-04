@@ -6,7 +6,6 @@ import time
 
 import pytest
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.hormone import (
     HormoneBus,
     HormoneLevels,

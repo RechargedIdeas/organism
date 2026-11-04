@@ -5,10 +5,8 @@ organism_sdk.generative pipelines; this module is the registry-facing wrapper.
 """
 from __future__ import annotations
 
-import hashlib
 import json
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from _common.contract_factory import make_contract
 from organism_sdk.contract import (
@@ -89,7 +87,7 @@ class GenerativeOrganismModule(OrganismModule):
                 "task_id": input.task_descriptor.task_id,
                 "exploration_only": True,
                 "cpu_everywhere": True,
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
             },
             sort_keys=True,
         ).encode()

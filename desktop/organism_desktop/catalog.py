@@ -5,7 +5,7 @@ RESEARCH_TIER modules are exploration / sim-only (never may_actuate=True via Des
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass(frozen=True)

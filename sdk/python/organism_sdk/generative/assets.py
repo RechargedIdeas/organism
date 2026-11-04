@@ -10,16 +10,14 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import json
-import math
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from organism_sdk.generative.artifacts import ArtifactStore
-
 
 AssetKind = Literal["avatar", "skin", "icon", "theme"]
 
@@ -60,7 +58,7 @@ class GeneratedAsset:
     research_tier: bool = True
     preview_bytes: bytes = b""
     validation_errors: list[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -120,7 +118,7 @@ class AssetPack:
     content_hash: str = ""
     stage: str = "GENERATED"
     research_tier: bool = True
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -163,9 +161,7 @@ def _palette_from_brief(brief: str) -> dict[str, str]:
     bg = colorsys.hsv_to_rgb(h, 0.15, 0.18)
 
     def hexify(rgb: tuple[float, float, float]) -> str:
-        return "#{:02x}{:02x}{:02x}".format(
-            int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
-        )
+        return f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
 
     palette = {
         "primary": hexify(primary),
@@ -494,7 +490,7 @@ class AssetPipeline:
                 "format": a.format,
                 "path": str(path),
                 "brief": a.brief[:500],
-                "staged_at": datetime.now(timezone.utc).isoformat(),
+                "staged_at": datetime.now(UTC).isoformat(),
                 "research_tier": True,
                 "preview_len": len(a.preview_bytes),
             }

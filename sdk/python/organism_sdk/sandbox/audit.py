@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 
@@ -23,7 +23,7 @@ class SandboxAuditEvent:
     degraded: list[str] = field(default_factory=list)
     duration_ms: float | None = None
     emitted_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def as_dict(self) -> dict[str, Any]:

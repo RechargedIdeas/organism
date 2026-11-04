@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable
 
 
 class RuntimeId(str, Enum):
@@ -157,8 +156,7 @@ def cpu_can_host(hardware_requirement: str | None) -> bool:
     hw = (hardware_requirement or "NONE").upper()
     if hw in {"", "UNSPECIFIED", "HW_UNSPECIFIED", "HW_NONE"}:
         return True
-    if hw.startswith("HW_"):
-        hw = hw[3:]
+    hw = hw.removeprefix("HW_")
     return hw in CPU_HOSTABLE_HARDWARE
 
 

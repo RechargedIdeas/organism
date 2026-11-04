@@ -10,7 +10,7 @@ process. See ``docs/CPU_EVERYWHERE.md``.
 from __future__ import annotations
 
 import os
-from typing import Iterable
+from collections.abc import Iterable
 
 from organism_sdk.device import RuntimeId, select_compute_backend
 

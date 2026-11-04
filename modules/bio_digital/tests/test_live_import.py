@@ -1,11 +1,14 @@
 """Phase 1 — live Hybrid import vs stub fallback."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
+from bio_digital.hal import BioDigitalHAL
+from bio_digital.limits import MYCELIUM_LIMITS, PHYSARUM_LIMITS
+from bio_digital.mycelium import MyceliumModule
+from bio_digital.slime_mold import SlimeMoldModule
 from bio_digital.vendor_loader import (
     DEFAULT_HYBRID_ROOT,
     clear_hybrid_cache,
@@ -13,10 +16,6 @@ from bio_digital.vendor_loader import (
     load_hybrid,
     resolve_hybrid_root,
 )
-from bio_digital.hal import BioDigitalHAL
-from bio_digital.limits import PHYSARUM_LIMITS, MYCELIUM_LIMITS
-from bio_digital.slime_mold import SlimeMoldModule
-from bio_digital.mycelium import MyceliumModule
 
 
 @pytest.fixture(autouse=True)

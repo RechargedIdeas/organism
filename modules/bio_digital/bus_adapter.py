@@ -8,15 +8,17 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import Any
 
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.trace import TraceEmitter, WorkspaceTraceEntry
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
-from bio_digital.mycelium import MyceliumModule, MODULE_ID as MYCELIUM_ID
-from bio_digital.slime_mold import SlimeMoldModule, MODULE_ID as SLIME_ID
+from bio_digital.mycelium import MODULE_ID as MYCELIUM_ID
+from bio_digital.mycelium import MyceliumModule
+from bio_digital.slime_mold import MODULE_ID as SLIME_ID
+from bio_digital.slime_mold import SlimeMoldModule
 
 CHANNEL_ONLY = frozenset(
     {"HEARTBEAT", "STATE_UPDATE", "PROMOTE", "DEMOTE", "SHUTDOWN"}
@@ -116,7 +118,7 @@ class BioDigitalBusAdapter:
             "payload_type": message.payload_type,
             "source": message.source_node,
             "target": message.target_node,
-            "at": datetime.now(timezone.utc).isoformat(),
+            "at": datetime.now(UTC).isoformat(),
         }
         self.channel_log.append(entry)
 

@@ -5,7 +5,7 @@ import hashlib
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -24,7 +24,7 @@ class BindingRecord:
     module_id: str = ""
     salience: float = 1.0
     fidelity: str = "FULL"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: bytes = b""
     # IMP-8 (v0.2): optional semantic payload for hormone_state / immune_decision / etc.
     payload: dict[str, Any] | None = None
@@ -68,7 +68,7 @@ class BindingWriteResult:
 class WorkspaceReader:
     """Capability-scoped read view handed to PerceptionInput."""
 
-    def __init__(self, client: "WorkspaceClient", *, read_roles: tuple[str, ...], read_tags: tuple[str, ...]) -> None:
+    def __init__(self, client: WorkspaceClient, *, read_roles: tuple[str, ...], read_tags: tuple[str, ...]) -> None:
         self._client = client
         self._read_roles = set(read_roles)
         self._read_tags = set(read_tags)

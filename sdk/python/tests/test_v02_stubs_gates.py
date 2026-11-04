@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.interoceptive import HealthVector

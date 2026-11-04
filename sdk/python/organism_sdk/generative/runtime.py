@@ -12,7 +12,7 @@ import json
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from organism_sdk.contract import (
@@ -28,7 +28,12 @@ from organism_sdk.contract import (
     UncertaintyKind,
 )
 from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
-from organism_sdk.generative.code_pipeline import CodeBundle, CodePipeline, CodeStage, PromoteRefused
+from organism_sdk.generative.code_pipeline import (
+    CodeBundle,
+    CodePipeline,
+    CodeStage,
+    PromoteRefused,
+)
 from organism_sdk.generative.skills import SkillDescriptor
 from organism_sdk.health import HealthReport
 from organism_sdk.hormone import HormoneBus, HormoneLevels
@@ -186,7 +191,7 @@ class GeneratedSkillModule(OrganismModule):
                 "research_tier": True,
                 "may_actuate": False,
                 "cpu_everywhere": True,
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
             },
             sort_keys=True,
         ).encode()

@@ -6,8 +6,8 @@ control actuation.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
@@ -27,7 +27,7 @@ class DrainPolicy:
     abandon_in_flight: bool = False
 
     def deadline(self, now: datetime | None = None) -> datetime:
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         return now + timedelta(seconds=self.drain_timeout_s)
 
 
@@ -280,7 +280,7 @@ class HypervisorMapper:
                 self.standby_id, self.active_id, pass_rate=1.0
             )
             # Force shadow ok if service requires prior certificate path
-            self.apoptosis._shadow_ok[self.standby_id] = True  # noqa: SLF001
+            self.apoptosis._shadow_ok[self.standby_id] = True
             promo = self.apoptosis.promote_successor(self.standby_id)
             if promo.promoted:
                 old = self.active_id

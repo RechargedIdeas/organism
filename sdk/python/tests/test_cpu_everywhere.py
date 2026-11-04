@@ -1,10 +1,6 @@
 """v1.3 — CPU-everywhere product guarantee (cpu:everywhere gate)."""
 from __future__ import annotations
 
-import os
-
-import pytest
-
 from organism_sdk.device import (
     CPU_HOSTABLE_HARDWARE,
     RuntimeId,
@@ -18,8 +14,8 @@ from organism_sdk.device import (
 from organism_sdk.neuro_sim import (
     CPU_RESEARCH_SIM_BACKEND,
     hardware_caps_with_sim,
-    neuromorphic_cpu_backend,
     neuro_sim_enabled,
+    neuromorphic_cpu_backend,
 )
 
 
@@ -73,8 +69,8 @@ def test_neuro_sim_caps_additive(monkeypatch):
 
 
 def test_snn_spike_sim_runs_on_cpu_without_hw():
-    from snn_sentinel.module import SNNSentinel
     from organism_sdk.workspace import WorkspaceClient
+    from snn_sentinel.module import SNNSentinel
 
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     snn = SNNSentinel(workspace=ws, hardware_present=False)
@@ -99,8 +95,8 @@ def test_gpu_twin_wave_on_cpu_under_prefer(monkeypatch):
 
 
 def test_bio_modules_may_actuate_false():
-    from bio_digital.slime_mold import SlimeMoldModule
     from bio_digital.mycelium import MyceliumModule
+    from bio_digital.slime_mold import SlimeMoldModule
 
     for mod in (SlimeMoldModule(), MyceliumModule()):
         c = mod.declare_contract()

@@ -4,10 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import struct
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
+from _common.contract_factory import make_contract
 from organism_sdk.contract import (
     DegradationKind,
     Determinism,
@@ -22,7 +22,6 @@ from organism_sdk.health import HealthReport
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission, JustificationToken
 from organism_sdk.module import OrganismModule
-from _common.contract_factory import make_contract
 
 MODULE_ID = "kernel_module"
 MODULE_VERSION = "1.0.0"

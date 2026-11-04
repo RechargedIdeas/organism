@@ -7,6 +7,7 @@ import json
 from dataclasses import replace
 from typing import Any, Literal
 
+from _common.contract_factory import make_contract
 from organism_sdk.contract import (
     BudgetClass,
     Channel,
@@ -27,7 +28,6 @@ from organism_sdk.health import HealthReport
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
-from _common.contract_factory import make_contract
 
 from bio_digital.hal import BioDigitalHAL
 from bio_digital.limits import PHYSARUM_LIMITS, PHYSARUM_LOGIC_VOLTAGE, SPECIES_PHYSARUM

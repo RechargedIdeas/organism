@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.deploy.config import default_cpu_only_config
 from organism_sdk.deploy.stack import build_minimal_stack
 from organism_sdk.generative import (

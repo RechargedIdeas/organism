@@ -9,12 +9,11 @@ import hashlib
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from organism_sdk.generative.artifacts import ArtifactStore
 from organism_sdk.generative.code_pipeline import CodeBundle, CodePipeline, PromoteRefused
-
 
 SkillSource = Literal["seed", "generated", "improved", "promoted", "metamodel"]
 
@@ -34,8 +33,8 @@ class SkillDescriptor:
     depends_on: tuple[str, ...] = ()
     shadow_score: float = 0.0
     version_history: list[dict[str, Any]] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -234,7 +233,7 @@ class SkillRegistry:
         skill.skill_id = existing.skill_id
         skill.version = _bump_version(existing.version)
         skill.source = "improved" if not bundle.may_control else "promoted"
-        skill.updated_at = datetime.now(timezone.utc).isoformat()
+        skill.updated_at = datetime.now(UTC).isoformat()
         skill.shadow_score = bundle.shadow_score
         self.register(skill)
         return skill, bundle
@@ -316,7 +315,7 @@ class SkillRegistry:
         skill.proficiency = max(skill.proficiency, bundle.shadow_score)
         skill.shadow_score = max(skill.shadow_score, bundle.shadow_score)
         skill.version = _bump_version(skill.version)
-        skill.updated_at = datetime.now(timezone.utc).isoformat()
+        skill.updated_at = datetime.now(UTC).isoformat()
         self.register(skill)
         return skill
 

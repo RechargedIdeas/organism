@@ -1,7 +1,7 @@
 """Phase 2 — Hybrid telemetry → HealthReport probes + hormone stress."""
 from __future__ import annotations
 
-from organism_sdk.hormone import HormoneBus, HORMONE_STATE_TAG
+from organism_sdk.hormone import HORMONE_STATE_TAG, HormoneBus
 from organism_sdk.workspace import WorkspaceClient
 
 from bio_digital.telemetry_bridge import (

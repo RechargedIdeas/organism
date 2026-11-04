@@ -1,22 +1,20 @@
 """v0.4-M3 security fuzz against trust model / fault matrix."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-
 from deterministic_engine.engine import DeterministicEngine
-from harness.scenarios.v04_security_fuzz import (
-    _UnjustifiedActuator,
-    fuzz_immune_forgeries,
-    fuzz_malformed_contracts,
-    malformed_contract_empty_identity,
-    malformed_contract_required_modality_undeclared,
-)
 from learned_module.module import LearnedModule
 from organism_sdk.contract import Modality, Severity
-from organism_sdk.degradation import BYZ_COUNT_L4, DegradationMachine, FaultInjector, HealthSignals, T_DOWN_FAST
+from organism_sdk.degradation import (
+    BYZ_COUNT_L4,
+    T_DOWN_FAST,
+    DegradationMachine,
+    FaultInjector,
+    HealthSignals,
+)
 from organism_sdk.errors import CapabilityScopeMissing, JustificationMissing, RegistrationRejected
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.immune import ImmuneLayer, validate_control_binding
@@ -25,6 +23,14 @@ from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
+
+from harness.scenarios.v04_security_fuzz import (
+    _UnjustifiedActuator,
+    fuzz_immune_forgeries,
+    fuzz_malformed_contracts,
+    malformed_contract_empty_identity,
+    malformed_contract_required_modality_undeclared,
+)
 
 
 def test_malformed_contracts_rejected():
@@ -57,7 +63,7 @@ def test_untrusted_learned_control_without_justification_rejected():
             form="control_actuation",
             safety_tier="high",
             deadline_ms=1000,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=800.0,

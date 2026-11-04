@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -8,8 +7,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QTableWidget,
-    QVBoxLayout,
-    QWidget,
 )
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, mono_text, set_json

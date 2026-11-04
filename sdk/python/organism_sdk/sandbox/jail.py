@@ -7,10 +7,11 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
-from organism_sdk.sandbox.policy import SHELL_ESCAPE_PATTERNS, SandboxPolicy
+from organism_sdk.sandbox.policy import SandboxPolicy
 
 
 class JailRefused(PermissionError):

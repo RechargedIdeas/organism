@@ -4,7 +4,6 @@ from __future__ import annotations
 from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
-from organism_sdk.trace import TraceEmitter
 
 
 def _reg_with_engine():

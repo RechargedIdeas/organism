@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTextEdit
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, set_json
-from PySide6.QtWidgets import QTextEdit
 
 
 class RegistryPanel(BasePanel):

@@ -7,8 +7,8 @@ from organism_desktop.panels.contracts import ContractsPanel
 from organism_desktop.panels.docs import DocsPanel
 from organism_desktop.panels.home import HomePanel
 from organism_desktop.panels.metamodel import MetamodelPanel
-from organism_desktop.panels.organism import OrganismPanel
 from organism_desktop.panels.ops import OpsPanel
+from organism_desktop.panels.organism import OrganismPanel
 from organism_desktop.panels.physiology import PhysiologyPanel
 from organism_desktop.panels.pipelines import PipelinesPanel
 from organism_desktop.panels.registry import RegistryPanel

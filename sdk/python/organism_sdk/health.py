@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class HealthReport:
     score: float = 1.0
     active_failures: list[dict[str, Any]] = field(default_factory=list)
     probes: dict[str, Any] = field(default_factory=dict)
-    observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    observed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_json(self) -> bytes:
         payload = {
@@ -70,7 +70,7 @@ class HealthServer:
         path = self._path
 
         class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 parsed = urlparse(self.path)
                 if parsed.path != path:
                     self.send_response(404)

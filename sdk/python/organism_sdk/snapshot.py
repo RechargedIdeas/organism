@@ -9,15 +9,14 @@ import json
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import UUID
 
 from organism_sdk.errors import DimensionMismatch
 from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ops (
@@ -62,7 +61,7 @@ class OpsLog:
         with self._lock:
             cur = self._conn.execute(
                 "INSERT INTO ops(op, binding_id, payload, checksum, at) VALUES (?,?,?,?,?)",
-                (op, binding_id, payload, checksum, datetime.now(timezone.utc).isoformat()),
+                (op, binding_id, payload, checksum, datetime.now(UTC).isoformat()),
             )
             self._conn.commit()
             return int(cur.lastrowid)
@@ -240,16 +239,16 @@ class DurableWorkspace:
         for blob in obj["bindings"]:
             rec = _binding_from_payload(blob.encode() if isinstance(blob, str) else blob)
             # Direct insert bypassing capability (trusted replay)
-            ws._bindings[rec.binding_id] = rec  # noqa: SLF001
+            ws._bindings[rec.binding_id] = rec
         start = ops_from if ops_from is not None else obj.get("seq_end", 0) + 1
         for seq, op, bid, payload, checksum in self.ops.range(start):
             if op == "WRITE":
                 rec = _binding_from_payload(payload)
                 if rec.checksum and rec.checksum != checksum:
                     raise RuntimeError(f"replay mismatch at sequence {seq}")
-                ws._bindings[rec.binding_id] = rec  # noqa: SLF001
+                ws._bindings[rec.binding_id] = rec
             elif op == "UNBIND":
-                ws._bindings.pop(UUID(bid), None)  # noqa: SLF001
+                ws._bindings.pop(UUID(bid), None)
         return ws
 
     def crash_recover(self) -> WorkspaceClient:
@@ -258,9 +257,9 @@ class DurableWorkspace:
         for seq, op, bid, payload, checksum in self.ops.range(1):
             if op == "WRITE":
                 rec = _binding_from_payload(payload)
-                ws._bindings[rec.binding_id] = rec  # noqa: SLF001
+                ws._bindings[rec.binding_id] = rec
             elif op == "UNBIND":
-                ws._bindings.pop(UUID(bid), None)  # noqa: SLF001
+                ws._bindings.pop(UUID(bid), None)
         self.ws = ws
         return ws
 

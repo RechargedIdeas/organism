@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import struct
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from organism_sdk.contract import DataType, Modality, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.workspace import WorkspaceClient
+
 from reservoir.module import ReservoirModule
 
 
@@ -31,7 +32,7 @@ def test_reservoir_fit_and_step():
         },
         task_descriptor=TaskDescriptor(
             task_id="r1", form="prediction", safety_tier="medium",
-            deadline_ms=500, submitted_at=datetime.now(timezone.utc),
+            deadline_ms=500, submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,

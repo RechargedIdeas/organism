@@ -9,14 +9,18 @@ import hashlib
 import json
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from organism_sdk.generative.assets import AppearanceProfile, AssetPipeline, GeneratedAsset, AssetStage
+from organism_sdk.generative.assets import (
+    AppearanceProfile,
+    AssetPipeline,
+    AssetStage,
+    GeneratedAsset,
+)
 from organism_sdk.generative.organism import OrganismProfile, OrganismStore
 from organism_sdk.generative.skills import SkillDescriptor, SkillRegistry
-
 
 BUNDLE_FORMAT = "organism_bundle_v1"
 BUNDLE_VERSION = "1.8.1"
@@ -28,7 +32,7 @@ class BundleManifest:
     version: str = BUNDLE_VERSION
     organism_id: str = ""
     display_name: str = ""
-    exported_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    exported_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     skill_count: int = 0
     asset_count: int = 0
     content_hash: str = ""
@@ -249,7 +253,7 @@ def import_organism_bundle(
             p.evolution_log = list(profile_raw["evolution_log"])
         if profile_raw.get("code_revisions"):
             p.code_revisions = list(profile_raw["code_revisions"])
-        p.updated_at = datetime.now(timezone.utc).isoformat()
+        p.updated_at = datetime.now(UTC).isoformat()
         organism_store._save(p)
     organism_store.log(
         oid,

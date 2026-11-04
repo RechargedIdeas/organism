@@ -5,7 +5,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from organism_sdk.hypervector import Hypervector
@@ -27,7 +27,7 @@ class MemoryCell:
 
     def record(self, action: str, success: bool, recovery_s: float) -> None:
         self.response_history.append({"action": action, "success": success, "recovery_s": recovery_s})
-        self.last_match_at = datetime.now(timezone.utc)
+        self.last_match_at = datetime.now(UTC)
 
 
 @dataclass

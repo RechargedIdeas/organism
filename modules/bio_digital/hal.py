@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from bio_digital.limits import BioLimits
@@ -161,6 +161,6 @@ class BioDigitalHAL:
             "co2_ppm": env.co2_ppm,
             "is_healthy": env.is_healthy,
             "electrodes": dict(self._electrodes),
-            "sampled_at": datetime.now(timezone.utc).isoformat(),
+            "sampled_at": datetime.now(UTC).isoformat(),
             "affects_control": False,
         }

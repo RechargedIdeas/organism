@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
 from organism_sdk.contract import ReliabilityTier as RT
 from organism_sdk.trace import TraceEmitter, V02TraceSink

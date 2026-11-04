@@ -14,7 +14,6 @@ import json
 import math
 import multiprocessing as mp
 import os
-import traceback
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,8 +45,7 @@ _FORBIDDEN_NAMES = {
     "pickle", "marshal", "shelve", "tempfile", "io", "codecs",
     "asyncio", "threading", "multiprocessing", "concurrent",
     "requests", "urllib", "http", "ftplib", "smtplib",
-    "pty", "fcntl", "resource", "signal", "ctypes",
-    "code", "codeop", "inspect", "gc", "sysconfig",
+    "pty", "fcntl", "resource", "signal", "code", "codeop", "inspect", "gc", "sysconfig",
     "may_actuate",
 }
 

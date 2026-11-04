@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import struct
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from deterministic_engine.engine import DeterministicEngine
-from learned_module.module import KernelBoundVerifier, LearnedModule
 from organism_sdk.contract import DataType, Modality, ReliabilityTier, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
-from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask
 from organism_sdk.workspace import WorkspaceClient
+
+from learned_module.module import KernelBoundVerifier, LearnedModule
 
 
 def test_learned_registers_t2_calibrated():
@@ -48,7 +48,7 @@ def test_kernel_bound_cross_check_for_high_control():
             form="control_actuation",
             safety_tier="high",
             deadline_ms=1000,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=800.0,

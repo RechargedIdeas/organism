@@ -2,21 +2,20 @@
 from __future__ import annotations
 
 import json
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import pytest
-
+from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.contract import DataType, MaxSafetyTier, Modality, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.neuro_sim import hardware_caps_with_sim, neuro_sim_enabled
-from organism_sdk.registry import CapabilityFilter, RegistryClient
+from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
 from organism_sdk.workspace import WorkspaceClient
-from physical_research.module import PhysicalResearchModule, MODULE_ID
-from snn_sentinel.module import SNNSentinel, MODULE_ID as SNN_ID
-from deterministic_engine.engine import DeterministicEngine
+from snn_sentinel.module import MODULE_ID as SNN_ID
+from snn_sentinel.module import SNNSentinel
+
+from physical_research.module import PhysicalResearchModule
 
 
 def test_physical_contract_research_only():
@@ -39,7 +38,7 @@ def test_physical_refuses_control_actuation():
         },
         task_descriptor=TaskDescriptor(
             task_id="p1", form="control_actuation", safety_tier="research",
-            deadline_ms=500, submitted_at=datetime.now(timezone.utc),
+            deadline_ms=500, submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,
@@ -62,7 +61,7 @@ def test_physical_exploration_emits_hypothesis():
         },
         task_descriptor=TaskDescriptor(
             task_id="p2", form="exploration", safety_tier="research",
-            deadline_ms=500, submitted_at=datetime.now(timezone.utc),
+            deadline_ms=500, submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,

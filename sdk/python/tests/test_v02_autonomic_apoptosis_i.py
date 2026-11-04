@@ -5,9 +5,8 @@ from dataclasses import replace
 
 import pytest
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
-from organism_sdk.autonomic import AutonomicController, AutonomicConfig, RouterExposedParams
+from organism_sdk.autonomic import AutonomicConfig, AutonomicController, RouterExposedParams
 from organism_sdk.contract import ReliabilityTier as RT
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask

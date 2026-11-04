@@ -1,13 +1,12 @@
 """M2 exit: register/query/promote round-trip; workspace bind/unbind exactness."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from deterministic_engine.engine import DeterministicEngine
+from organism_sdk.contract import ModuleRole
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.registry import CapabilityFilter, RegistryClient, ShadowValidationRecord
-from organism_sdk.contract import ModuleRole
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 

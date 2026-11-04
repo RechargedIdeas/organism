@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import concurrent.futures
-import json
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.generative import (
     ArtifactStore,
     AssetPipeline,
@@ -367,9 +365,9 @@ def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore):
 
 
 def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path):
-    from organism_sdk.generative.runtime import EvolutionRuntime, EVOLVE_P95_MS
+    from organism_sdk.generative.runtime import EVOLVE_P95_MS, EvolutionRuntime
     from organism_sdk.registry import RegistryClient
-    from organism_sdk.trace import TraceEmitter, EvolutionTraceEntry
+    from organism_sdk.trace import EvolutionTraceEntry, TraceEmitter
 
     pipe = CodePipeline(art)
     reg = RegistryClient()
@@ -407,12 +405,12 @@ def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path):
 
 
 def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
+    import sys
+
     from organism_sdk.generative.runtime import EvolutionRuntime
     from organism_sdk.immune import ImmuneLayer
-    from organism_sdk.workspace import WorkspaceClient
     from organism_sdk.trace import TraceEmitter, V02TraceSink
-
-    import sys
+    from organism_sdk.workspace import WorkspaceClient
     root = Path(__file__).resolve().parents[3]
     mods = str(root / "modules")
     if mods not in sys.path:
@@ -442,13 +440,13 @@ def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
 
 
 def test_hormone_pulse_on_promote(art: ArtifactStore):
+    import sys
+
     from organism_sdk.generative.runtime import EvolutionRuntime
     from organism_sdk.hormone import HormoneBus, HormoneLevels
     from organism_sdk.registry import RegistryClient
     from organism_sdk.trace import TraceEmitter, V02TraceSink
     from organism_sdk.workspace import WorkspaceClient
-
-    import sys
     root = Path(__file__).resolve().parents[3]
     mods = str(root / "modules")
     if mods not in sys.path:

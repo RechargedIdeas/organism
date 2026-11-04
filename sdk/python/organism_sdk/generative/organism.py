@@ -5,13 +5,12 @@ import json
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from organism_sdk.generative.assets import AppearanceProfile
 from organism_sdk.generative.skills import SkillDescriptor
-
 
 EvolutionKind = Literal[
     "code_draft",
@@ -62,8 +61,8 @@ class OrganismProfile:
     appearance: dict[str, Any] = field(default_factory=dict)
     code_revisions: list[dict[str, Any]] = field(default_factory=list)
     evolution_log: list[dict[str, Any]] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -213,7 +212,7 @@ class OrganismStore:
                 event_id=uuid.uuid4().hex[:12],
                 kind=kind,
                 summary=summary,
-                at=datetime.now(timezone.utc).isoformat(),
+                at=datetime.now(UTC).isoformat(),
                 payload=payload or {},
             )
             p.evolution_log.append(ev.as_dict())
@@ -225,7 +224,7 @@ class OrganismStore:
         with self._lock:
             p = self._require(organism_id)
             p.skills = [s.as_dict() if hasattr(s, "as_dict") else dict(s) for s in skills]
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 
@@ -233,7 +232,7 @@ class OrganismStore:
         with self._lock:
             p = self._require(organism_id)
             p.appearance = appearance.as_dict() if hasattr(appearance, "as_dict") else dict(appearance)
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 
@@ -249,10 +248,10 @@ class OrganismStore:
                     "shadow_metrics": bundle.get("shadow_metrics"),
                     "backend": bundle.get("backend"),
                     "stage_progress": bundle.get("stage_progress"),
-                    "at": datetime.now(timezone.utc).isoformat(),
+                    "at": datetime.now(UTC).isoformat(),
                 }
             )
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 

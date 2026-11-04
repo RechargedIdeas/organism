@@ -9,15 +9,15 @@ v1.7.2: wall-clock evolve/promote budgets recorded on last_timings.
 from __future__ import annotations
 
 import ast
-import json
 import hashlib
+import json
 import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from organism_sdk.generative.artifacts import ArtifactStore, ProvenanceRecord
@@ -88,7 +88,7 @@ class CodeBundle:
     shadow_metrics: dict[str, Any] = field(default_factory=dict)
     provenance: list[dict[str, Any]] = field(default_factory=list)
     may_control: bool = False
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     research_tier: bool = True
     replay_id: str | None = None
     stage_progress: list[str] = field(default_factory=list)
@@ -567,7 +567,6 @@ class CodePipeline:
         return rec
 
     def _hydrate_bundle(self, bundle_id: str) -> CodeBundle | None:
-        from pathlib import Path
 
         path = self._bundle_state_path(bundle_id)
         if not path.is_file():

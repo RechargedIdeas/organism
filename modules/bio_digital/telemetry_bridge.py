@@ -10,7 +10,6 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any
 
 from organism_sdk.health import HealthReport
@@ -36,7 +35,7 @@ class NodeStatusView:
     is_healthy: bool = True
 
     @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> "NodeStatusView":
+    def from_mapping(cls, data: dict[str, Any]) -> NodeStatusView:
         return cls(
             node_id=str(data.get("node_id", "unknown")),
             substrate=str(data.get("substrate", "")),
@@ -70,7 +69,7 @@ class EnvironmentStateView:
     is_healthy: bool = True
 
     @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> "EnvironmentStateView":
+    def from_mapping(cls, data: dict[str, Any]) -> EnvironmentStateView:
         return cls(
             temp_c=float(data.get("temp_c", data.get("temperature_c", 0.0))),
             humidity_pct=float(data.get("humidity_pct", 0.0)),
@@ -95,7 +94,7 @@ class MetricsSnapshot:
     histograms: dict[str, dict[str, float]] = field(default_factory=dict)
 
     @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> "MetricsSnapshot":
+    def from_mapping(cls, data: dict[str, Any]) -> MetricsSnapshot:
         return cls(
             counters={k: int(v) for k, v in (data.get("counters") or {}).items()},
             gauges={k: float(v) for k, v in (data.get("gauges") or {}).items()},
@@ -252,6 +251,7 @@ class TelemetryBridge:
         if self.ws is None:
             return
         import uuid
+
         from organism_sdk.hypervector import Hypervector
         from organism_sdk.workspace import BindingRecord
 

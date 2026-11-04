@@ -7,7 +7,7 @@ HormoneBus / Immune / Autonomic runtime in v0.1 (E.8).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from organism_sdk.errors import SDKInvariantViolation, TraceUnavailable
@@ -30,7 +30,7 @@ class RoutingTraceEntry:
     policy_digest: bytes | None = None
     level: str | None = None
     calibration_state: dict[str, Any] | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -44,7 +44,7 @@ class DegradationTraceEntry:
     policy_digest: bytes | None = None
     level: str | None = None
     human_ack: bool | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -56,7 +56,7 @@ class WorkspaceTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -70,7 +70,7 @@ class LifecycleTraceEntry:
     level: str | None = None
     on_drain_outcome: str | None = None  # started|completed|abandoned|killed
     on_drain_synthetic: bool = False
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -84,7 +84,7 @@ class ImmuneTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -100,7 +100,7 @@ class HormoneTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -115,7 +115,7 @@ class AutonomicTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -132,7 +132,7 @@ class EvolutionTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class V02TraceSink:
@@ -158,7 +158,7 @@ class SandboxTraceEntry:
     policy_id: str | None = None
     policy_digest: bytes | None = None
     level: str | None = None
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class TraceEmitter:
@@ -200,7 +200,7 @@ class TraceEmitter:
                 self._router.current_policy_digest(),
                 self._router.current_level(),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise TraceUnavailable(str(exc)) from exc
 
     def _stamp(self, entry: Any) -> Any:

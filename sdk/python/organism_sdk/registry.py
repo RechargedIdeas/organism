@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
 from organism_sdk.contract import (
@@ -17,7 +17,6 @@ from organism_sdk.contract import (
 from organism_sdk.errors import RegistrationRejected
 from organism_sdk.health import HealthReport
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
-
 
 LifecycleState = Literal[
     "PROPOSED",
@@ -151,7 +150,7 @@ class RegistryClient:
                 contract_digest=digest,
             )
             self._audit.append(
-                {"event": "register", "module_id": mid, "at": datetime.now(timezone.utc).isoformat()}
+                {"event": "register", "module_id": mid, "at": datetime.now(UTC).isoformat()}
             )
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=mid, from_state="", to_state=state, event="register")
@@ -162,7 +161,7 @@ class RegistryClient:
         with self._lock:
             entry = self._modules.pop(module_id, None)
         if entry and entry.module is not None:
-            entry.module.on_drain(datetime.now(timezone.utc))
+            entry.module.on_drain(datetime.now(UTC))
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(
                 module_id=module_id,
