@@ -1,8 +1,10 @@
 """The work store: durable state of the work agent (v1.12). Design record: docs/v1.12/WORK_AGENT.md.
 
 This is the only module of the work package that does I/O. It keeps state in SQLite in WAL
-mode, as the workspace ops log does (`organism_sdk.snapshot`). One process writes at a time;
-an in-process lock serializes the writers.
+mode, as the workspace ops log does (`organism_sdk.snapshot`). Opening a store takes a writer
+lock on its `.lock` file. A second writer, in this process or another, is refused at once with
+`StoreInUse`, and the OS drops the lock when a process dies, so a crash leaves nothing to clear.
+An in-process lock serializes threads. WAL lets readers run beside the writer.
 
 A round of intake is one transaction. Its Triggers, the Source's cursor and the effects it
 queues commit together or not at all, so a restart neither drops nor repeats a Trigger.
@@ -13,7 +15,9 @@ stored runs again after the restart, so every handler must be idempotent.
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -120,6 +124,56 @@ class RunReport:
     failed: int
 
 
+class StoreInUse(RuntimeError):
+    """Another WorkStore holds this store's writer lock, in this process or another."""
+
+
+def _take_writer_lock(path: Path) -> int:
+    """Take the writer lock on the store's `.lock` file. Refuses at once if it is held."""
+    fd = os.open(path.with_name(f"{path.name}.lock"), os.O_RDWR | os.O_CREAT)
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        if sys.platform == "win32":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        raise StoreInUse(f"work store {path} is in use by another writer") from None
+    return fd
+
+
+def _release_writer_lock(fd: int) -> None:
+    if sys.platform == "win32":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    os.close(fd)  # on POSIX, closing the descriptor drops the flock
+
+
+def _open_database(path: Path) -> sqlite3.Connection:
+    """Open the database in WAL mode with full sync, and check its schema version."""
+    conn = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=FULL")
+        conn.executescript(SCHEMA)
+        row = conn.execute("SELECT value FROM flags WHERE name = 'schema'").fetchone()
+        if row is None:
+            conn.execute("INSERT INTO flags (name, value) VALUES ('schema', ?)", (SCHEMA_VERSION,))
+        elif row[0] != SCHEMA_VERSION:
+            raise RuntimeError(f"work store schema {row[0]} is not {SCHEMA_VERSION}")
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
 def backoff_seconds(attempts: int) -> float:
     """The wait after the given number of failures: 5, 10, 20 ... seconds, capped at 300."""
     if attempts < 1:
@@ -136,15 +190,13 @@ class WorkStore:
         self._lock = threading.RLock()
         self._depth = 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False, isolation_level=None)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=FULL")
-        self._conn.executescript(SCHEMA)
+        fd = _take_writer_lock(self.path)
         try:
-            self._check_schema()
-        except RuntimeError:
-            self._conn.close()
+            self._conn = _open_database(self.path)
+        except BaseException:
+            _release_writer_lock(fd)
             raise
+        self._writer_fd: int | None = fd
 
     def __enter__(self) -> Self:
         return self
@@ -153,17 +205,13 @@ class WorkStore:
         self.close()
 
     def close(self) -> None:
+        """Close the store and release its writer lock. Closing twice does nothing."""
         with self._lock:
+            if self._writer_fd is None:
+                return
             self._conn.close()
-
-    def _check_schema(self) -> None:
-        row = self._conn.execute("SELECT value FROM flags WHERE name = 'schema'").fetchone()
-        if row is None:
-            self._conn.execute(
-                "INSERT INTO flags (name, value) VALUES ('schema', ?)", (SCHEMA_VERSION,)
-            )
-        elif row[0] != SCHEMA_VERSION:
-            raise RuntimeError(f"work store schema {row[0]} is not {SCHEMA_VERSION}")
+            _release_writer_lock(self._writer_fd)
+            self._writer_fd = None
 
     @contextmanager
     def transaction(self) -> Iterator[None]:

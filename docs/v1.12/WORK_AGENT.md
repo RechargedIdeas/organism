@@ -65,7 +65,7 @@ These come from the superagent's domain document and are kept as rules:
 | `gate.py` | `admit`, the deterministic first layer of Eval. Returns an `Admission`. |
 | `policy.py` | `AcceptMode`, `Cell`, `AdmissionRow`, `Rule`, `SourcePolicy`, `Policy`, `policy_version`, `may_accept_inferred`. |
 | `codec.py` | `encode`, `decode`, `to_text`, `from_text`: the JSON form of the domain, read from each dataclass's annotations. Pure. |
-| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue and the pause flag. The only module that does I/O. |
+| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag and the writer lock. The only module that does I/O. |
 
 ## 6. W1 behaviour
 
@@ -99,7 +99,7 @@ The version is `sha256:` followed by the digest of the Policy's canonical JSON: 
 
 ### Store
 
-`store.py` is the only module of the package that does I/O. It keeps its state in SQLite in WAL mode with `synchronous=FULL`, as the ops log in `snapshot.py` does. One process writes at a time, and an in-process lock serializes the writers within it.
+`store.py` is the only module of the package that does I/O. It keeps its state in SQLite in WAL mode with `synchronous=FULL`, as the ops log in `snapshot.py` does. Opening a store takes a writer lock: an OS lock on the store's `.lock` file, held until the store closes or its process dies. A second writer, in this process or another, is refused at once with `StoreInUse`. A crash leaves nothing to clear, because the OS releases the lock. Threads in one process are serialized by an in-process lock. WAL lets readers run beside the writer, which the operator views of W7 will use.
 
 A round of intake is one transaction. Its Triggers, the Source's cursor and the effects it queues commit together or not at all, so a restart neither drops a Trigger nor stores one twice.
 
@@ -128,6 +128,8 @@ An outbound message is queued once, by id, as pending. It is then settled as sen
 - inside an effect handler: the effect runs again;
 - with the pause flag set: the flag survives, and nothing runs.
 
+A child that opens a store another process holds is refused with `StoreInUse`, and a crashed writer releases the lock for the next process.
+
 ## 8. Not yet built
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
@@ -144,7 +146,7 @@ An outbound message is queued once, by id, as pending. It is then settled as sen
 - `test_v112_work_gate.py`: the admission cells, plus the invariants over every input combination.
 - `test_v112_work_policy.py`: the version digest, the shape of admission rows, `may_accept_inferred`, a pinned digest of the empty Policy, and the purity check, which allows I/O only in `store.py`.
 - `test_v112_work_store.py` (`work:store`, fast tier): intake, rounds and their transactions, Tickets, Assignments, Receipts, effects, the pause flag and the codec.
-- `test_v112_work_restart.py` (`work:restart`, fast tier): a process killed mid-round and mid-effect, and what the replay leaves behind.
+- `test_v112_work_restart.py` (`work:restart`, fast tier): a process killed mid-round and mid-effect, what the replay leaves behind, and a second writer refused while the store is held.
 
 ## 10. Changing this record
 

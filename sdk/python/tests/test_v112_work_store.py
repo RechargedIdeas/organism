@@ -27,6 +27,7 @@ from organism_sdk.work.store import (
     Receipt,
     ReceiptStatus,
     RunReport,
+    StoreInUse,
     WorkStore,
     backoff_seconds,
 )
@@ -326,6 +327,19 @@ def test_a_payload_queued_during_its_run_is_not_lost(store: WorkStore) -> None:
 
 
 # Persistence and schema
+
+
+def test_a_second_writer_is_refused_until_the_first_closes(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    with WorkStore(path), pytest.raises(StoreInUse):
+        WorkStore(path)
+    WorkStore(path).close()
+
+
+def test_closing_twice_does_nothing(tmp_path: Path) -> None:
+    store = WorkStore(tmp_path / "work.sqlite")
+    store.close()
+    store.close()
 
 
 def test_the_store_reopens_with_its_state(tmp_path: Path, clock: Clock) -> None:

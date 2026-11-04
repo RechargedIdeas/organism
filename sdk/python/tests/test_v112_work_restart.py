@@ -19,6 +19,7 @@ from organism_sdk.work.store import RunReport, WorkStore
 
 SDK = Path(__file__).resolve().parents[1]
 CRASH = 17
+REFUSED = 3
 
 # The child receives the database path, the scenario and the sink file as arguments.
 CHILD = """
@@ -26,7 +27,7 @@ import os
 import sys
 
 from organism_sdk.work.domain import Addressed, Trigger
-from organism_sdk.work.store import WorkStore
+from organism_sdk.work.store import StoreInUse, WorkStore
 
 
 def trigger(n):
@@ -52,6 +53,12 @@ def round_of_two(store):
 
 
 path, scenario, sink = sys.argv[1:4]
+if scenario == "held":
+    try:
+        WorkStore(path)
+    except StoreInUse:
+        os._exit(3)
+    os._exit(0)
 store = WorkStore(path)
 if scenario == "before-commit":
     with store.transaction():
@@ -88,13 +95,13 @@ def trigger(n: int) -> Trigger:
     )
 
 
-def crash(db: Path, scenario: str, sink: Path) -> None:
-    """Run a child that dies at the named point, and check that it died there."""
+def run_child(db: Path, scenario: str, sink: Path) -> subprocess.CompletedProcess[str]:
+    """Run one child process of the scenario and return how it ended."""
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         part for part in (str(SDK), env.get("PYTHONPATH", "")) if part
     )
-    done = subprocess.run(
+    return subprocess.run(
         [sys.executable, "-c", CHILD, str(db), scenario, str(sink)],
         env=env,
         capture_output=True,
@@ -102,6 +109,11 @@ def crash(db: Path, scenario: str, sink: Path) -> None:
         check=False,
         timeout=60,
     )
+
+
+def crash(db: Path, scenario: str, sink: Path) -> None:
+    """Run a child that dies at the named point, and check that it died there."""
+    done = run_child(db, scenario, sink)
     assert done.returncode == CRASH, done.stderr
 
 
@@ -190,3 +202,16 @@ def test_the_paused_flag_survives_a_crash_and_nothing_runs_while_it_is_set(
         store.set_paused(False)
         assert store.run_due({"reply": send_to(sink)}) == RunReport(completed=1, failed=0)
     assert sink.read_text(encoding="utf-8").splitlines() == ["hi"]
+
+
+def test_a_crashed_writer_releases_the_lock_for_the_next_process(tmp_path: Path) -> None:
+    db = tmp_path / "work.sqlite"
+    crash(db, "paused", tmp_path / "sink.txt")
+    WorkStore(db).close()
+
+
+def test_a_child_process_is_refused_while_another_holds_the_store(tmp_path: Path) -> None:
+    db = tmp_path / "work.sqlite"
+    with WorkStore(db):
+        done = run_child(db, "held", tmp_path / "sink.txt")
+    assert done.returncode == REFUSED, done.stderr
