@@ -1,0 +1,474 @@
+"""The work store: durable state of the work agent (v1.12). Design record: docs/v1.12/WORK_AGENT.md.
+
+This is the only module of the work package that does I/O. It keeps state in SQLite in WAL
+mode, as the workspace ops log does (`organism_sdk.snapshot`). One process writes at a time;
+an in-process lock serializes the writers.
+
+A round of intake is one transaction. Its Triggers, the Source's cursor and the effects it
+queues commit together or not at all, so a restart neither drops nor repeats a Trigger.
+
+Effects run at least once. A handler that finishes but is killed before its completion is
+stored runs again after the restart, so every handler must be idempotent.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import threading
+import time
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any, Self
+
+from organism_sdk.work import codec
+from organism_sdk.work.domain import Assignment, Decision, Ticket, Trigger
+
+SCHEMA_VERSION = "1"
+BACKOFF_BASE_S = 5.0
+BACKOFF_CAP_S = 300.0
+ERROR_CHARS = 500
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS flags (name TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS triggers (
+  id TEXT PRIMARY KEY,
+  thread TEXT NOT NULL,
+  at TEXT NOT NULL,
+  body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS triggers_thread ON triggers (thread, at, id);
+CREATE TABLE IF NOT EXISTS cursors (source TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS decisions (
+  id TEXT PRIMARY KEY,
+  trigger_id TEXT NOT NULL,
+  body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS decisions_trigger ON decisions (trigger_id);
+CREATE TABLE IF NOT EXISTS tickets (
+  id TEXT PRIMARY KEY,
+  ended INTEGER NOT NULL,
+  body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS assignments (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL,
+  body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS assignments_ticket ON assignments (ticket_id);
+CREATE TABLE IF NOT EXISTS effects (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  key TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  due_at REAL NOT NULL,
+  last_error TEXT,
+  UNIQUE (kind, key)
+);
+CREATE TABLE IF NOT EXISTS receipts (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL,
+  conversation TEXT NOT NULL,
+  text TEXT NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT
+);
+"""
+
+
+class ReceiptStatus(str, Enum):
+    """Where an outbound message is. A message is never queued twice."""
+
+    PENDING = "pending"
+    SENT = "sent"
+    DROPPED = "dropped"
+
+
+@dataclass(frozen=True)
+class Effect:
+    """A piece of stored work waiting to run, such as a reply to send."""
+
+    seq: int
+    kind: str
+    key: str
+    payload: Mapping[str, Any]
+    attempts: int
+    due_at: float
+    last_error: str | None
+
+
+@dataclass(frozen=True)
+class Receipt:
+    """An outbound message and what became of it."""
+
+    id: str
+    ticket_id: str
+    conversation: str
+    text: str
+    status: ReceiptStatus
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class RunReport:
+    """How many due effects completed and how many failed in one run."""
+
+    completed: int
+    failed: int
+
+
+def backoff_seconds(attempts: int) -> float:
+    """The wait after the given number of failures: 5, 10, 20 ... seconds, capped at 300."""
+    if attempts < 1:
+        raise ValueError("a backoff follows at least one failure")
+    return min(BACKOFF_BASE_S * 2.0 ** (attempts - 1), BACKOFF_CAP_S)
+
+
+class WorkStore:
+    """SQLite state of the work agent. Open one per state directory."""
+
+    def __init__(self, path: Path | str, *, clock: Callable[[], float] = time.time) -> None:
+        self.path = Path(path)
+        self._clock = clock
+        self._lock = threading.RLock()
+        self._depth = 0
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(str(self.path), check_same_thread=False, isolation_level=None)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=FULL")
+        self._conn.executescript(SCHEMA)
+        try:
+            self._check_schema()
+        except RuntimeError:
+            self._conn.close()
+            raise
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    def _check_schema(self) -> None:
+        row = self._conn.execute("SELECT value FROM flags WHERE name = 'schema'").fetchone()
+        if row is None:
+            self._conn.execute(
+                "INSERT INTO flags (name, value) VALUES ('schema', ?)", (SCHEMA_VERSION,)
+            )
+        elif row[0] != SCHEMA_VERSION:
+            raise RuntimeError(f"work store schema {row[0]} is not {SCHEMA_VERSION}")
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Group writes into one transaction. A nested call joins the outer transaction."""
+        with self._lock:
+            if self._depth > 0:
+                self._depth += 1
+                try:
+                    yield
+                finally:
+                    self._depth -= 1
+                return
+            self._conn.execute("BEGIN IMMEDIATE")
+            self._depth = 1
+            try:
+                yield
+                self._conn.execute("COMMIT")
+            except BaseException:
+                self._conn.execute("ROLLBACK")
+                raise
+            finally:
+                self._depth = 0
+
+    # Intake
+
+    def receive(self, trigger: Trigger) -> bool:
+        """Store a Trigger once. True when it was new, False when its id was already stored."""
+        with self.transaction():
+            return self._insert_trigger(trigger)
+
+    def commit_round(
+        self,
+        source: str,
+        triggers: Iterable[Trigger],
+        *,
+        cursor: str,
+        effects: Iterable[tuple[str, str, Mapping[str, Any]]] = (),
+    ) -> int:
+        """Store one round of intake atomically: its Triggers, the Source's cursor, its effects.
+
+        Returns how many of the Triggers were new.
+        """
+        with self.transaction():
+            new = 0
+            for trigger in triggers:
+                if self._insert_trigger(trigger):
+                    new += 1
+            self._set_cursor(source, cursor)
+            for kind, key, payload in effects:
+                self._enqueue(kind, key, payload)
+            return new
+
+    def cursor(self, source: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM cursors WHERE source = ?", (source,)
+            ).fetchone()
+        return None if row is None else str(row[0])
+
+    def trigger(self, trigger_id: str) -> Trigger | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT body FROM triggers WHERE id = ?", (trigger_id,)
+            ).fetchone()
+        return None if row is None else codec.from_text(Trigger, row[0])
+
+    def triggers_in_thread(self, thread: str) -> list[Trigger]:
+        """The Triggers of one Thread, in time order and then by id."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT body FROM triggers WHERE thread = ? ORDER BY at, id", (thread,)
+            ).fetchall()
+        return [codec.from_text(Trigger, row[0]) for row in rows]
+
+    def trigger_count(self) -> int:
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) FROM triggers").fetchone()
+        return int(row[0])
+
+    def _insert_trigger(self, trigger: Trigger) -> bool:
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO triggers (id, thread, at, body) VALUES (?, ?, ?, ?)",
+            (trigger.id, trigger.thread, trigger.at, codec.to_text(trigger)),
+        )
+        return cursor.rowcount == 1
+
+    def _set_cursor(self, source: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO cursors (source, value) VALUES (?, ?) "
+            "ON CONFLICT (source) DO UPDATE SET value = excluded.value",
+            (source, value),
+        )
+
+    # Decisions, Tickets and Assignments
+
+    def save_decision(self, decision: Decision) -> bool:
+        """Store a Decision. True when it was new; a Decision is never replaced."""
+        with self.transaction():
+            cursor = self._conn.execute(
+                "INSERT OR IGNORE INTO decisions (id, trigger_id, body) VALUES (?, ?, ?)",
+                (decision.id, decision.trigger_id, codec.to_text(decision)),
+            )
+        return cursor.rowcount == 1
+
+    def decisions_for(self, trigger_id: str) -> list[Decision]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT body FROM decisions WHERE trigger_id = ? ORDER BY rowid", (trigger_id,)
+            ).fetchall()
+        return [codec.from_text(Decision, row[0]) for row in rows]
+
+    def save_ticket(self, ticket: Ticket) -> None:
+        """Store a Ticket, replacing the stored facts of the same id."""
+        with self.transaction():
+            self._conn.execute(
+                "INSERT INTO tickets (id, ended, body) VALUES (?, ?, ?) "
+                "ON CONFLICT (id) DO UPDATE SET ended = excluded.ended, body = excluded.body",
+                (ticket.id, int(ticket.ended), codec.to_text(ticket)),
+            )
+
+    def ticket(self, ticket_id: str) -> Ticket | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT body FROM tickets WHERE id = ?", (ticket_id,)
+            ).fetchone()
+        return None if row is None else codec.from_text(Ticket, row[0])
+
+    def open_tickets(self) -> list[Ticket]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT body FROM tickets WHERE ended = 0 ORDER BY rowid"
+            ).fetchall()
+        return [codec.from_text(Ticket, row[0]) for row in rows]
+
+    def save_assignment(self, assignment: Assignment) -> None:
+        with self.transaction():
+            self._conn.execute(
+                "INSERT INTO assignments (id, ticket_id, body) VALUES (?, ?, ?) "
+                "ON CONFLICT (id) DO UPDATE SET body = excluded.body",
+                (assignment.id, assignment.ticket_id, codec.to_text(assignment)),
+            )
+
+    def assignments_of(self, ticket_id: str) -> list[Assignment]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT body FROM assignments WHERE ticket_id = ? ORDER BY rowid", (ticket_id,)
+            ).fetchall()
+        return [codec.from_text(Assignment, row[0]) for row in rows]
+
+    # Outbound receipts
+
+    def add_receipt(self, receipt_id: str, *, ticket_id: str, conversation: str, text: str) -> bool:
+        """Queue an outbound message once. True when it was new; a repeat changes nothing."""
+        with self.transaction():
+            cursor = self._conn.execute(
+                "INSERT OR IGNORE INTO receipts (id, ticket_id, conversation, text, status, reason) "
+                "VALUES (?, ?, ?, ?, ?, NULL)",
+                (receipt_id, ticket_id, conversation, text, ReceiptStatus.PENDING.value),
+            )
+        return cursor.rowcount == 1
+
+    def settle_receipt(
+        self, receipt_id: str, status: ReceiptStatus, reason: str | None = None
+    ) -> None:
+        """Record that a message was sent or dropped. An unknown id raises KeyError."""
+        with self.transaction():
+            cursor = self._conn.execute(
+                "UPDATE receipts SET status = ?, reason = ? WHERE id = ?",
+                (status.value, reason, receipt_id),
+            )
+        if cursor.rowcount != 1:
+            raise KeyError(receipt_id)
+
+    def receipt(self, receipt_id: str) -> Receipt | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id, ticket_id, conversation, text, status, reason FROM receipts "
+                "WHERE id = ?",
+                (receipt_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return Receipt(
+            id=row[0],
+            ticket_id=row[1],
+            conversation=row[2],
+            text=row[3],
+            status=ReceiptStatus(row[4]),
+            reason=row[5],
+        )
+
+    # Effects
+
+    def enqueue(self, kind: str, key: str, payload: Mapping[str, Any]) -> None:
+        """Queue an effect. A waiting effect with the same kind and key takes the new payload,
+        becomes due at once, and keeps its place in the queue."""
+        with self.transaction():
+            self._enqueue(kind, key, payload)
+
+    def _enqueue(self, kind: str, key: str, payload: Mapping[str, Any]) -> None:
+        self._conn.execute(
+            "INSERT INTO effects (kind, key, payload, due_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (kind, key) DO UPDATE SET "
+            "payload = excluded.payload, due_at = excluded.due_at",
+            (kind, key, codec.to_text(dict(payload)), self._clock()),
+        )
+
+    def pending_effects(self) -> list[Effect]:
+        """Every queued effect, in queue order, due or not."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT seq, kind, key, payload, attempts, due_at, last_error "
+                "FROM effects ORDER BY seq"
+            ).fetchall()
+        return [_effect(row) for row in rows]
+
+    def run_due(
+        self,
+        handlers: Mapping[str, Callable[[Mapping[str, Any]], None]],
+        *,
+        limit: int = 50,
+    ) -> RunReport:
+        """Run the due effects of the kinds that have a handler, oldest first, up to `limit`.
+
+        Nothing runs while the store is paused. An effect whose handler raises is counted as
+        failed and waits `backoff_seconds` before it is tried again. An effect of a kind
+        without a handler is left alone. An effect that is due when the run starts runs at
+        most once in that run.
+        """
+        if self.paused:
+            return RunReport(completed=0, failed=0)
+        completed = 0
+        failed = 0
+        for effect in self._due(handlers)[:limit]:
+            try:
+                handlers[effect.kind](effect.payload)
+            except Exception as error:  # noqa: BLE001 - a failing effect must not stop the queue
+                self._fail(effect, error)
+                failed += 1
+            else:
+                self._complete(effect)
+                completed += 1
+        return RunReport(completed=completed, failed=failed)
+
+    def _due(self, handlers: Mapping[str, Callable[[Mapping[str, Any]], None]]) -> list[Effect]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT seq, kind, key, payload, attempts, due_at, last_error "
+                "FROM effects WHERE due_at <= ? ORDER BY seq",
+                (self._clock(),),
+            ).fetchall()
+        return [_effect(row) for row in rows if row[1] in handlers]
+
+    def _complete(self, effect: Effect) -> None:
+        # Delete only if the payload is unchanged. A handler that queued the same effect again
+        # leaves the new payload in place, to run on the next pass.
+        with self.transaction():
+            self._conn.execute(
+                "DELETE FROM effects WHERE seq = ? AND payload = ?",
+                (effect.seq, codec.to_text(dict(effect.payload))),
+            )
+
+    def _fail(self, effect: Effect, error: Exception) -> None:
+        attempts = effect.attempts + 1
+        due_at = self._clock() + backoff_seconds(attempts)
+        message = f"{type(error).__name__}: {error}"[:ERROR_CHARS]
+        with self.transaction():
+            self._conn.execute(
+                "UPDATE effects SET attempts = ?, due_at = ?, last_error = ? WHERE seq = ?",
+                (attempts, due_at, message, effect.seq),
+            )
+
+    # Processing
+
+    @property
+    def paused(self) -> bool:
+        """True while processing is paused. Intake keeps recording; nothing runs."""
+        with self._lock:
+            row = self._conn.execute("SELECT value FROM flags WHERE name = 'paused'").fetchone()
+        return row is not None and row[0] == "1"
+
+    def set_paused(self, paused: bool) -> None:
+        with self.transaction():
+            self._conn.execute(
+                "INSERT INTO flags (name, value) VALUES ('paused', ?) "
+                "ON CONFLICT (name) DO UPDATE SET value = excluded.value",
+                ("1" if paused else "0",),
+            )
+
+
+def _effect(row: tuple[Any, ...]) -> Effect:
+    seq, kind, key, payload, attempts, due_at, last_error = row
+    return Effect(
+        seq=int(seq),
+        kind=str(kind),
+        key=str(key),
+        payload=_json_object(payload),
+        attempts=int(attempts),
+        due_at=float(due_at),
+        last_error=None if last_error is None else str(last_error),
+    )
+
+
+def _json_object(text: str) -> dict[str, Any]:
+    value = codec.from_text(dict, text)
+    if not isinstance(value, dict):
+        raise TypeError("an effect payload is a JSON object")
+    return value

@@ -108,7 +108,7 @@ def policy_version(policy: Policy) -> str:
     """A digest of the whole Policy in one canonical form.
 
     The form has sorted keys, sorted sets, no whitespace and ASCII only. Changing it changes
-    every version, so it is a breaking change to stored Mandates (docs/v1.12/WORK_AGENT.md, 9).
+    every version, so it is a breaking change to stored Mandates (docs/v1.12/WORK_AGENT.md, 10).
     """
     canonical = json.dumps(_plain(policy), sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(canonical.encode("ascii")).hexdigest()

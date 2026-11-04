@@ -301,6 +301,16 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_stage.py sdk/python/tests/test_v112_work_gate.py sdk/python/tests/test_v112_work_policy.py"
 
+  # The work agent's store (v1.12 W2): intake, rounds, tickets, receipts, effects, pause, codec.
+  - id: work:store
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_store.py"
+
+  # The work agent across a crash (v1.12 W2): a killed round or effect replays without loss.
+  - id: work:restart
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_restart.py"
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   - id: desktop:smoke
     tier: full

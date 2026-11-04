@@ -209,21 +209,38 @@ FORBIDDEN_IMPORTS = {
     "urllib",
 }
 FORBIDDEN_CALLS = {"input", "open", "print"}
+# The store is the only module that does I/O (v1.12 W2); the rest stay pure.
+IO_MODULES = {"store.py"}
+
+
+def _io_findings(path: Path) -> list[str]:
+    """The forbidden imports and calls in one module of the package."""
+    findings: list[str] = []
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            names = [node.module or ""]
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in FORBIDDEN_CALLS:
+                findings.append(f"calls {node.func.id}")
+            continue
+        else:
+            continue
+        findings.extend(
+            f"imports {name}" for name in names if name.split(".")[0] in FORBIDDEN_IMPORTS
+        )
+    return findings
 
 
 def test_the_work_domain_does_no_io() -> None:
     root = Path(work.__file__).parent
     for path in sorted(root.glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                names = [node.module or ""]
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                assert node.func.id not in FORBIDDEN_CALLS, f"{path.name} calls {node.func.id}"
-                continue
-            else:
-                continue
-            for name in names:
-                assert name.split(".")[0] not in FORBIDDEN_IMPORTS, f"{path.name} imports {name}"
+        if path.name not in IO_MODULES:
+            assert _io_findings(path) == [], path.name
+
+
+def test_only_the_store_does_io() -> None:
+    root = Path(work.__file__).parent
+    assert {path.name for path in root.glob("*.py") if _io_findings(path)} == IO_MODULES
