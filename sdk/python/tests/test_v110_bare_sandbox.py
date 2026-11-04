@@ -112,7 +112,7 @@ def test_fuzz_unsafe_escapes_refused() -> None:
         assert r.refused, argv
 
 
-def test_cli_sandbox_status(capsys):
+def test_cli_sandbox_status(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["sandbox", "status"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
@@ -121,14 +121,14 @@ def test_cli_sandbox_status(capsys):
     assert out["native"] is True
 
 
-def test_cli_sandbox_self_check(capsys):
+def test_cli_sandbox_self_check(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["sandbox", "self-check"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is True
 
 
-def test_cli_status_includes_host(capsys):
+def test_cli_status_includes_host(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["status", "-c", str(CFG_DIR / "bare_metal.yaml")])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)

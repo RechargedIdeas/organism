@@ -16,7 +16,7 @@ from uuid import UUID
 
 from organism_sdk.errors import DimensionMismatch
 from organism_sdk.hypervector import DIM, Hypervector
-from organism_sdk.workspace import BindingRecord, WorkspaceClient
+from organism_sdk.workspace import BindingRecord, BindingWriteResult, WorkspaceClient
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ops (
@@ -138,7 +138,7 @@ class DurableWorkspace:
         self.ws = WorkspaceClient(write_tags=write_tags, read_tags=("*",))
         self._dim = DIM
 
-    def write(self, binding: BindingRecord):
+    def write(self, binding: BindingRecord) -> BindingWriteResult:
         results = self.ws.write_batch([binding])
         r = results[0]
         if r.status == "ACCEPTED":
@@ -148,7 +148,7 @@ class DurableWorkspace:
             self.ops.append("WRITE", str(stored.binding_id), payload, stored.checksum)
         return r
 
-    def bind_exact(self, role: Hypervector, filler: Hypervector, **kw) -> BindingRecord:
+    def bind_exact(self, role: Hypervector, filler: Hypervector, **kw: Any) -> BindingRecord:
         rec = self.ws.bind_exact(role, filler, **kw)
         payload = _binding_payload(rec)
         self.ops.append("WRITE", str(rec.binding_id), payload, rec.checksum)

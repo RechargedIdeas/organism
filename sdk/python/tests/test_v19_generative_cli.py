@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from organism_sdk.cli import main
 
 
@@ -13,13 +14,13 @@ def _run(argv, tmp_path: Path, capsys):
     return code, captured.out
 
 
-def test_list_templates_cli(capsys):
+def test_list_templates_cli(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["list-templates"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] and "scorer" in out["templates"]
 
 
-def test_evolve_promote_rollback_cli(tmp_path: Path, capsys) -> None:
+def test_evolve_promote_rollback_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # Single-process auto-promote exercises gate + hot-register.
     code, out = _run(
         ["evolve-code", "--intent", "Organism CLI scorer", "--auto-promote"],
@@ -57,7 +58,7 @@ def test_evolve_promote_rollback_cli(tmp_path: Path, capsys) -> None:
     assert orgs["ok"] and orgs["organisms"]
 
 
-def test_promote_code_cross_process(tmp_path: Path, capsys) -> None:
+def test_promote_code_cross_process(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Bundle state must hydrate across separate CLI invocations."""
     code, out = _run(["evolve-code", "--intent", "Organism CLI scorer"], tmp_path, capsys)
     assert code == 0, out
@@ -75,7 +76,7 @@ def test_promote_code_cross_process(tmp_path: Path, capsys) -> None:
     assert json.loads(out)["bundle"]["stage"] == "ROLLBACK"
 
 
-def test_bundle_roundtrip_cli(tmp_path: Path, capsys) -> None:
+def test_bundle_roundtrip_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = tmp_path / "data"
     code, out = _run(["evolve-looks", "--brief", "bundle look", "--pack"], root, capsys)
     assert code == 0, out

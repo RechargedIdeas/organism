@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable
 
-from organism_sdk.device import RuntimeId, select_compute_backend
+from organism_sdk.device import DeviceSelection, RuntimeId, select_compute_backend
 
 
 def neuro_sim_enabled() -> bool:
@@ -27,7 +27,7 @@ def hardware_caps_with_sim(base: Iterable[str] | None = None) -> set[str]:
     return caps
 
 
-def neuromorphic_cpu_backend():
+def neuromorphic_cpu_backend() -> DeviceSelection:
     """Always-available CPU RESEARCH_SIM selection for SNN / neuro workloads."""
     return select_compute_backend(prefer=RuntimeId.NEUROMORPHIC)
 

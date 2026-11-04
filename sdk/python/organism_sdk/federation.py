@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from organism_sdk.hormone import HormoneBus, HormoneLevels
 from organism_sdk.workspace import WorkspaceClient
+
+if TYPE_CHECKING:
+    from organism_sdk.multinode import MultiNodeCluster
 
 UnsupportedKind = Literal[
     "FEDERATED_OXYTOCIN",
@@ -96,7 +99,7 @@ class FederationGate:
         return ev
 
     @property
-    def cluster(self):
+    def cluster(self) -> MultiNodeCluster | None:
         return self._cluster
 
     def federated_oxytocin_release(

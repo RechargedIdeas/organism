@@ -35,7 +35,7 @@ def test_hosted_llm_never_default_on() -> None:
     assert resolve_backend("template").name == "template"
 
 
-def test_hosted_llm_requires_url_key(monkeypatch):
+def test_hosted_llm_requires_url_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_LLM_ENABLED", "1")
     monkeypatch.delenv("ORGANISM_LLM_URL", raising=False)
     monkeypatch.delenv("ORGANISM_LLM_API_KEY", raising=False)

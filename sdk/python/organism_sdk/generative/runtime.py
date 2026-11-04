@@ -107,7 +107,7 @@ class PipelineTiming:
         return not (self.quarantine_ms and self.p95("quarantine") > QUARANTINE_P95_MS)
 
 
-def _make_generated_contract(module_id: str, version: str = "0.1.0"):
+def _make_generated_contract(module_id: str, version: str = "0.1.0") -> Any:
     """Build a RESEARCH-safe SubstrateContract for a promoted generative module."""
     from _common.contract_factory import make_contract
 
@@ -160,7 +160,7 @@ class GeneratedSkillModule(OrganismModule):
         self._score = min(1.0, max(0.0, shadow_score))
         self._invocations = 0
 
-    def declare_contract(self):
+    def declare_contract(self) -> Any:
         return _make_generated_contract(self._module_id, self._version)
 
     def health(self) -> HealthReport:

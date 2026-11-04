@@ -16,7 +16,10 @@ import math
 import multiprocessing as mp
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from organism_sdk.sandbox.jail import JailResult
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +292,7 @@ class SafeSandbox:
         return result
 
 
-def run_under_organism_jail(argv: list[str], **kwargs):
+def run_under_organism_jail(argv: list[str], **kwargs: Any) -> JailResult:
     """Delegate argv containment to the native OrganismSandbox ProcessJail."""
     from organism_sdk.sandbox import OrganismSandbox, SandboxPolicy
 

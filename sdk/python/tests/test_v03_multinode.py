@@ -70,7 +70,9 @@ def test_enabled_gate_mirror_and_oxytocin() -> None:
         lag_ms=3.0,
     )
     assert info["supported"] is True
+    cluster = gate.cluster
+    assert cluster is not None  # enable_multi_node=True builds the cluster
     levels = gate.federated_oxytocin_release(
-        adapter_acceptance_rate=0.95, peer_nodes=list(gate.cluster.nodes.keys())
+        adapter_acceptance_rate=0.95, peer_nodes=list(cluster.nodes.keys())
     )
     assert levels.oxytocin >= 0.0
