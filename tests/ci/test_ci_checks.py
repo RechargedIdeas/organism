@@ -144,9 +144,9 @@ def test_cache_hits_only_on_matching_key_and_passing_status(tmp_path):
     cache.put("v1:x", "k1", duration_s=1.5)
     assert cache.get("v1:x", "k1") is not None
     assert cache.get("v1:x", "other") is None
-    entry = json.loads((tmp_path / "cache" / "v1__x.json").read_text(encoding="utf-8"))
-    entry["status"] = "FAIL"
-    (tmp_path / "cache" / "v1__x.json").write_text(json.dumps(entry), encoding="utf-8")
+    doc = json.loads((tmp_path / "cache" / "v1__x.json").read_text(encoding="utf-8"))
+    doc["entries"][0]["status"] = "FAIL"
+    (tmp_path / "cache" / "v1__x.json").write_text(json.dumps(doc), encoding="utf-8")
     assert cache.get("v1:x", "k1") is None
 
 

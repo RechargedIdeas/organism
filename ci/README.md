@@ -1,7 +1,7 @@
 # Local CI pipeline
 
 The pipeline runs on this machine. The `pipeline` job in `.github/workflows/ci.yml` runs
-the same fast tier on Linux for pushes and pull requests to `main`, so the gates apply even
+the full tier on Linux for pushes and pull requests to `main`, so the gates apply even
 in clones without hooks. The local pipeline is the place where every
 gate in [gates.yaml](gates.yaml) actually runs, with preflight checks, caching, lint
 ratchets, and hooks.
@@ -110,7 +110,8 @@ to confirm it is picked up. Use `{python}` for the venv interpreter; never hard-
 
 ## Caching and logs
 
-- The cache lives in `ci/cache/` (one file per gate). A key covers the gate id, the
+- The cache lives in `ci/cache/` (one file per gate, holding its last eight passing keys, so a
+  terminal run and a git hook run do not evict each other). A key covers the gate id, the
   resolved command and environment, the Python, protoc, and cargo versions, and the bytes
   of the gate's inputs. Only passing results are stored. Gates marked `cacheable: false`
   (timing budgets, full suites) never use the cache.

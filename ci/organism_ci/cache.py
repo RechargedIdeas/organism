@@ -38,20 +38,35 @@ def _safe_name(gate_id: str) -> str:
     return _SAFE.sub("__", gate_id) + ".json"
 
 
+MAX_ENTRIES = 8  # passing keys kept per gate, so environments that alternate do not evict each other
+
+
 class ResultCache:
-    """One JSON file per gate. Every read error is a miss, so a damaged cache cannot fail a run."""
+    """One JSON file per gate, holding its most recent passing keys. Every read error is a miss, so a
+    damaged cache cannot fail a run."""
 
     def __init__(self, directory: Path) -> None:
         self.directory = directory
 
-    def get(self, gate_id: str, key: str) -> dict[str, object] | None:
+    def _entries(self, gate_id: str) -> list[dict[str, object]]:
         path = self.directory / _safe_name(gate_id)
         try:
-            entry = json.loads(path.read_text(encoding="utf-8"))
+            doc = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return None
-        if isinstance(entry, dict) and entry.get("key") == key and entry.get("status") == "PASS":
-            return entry
+            return []
+        if not isinstance(doc, dict):
+            return []
+        entries = doc.get("entries")
+        if entries is None and "key" in doc:  # the single-entry format written before this one
+            entries = [doc]
+        if not isinstance(entries, list):
+            return []
+        return [entry for entry in entries if isinstance(entry, dict)]
+
+    def get(self, gate_id: str, key: str) -> dict[str, object] | None:
+        for entry in self._entries(gate_id):
+            if entry.get("key") == key and entry.get("status") == "PASS":
+                return entry
         return None
 
     def put(self, gate_id: str, key: str, *, duration_s: float) -> None:
@@ -61,11 +76,13 @@ class ResultCache:
             "duration_s": round(duration_s, 3),
             "recorded": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+        kept = [old for old in self._entries(gate_id) if old.get("key") != key]
+        entries = [entry, *kept][:MAX_ENTRIES]
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
             path = self.directory / _safe_name(gate_id)
             tmp = path.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(entry, indent=2) + "\n", encoding="utf-8")
+            tmp.write_text(json.dumps({"entries": entries}, indent=2) + "\n", encoding="utf-8")
             os.replace(tmp, path)
         except OSError:
             return  # a cache that cannot be written only costs time on the next run

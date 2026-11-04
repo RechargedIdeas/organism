@@ -650,7 +650,6 @@ dependencies = [
 name = "organism-registry"
 version = "1.3.0"
 dependencies = [
- "chrono",
  "organism-client",
  "parking_lot",
  "serde",

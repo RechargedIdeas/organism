@@ -16,7 +16,7 @@
 
 ### Changed
 - `tests/ops/test_soak_ops.py`: the POSIX executable-bit check is skipped on Windows. It still runs on Linux.
-- `EVOLVE_BUDGET_MS` (`organism_sdk/generative/budgets.py`): the evolve wall-clock budget is per platform, 1000 ms on Windows and 250 ms elsewhere. Windows `spawn` start-up dominates the measured cost.
+- `EVOLVE_BUDGET_MS` (`organism_sdk/generative/budgets.py`): the evolve wall-clock budget is per platform, 2000 ms on Windows and 1000 ms elsewhere. Windows `spawn` start-up dominates the measured cost.
 - **Rust clean-up**: `cargo fmt` applied to four files (formatting only), so the rustfmt baseline is zero. Clippy fixes in `organism-client` (index loops rewritten as iterators, same output) and `organism-workspace` (`is_empty` added beside `len`). Removed the unused `registered_at` field from `organism-registry`. The `chrono` dependency in `runtime/registry/Cargo.toml` is now unused and can go.
 
 ### Fixed
