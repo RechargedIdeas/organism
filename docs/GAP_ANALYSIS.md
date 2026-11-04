@@ -67,7 +67,7 @@ done without one, but were not done in this review, with the reason given.
 | O8 | Dependencies | No Python lock or constraints file. Installs resolve fresh every time. | open. A lock file adds a tool and an upkeep cost, so it is a choice, not a gap to close silently. |
 | O9 | Typing | 59 hand-written mypy findings remain. See the breakdown below. | open. The annotation work is done (F14). The rest need the code read first, starting with `arg-type` and `attr-defined`. |
 | O10 | Docs | `STATUS.md` was dated 2026-10-25 and listed MoA Phases 4 and 5 as not started. | fixed in this review. The CHANGELOG's chrono note was also wrong: `runtime/registry` no longer depends on chrono, but `runtime/workspace` and `organism-client` still do. |
-| O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **open**, with three options. (a) Give the desktop tests a clean root through an optional `repo_root` on `DesktopService.create`. (b) Bound the replay log by rotation or compaction, which changes runtime behaviour. (c) Reset the local `organism_data/` state, which is the user's local data and needs their say. |
+| O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **resolved** in `edd2924`. The evolve tests use `DesktopService.create(data_root=...)` on a temp directory. The replay log still grows in normal use, so bounding it (rotation or compaction) is an open runtime change. |
 
 ## Decisions needed
 
@@ -109,3 +109,5 @@ in harness and test files.
 - Full tier on WSL Ubuntu at `77e110c`: 61 of 61 gates pass in 80.9 s. The first run failed `lint:mypy` on a stale `.mypy_cache`, and clearing the cache fixed it (see the troubleshooting section of [ci/README.md](../ci/README.md)). In a non-login shell the run needs `/root/.cargo/bin` on `PATH`.
 - Full tier on Windows at `4083925`: 60 of 61 gates pass. `v17:desktop_organism` fails its evolve budget on the local state, which is open as O11.
 - Full tier on WSL Ubuntu at `4083925`: 61 of 61 gates pass in 111.5 s.
+- Full tier on Windows at `edd2924`: 61 of 61 gates pass in 244.5 s. The evolve tests run on a clean data root (O11).
+- Full tier on WSL Ubuntu at `edd2924`: 61 of 61 gates pass in 110.3 s.

@@ -38,6 +38,7 @@
   path. It now matches the path protoc writes to.
 - **Gate environment placeholders**: `env` values such as `PROTOC: "{protoc}"` reached the child process unexpanded, so `build.rs` received the literal text. The runner now fills them as it does commands. Cargo's build-script cache hid the bug until a formatting change to `build.rs` forced a rerun.
 - **Workspace replay determinism**: bindings with equal similarity are ordered by binding id, so replay no longer depends on insertion order.
+- **Desktop evolve budget gate** (`v17:desktop_organism`): its tests run on a temp data root through `DesktopService.create(data_root=...)`. The budget no longer depends on the replay log that earlier runs grew in the repo's `organism_data`. See `docs/GAP_ANALYSIS.md`, item O11.
 
 ### Known issues
 - Evolve budgets were measured on Windows and WSL only: 2000 ms on Windows, 1000 ms elsewhere. See `docs/v1.11/MOA_LAYER.md`, section 8.
@@ -45,12 +46,11 @@
 - Three guardrail misses are recorded as strict xfails in `test_v111_moa_redteam.py`. See `docs/v1.11/MOA_LAYER.md`, section 10.
 - Routing recall gap: extraction queries built around "email address" route unsure. Adding the phrases lost precision (7/11), so the fix waits for a context rule. See `docs/v1.11/MOA_LAYER.md`, section 4.
 - Rust workspace tests need `protoc`. The local pipeline resolves it from `PROTOC`, then `.venv`, then `PATH`.
-- The desktop evolve budget gate (`v17:desktop_organism`) depends on the local `organism_data` state, which grows on every run. On Windows the gate failed its 2000 ms budget once that state had grown. Fresh state passes in about 6 s. See `docs/GAP_ANALYSIS.md`, item O11.
-
 ### Test baseline
 - `pytest -m 'not slow'` collects 591 tests (584 passed, 3 skipped, 4 xfailed). The `suite:fast` gate passes in the full tier on Windows and WSL.
 - Full tier of the local pipeline on Windows (`77e110c`): 61 of 61 gates pass. 49 of them were served from the content-addressed cache.
 - Full tier on WSL Ubuntu (`77e110c`): 61 of 61 gates pass. The first WSL run failed `lint:mypy` on a stale `.mypy_cache` left from before the protobuf modules were regenerated. Clearing the cache fixed it with no code change.
+- At `edd2924`, the head of this unreleased work, the full tier passes on Windows (61 of 61) and on WSL (61 of 61).
 - Fast tier (pre-push): 60 of 60 gates pass.
 
 ## [1.10.0] — 2026-10-25
