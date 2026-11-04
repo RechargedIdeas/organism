@@ -130,10 +130,11 @@ Found while building. These change the plan in
 
 ## 7. Verification
 
-- Fast tier (`python ci/run.py run --tier fast`): 58 of 58 gates pass in 166 s. This includes
-  `suite:fast`, the `v17:*` budgets, `v18:desktop_polish`, `v10:rust` and `rust:clippy`.
-- `suite:fast` (`pytest -m 'not slow'`): 510 passed, 4 skipped, 1 xfailed, 0 failed.
-- `tests/ci` (the local pipeline's own tests): 57 passed.
+- Full tier on Windows (`python ci/run.py run --tier full`, commit `77e110c`): 61 of 61 gates pass in
+  258.7 s, and 49 of them are served from the cache. This includes `suite:fast`, the `v17:*` budgets,
+  `v18:desktop_polish`, `v10:rust`, `rust:clippy` and the MoA redteam gate.
+- Full tier on WSL Ubuntu (`77e110c`, Python 3.12.16): 61 of 61 gates pass in 80.9 s. 49 of them were served from the cache, populated by the earlier WSL run that passed those gates.
+- `suite:fast` (`pytest -m 'not slow'`) on Windows and WSL: 584 passed, 3 skipped, 4 xfailed, 2 deselected, 0 failed.
 - `ruff` and `mypy` pass their ratchets against the recorded baselines. `rustfmt` and `clippy`
   report zero findings.
 - Nightly tier, run before the Rust clean-up: 60 of 60 pass in 589 s. `slow:wall_clock_full`

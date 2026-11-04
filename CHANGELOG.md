@@ -13,11 +13,21 @@
   nightly schedule script, `ci/schedule/windows_nightly.ps1`. Documented in `ci/README.md`.
 - **Runner tests**: `tests/ci/` covers config, preflight, ratchets, hygiene, cache, executor, lock, environment and CLI.
 - **Clippy gate** `rust:clippy` (fast tier): `cargo clippy --workspace --all-targets -- -D warnings`. The Rust workspace has zero clippy findings.
+- **Signed registry actions** (`organism_sdk.signing`): Ed25519 signatures, a `TrustStore` with separate author and approver keys, and domain-tagged payloads. The registration payload binds the module id, version and artifact digest. The promotion payload binds the states and the shadow evidence. `RegistryClient(trust_store=...)` enforces the check. With no trust store, behaviour is unchanged.
+- **MoA guardrails** (`organism_sdk.moa.guardrails`, Phase 5, rule-based): an input guard that blocks prompt-injection queries before routing, and an output guard that rejects an answer whose extracted entities do not occur in the query. Each guard declares its measured false-positive and false-negative rates. `MoAResult.guarded` records which guards fired.
+- **Red-team suite** (`test_v111_moa_redteam.py`, gate `v111:moa_redteam`, non-blocking): variants that must be blocked, three known misses as strict xfails, and a seeded fuzz that checks invariants.
+- **Scheduled CI on GitHub** (`.github/workflows/nightly.yml`): the nightly tier at 02:00 UTC, and an advisory job running `pip-audit` and `cargo audit`.
+- **Tests**: version alignment across the packages and the Rust workspace; every name in the frozen Python API is exported; container and VM detection evidence; the `python -m organism_sdk` entry point.
+- **Docs**: `docs/GAP_ANALYSIS.md` lists what the review fixed, what is open, and the decisions still needed.
 
 ### Changed
-- `tests/ops/test_soak_ops.py`: the POSIX executable-bit check is skipped on Windows. It still runs on Linux.
+- `tests/ops/test_soak_ops.py`: the executable-bit check reads the git index mode (`100755`) on every platform. On Linux it also checks the file's mode bit.
+- **Versions** are aligned to 1.10.0. `sdk/python/pyproject.toml` was 1.4.0 and the Rust workspace was 1.3.0.
+- **Dependencies**: removed `pydantic`, `blake3` and `structlog` from the root project, and `pydantic` and `numpy` from the SDK package, because nothing imported them. The SDK package now declares `cryptography`, which signing uses.
+- **Typing**: mypy excludes the generated protobuf code. The in-repo packages under `modules/` are typed `Any` at the import boundary. Public SDK helpers and test fixtures are annotated. The hand-written mypy ratchet goes from 527 to 130.
+- **Logging**: 24 modules that caught exceptions silently now log them with the standard `logging` module.
 - `EVOLVE_BUDGET_MS` (`organism_sdk/generative/budgets.py`): the evolve wall-clock budget is per platform, 2000 ms on Windows and 1000 ms elsewhere. Windows `spawn` start-up dominates the measured cost.
-- **Rust clean-up**: `cargo fmt` applied to four files (formatting only), so the rustfmt baseline is zero. Clippy fixes in `organism-client` (index loops rewritten as iterators, same output) and `organism-workspace` (`is_empty` added beside `len`). Removed the unused `registered_at` field from `organism-registry`. The `chrono` dependency in `runtime/registry/Cargo.toml` is now unused and can go.
+- **Rust clean-up**: `cargo fmt` applied to four files (formatting only), so the rustfmt baseline is zero. Clippy fixes in `organism-client` (index loops rewritten as iterators, same output) and `organism-workspace` (`is_empty` added beside `len`). Removed the unused `registered_at` field from `organism-registry`. `runtime/registry` no longer depends on `chrono`. The crate is still used by `runtime/workspace` and `organism-client`.
 
 ### Fixed
 - **Routing false positive**: the bare verb `find` is no longer an extractor keyword. It sent generic queries such as
@@ -27,16 +37,20 @@
 - **Preflight protobuf check**: it reported stale modules on every run because it looked for the generated files at the wrong
   path. It now matches the path protoc writes to.
 - **Gate environment placeholders**: `env` values such as `PROTOC: "{protoc}"` reached the child process unexpanded, so `build.rs` received the literal text. The runner now fills them as it does commands. Cargo's build-script cache hid the bug until a formatting change to `build.rs` forced a rerun.
+- **Workspace replay determinism**: bindings with equal similarity are ordered by binding id, so replay no longer depends on insertion order.
 
 ### Known issues
-- Linux evolve budget is unmeasured and kept at 250 ms. See `docs/v1.11/MOA_LAYER.md`, section 8.
+- Evolve budgets were measured on Windows and WSL only: 2000 ms on Windows, 1000 ms elsewhere. See `docs/v1.11/MOA_LAYER.md`, section 8.
+- Registry signatures are checked only when a `TrustStore` is passed. Internal callers still pass placeholder bytes, and where production keys live is not decided. See `docs/GAP_ANALYSIS.md`, item S1.
+- Three guardrail misses are recorded as strict xfails in `test_v111_moa_redteam.py`. See `docs/v1.11/MOA_LAYER.md`, section 10.
 - Routing recall gap: extraction queries built around "email address" route unsure. Adding the phrases lost precision (7/11), so the fix waits for a context rule. See `docs/v1.11/MOA_LAYER.md`, section 4.
 - Rust workspace tests need `protoc`. The local pipeline resolves it from `PROTOC`, then `.venv`, then `PATH`.
 
 ### Test baseline
-- `suite:fast` (`pytest -m 'not slow'`): 510 passed, 4 skipped, 1 xfailed, 0 failed.
-- `tests/ci` (local pipeline): 57 passed.
-- Fast tier of the local pipeline: 58 of 58 gates pass.
+- `pytest -m 'not slow'` collects 591 tests (584 passed, 3 skipped, 4 xfailed). The `suite:fast` gate passes in the full tier on Windows and WSL.
+- Full tier of the local pipeline on Windows (`77e110c`): 61 of 61 gates pass. 49 of them were served from the content-addressed cache.
+- Full tier on WSL Ubuntu (`77e110c`): 61 of 61 gates pass. The first WSL run failed `lint:mypy` on a stale `.mypy_cache` left from before the protobuf modules were regenerated. Clearing the cache fixed it with no code change.
+- Fast tier (pre-push): 60 of 60 gates pass.
 
 ## [1.10.0] — 2026-10-25
 

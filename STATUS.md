@@ -1,10 +1,11 @@
 # Organism — Implementation Status
 
-**Date:** 2026-10-25 (America/New_York)  
-**Release:** **v1.10.0 — Bare metal first + native sandbox**  
+**Date:** 2026-11-04 (America/New_York)  
+**Release:** **v1.10.0 — Bare metal first + native sandbox** (latest tag). v1.11 is in progress and unreleased.  
 **Corpus:** closed v0.1–v1.9.0 + v1.10.0 host portability / native sandbox  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
 **Tag:** [v1.10.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.10.0)  
+**Gap review:** [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) lists what is fixed, what is open, and the decisions still needed.
 
 ## Verdict
 
@@ -20,7 +21,7 @@ See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md)
 ## v1.11 in progress: MoA layer
 
 Phases 0 to 3 of the [upgrade plan](docs/UPGRADE_AND_EXPANSION_PLAN.md) are implemented
-and tested. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
+and tested, and Phase 5 has its rule-based part. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -28,15 +29,32 @@ and tested. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
 | 1 Experts and registration | done | Two reference experts; registry health works |
 | 2 Capability scorer and shadow gate | done | Gate passes on the synthetic set (extraction 12/13, one known false positive) |
 | 3 VSA aggregation, tiers T0 to T4, drills | done | Hysteresis and failure drills tested |
-| 4 Synthesizer and router evolution | not started | Needs a routing-policy artifact and a learned backend |
-| 5 Judge, guardrails, red team | not started | |
+| 4 Synthesizer and router evolution | not started | Needs a routing-policy artifact and a learned backend (D1) |
+| 5 Judge | not started | Needs a calibrated learned backend (D1) |
+| 5 Guardrails and red team | done (rule-based) | Input and output guardrails with measured error rates. Red-team suite runs non-blocking, with three known misses |
 | 6 Lifecycle and provenance | optional | Decision D4 |
+
+Signed registration is available. Pass a `TrustStore` to `RegistryClient` to require an author
+signature on registration and an approver signature on promotion. Without one, signatures are not
+checked, which is the default. Choosing where production keys live is open (decision S1).
 
 ## Soak / wall-clock cadence
 
 - Default CI / pytest: `-m 'not slow'` (fast soak + budgets).
 - Full soak: `ORGANISM_SOAK_FULL=1` on a target box per [docs/ops/SOAK_RUNBOOK.md](docs/ops/SOAK_RUNBOOK.md).
 - Category I ~480s: `ORGANISM_WALL_CLOCK_FULL=1` (opt-in only).
+- Nightly: the local `nightly` tier (Windows Task Scheduler, 02:00), and a scheduled
+  [`nightly.yml`](.github/workflows/nightly.yml) workflow on GitHub with an advisory dependency audit.
+
+## Quality ratchets
+
+| Ratchet | Count | Baseline |
+|---|---|---|
+| ruff | 1 | `ci/baselines/ruff.json` (intentional `exec` in the generative sandbox) |
+| mypy (hand-written) | 130 | `ci/baselines/mypy.json` (breakdown in [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)) |
+| rustfmt | 0 | enforced |
+
+`pytest -m 'not slow'` collects 591 tests. The pre-push fast tier runs 60 gates.
 
 ## v1.10.0 phase table
 

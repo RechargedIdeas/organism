@@ -140,6 +140,9 @@ The list lives in `[hygiene]` in [pipeline.toml](pipeline.toml).
   `ci/runs/.lock`. The runner also detects and clears a lock whose process has exited.
 - **A gate is `ERROR` with `timed out`.** The gate exceeded its `timeout_s`. Raise it in
   `gates.yaml`, or pass `--timeout-scale 2` once to see whether the gate is simply slow.
+- **`lint:mypy` fails with `Module "organism.v1" has no attribute "common_pb2"`**, while `mypy sdk/python`
+  passes with a fresh cache. The cache predates the regenerated protobuf modules. Delete `.mypy_cache` in the
+  repo root and run the gate again.
 - **Re-run a single gate.** `python ci/run.py run --only <gate-id> --no-cache`.
 
 ## Tests
