@@ -8,6 +8,7 @@ import pytest
 from organism_sdk.errors import DimensionMismatch
 from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.snapshot import DurableWorkspace, query_digest
+from organism_sdk.workspace import WorkspaceClient
 
 
 def test_snapshot_and_replay(tmp_path: Path) -> None:
@@ -68,3 +69,14 @@ def test_snapshot_integrity_merkle(tmp_path: Path) -> None:
     snap = dw.snapshot()
     obj = json.loads(snap.path.read_bytes())
     assert obj["merkle_root"] == snap.merkle_root.hex()
+
+
+def test_tied_similarities_come_back_in_binding_id_order() -> None:
+    # Similarity is quantized to 1/DIM, so ties are common. The order of tied hits must not depend
+    # on insertion history, or a replayed workspace answers differently from the original.
+    ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
+    role, filler = Hypervector.random(), Hypervector.random()
+    recs = [ws.bind_exact(role, filler, tags=(f"t{i}",), module_id="m") for i in range(8)]
+    hits = [rec.binding_id for rec, _ in ws.read_similar(recs[0].hypervector, k=8)]
+    assert len(hits) == 8
+    assert hits == sorted(hits, key=str)

@@ -278,7 +278,9 @@ class WorkspaceClient:
         with self._lock:
             for b in self._bindings.values():
                 scored.append((b, b.hypervector.similarity(hv)))
-        scored.sort(key=lambda x: x[1], reverse=True)
+        # Similarity is quantized to 1/DIM, so ties are common. Break them by id so the order does not
+        # depend on insertion history: a replayed workspace inserts its bindings in another order.
+        scored.sort(key=lambda x: (-x[1], str(x[0].binding_id)))
         return scored[:k]
 
     def read_by_provenance(
