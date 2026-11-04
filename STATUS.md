@@ -51,7 +51,7 @@ checked, which is the default. Choosing where production keys live is open (deci
 | Ratchet | Count | Baseline |
 |---|---|---|
 | ruff | 1 | `ci/baselines/ruff.json` (intentional `exec` in the generative sandbox) |
-| mypy (hand-written) | 130 | `ci/baselines/mypy.json` (breakdown in [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)) |
+| mypy (hand-written) | 59 | `ci/baselines/mypy.json` (breakdown in [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)) |
 | rustfmt | 0 | enforced |
 
 `pytest -m 'not slow'` collects 591 tests. The pre-push fast tier runs 60 gates.

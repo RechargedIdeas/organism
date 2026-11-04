@@ -24,7 +24,7 @@ Counts were taken with the project venv (`.venv`), the same interpreter the gate
 | Measure | Start | Now |
 |---|---|---|
 | Ruff findings (ratchet) | 170 | 1 (intentional `exec` in the generative sandbox) |
-| Mypy hand-written findings (ratchet) | 527 | 130 |
+| Mypy hand-written findings (ratchet) | 527 | 59 |
 | Package versions | 1.4.0 (SDK), 1.3.0 (Rust), 1.10.0 (root) | 1.10.0 everywhere, guarded by a test |
 | Declared dependencies unused in code | pydantic, blake3, structlog, SDK numpy | removed |
 | Registry signatures checked | never | when a trust store is configured |
@@ -48,6 +48,7 @@ Counts were taken with the project venv (`.venv`), the same interpreter the gate
 | F11 | Roadmap | MoA Phase 5 (guardrails and red team) was not started. | Rule-based input and output guardrails, a labeled set with measured error rates, and a non-blocking red-team suite. | `aedc234` |
 | F12 | Determinism | An equal-score workspace replay could pick either binding. | Ties are broken by binding id. | `5516388` |
 | F13 | Docs | Budget text in `MOA_LAYER.md` §8 and the CHANGELOG said Linux keeps 250 ms. | Updated to the measured values in `budgets.py`. | this review |
+| F14 | Typing | 33 test and harness functions had no annotations, so their calls were untyped as well. | Annotated them and narrowed the `Optional` reads that the annotations exposed, with asserts. Ratchet 130 to 59. | `4083925` |
 
 ## Open gaps
 
@@ -64,8 +65,9 @@ done without one, but were not done in this review, with the reason given.
 | O6 | Signing | The trust store is not configured in any production entry point. The deploy stack, the generative runtime, and the MoA experts still pass placeholder bytes such as `b"deploy"` and `b"reference-unsigned"`. | **blocked** on S1 (where keys live and who holds them). The default stays unchecked, so existing behaviour is unchanged. |
 | O7 | Guardrails | Aggregation picks the highest-confidence answer. A grounded but wrong answer passes the guards, and a compromised expert reporting confidence 1.0 wins. The guards bound fabricated values, not correctness. | open, documented in `MOA_LAYER.md` §10. Calibration belongs to the judge, so it is covered by O2. |
 | O8 | Dependencies | No Python lock or constraints file. Installs resolve fresh every time. | open. A lock file adds a tool and an upkeep cost, so it is a choice, not a gap to close silently. |
-| O9 | Typing | 130 hand-written mypy findings remain. See the breakdown below. | open. About 64 are annotation work (`no-untyped-def` and `no-untyped-call`). The rest need the code read first, starting with `comparison-overlap` and `arg-type`. |
+| O9 | Typing | 59 hand-written mypy findings remain. See the breakdown below. | open. The annotation work is done (F14). The rest need the code read first, starting with `arg-type` and `attr-defined`. |
 | O10 | Docs | `STATUS.md` was dated 2026-10-25 and listed MoA Phases 4 and 5 as not started. | fixed in this review. The CHANGELOG's chrono note was also wrong: `runtime/registry` no longer depends on chrono, but `runtime/workspace` and `organism-client` still do. |
+| O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **open**, with three options. (a) Give the desktop tests a clean root through an optional `repo_root` on `DesktopService.create`. (b) Bound the replay log by rotation or compaction, which changes runtime behaviour. (c) Reset the local `organism_data/` state, which is the user's local data and needs their say. |
 
 ## Decisions needed
 
@@ -79,20 +81,19 @@ These are the user's to make. Nothing above was decided on your behalf.
 - **S2 (new).** Approve a fresh labeled set for the email recall gap (O4). It has to be written before the context rule, so the rule is not tuned on the test that checks it.
 - **N1 (new).** The GitHub nightly workflow uses Actions minutes. The nightly tier took 589 s locally when it was last measured, and the job is capped at 120 minutes. Keep it, or leave only the Windows task (`OrganismNightlyCI`, which is registered and runs at 02:00)?
 
-## Mypy backlog (130 findings)
+## Mypy backlog (59 findings)
 
-Measured by the ratchet at 130. This is the breakdown by error code, from the same run:
+Measured by the ratchet at 59 after F14. The two annotation codes are gone. This is the breakdown by
+error code, from the same run:
 
 | Code | Count | Where it sits |
 |---|---|---|
-| `no-untyped-call` | 37 | calls to helper functions in tests and the harness that have no annotations |
-| `no-untyped-def` | 27 | the helper functions themselves, mostly in tests and the harness |
-| `arg-type` | 22 | values passed where a narrower type is expected |
+| `arg-type` | 17 | values passed where a narrower type is expected |
 | `attr-defined` | 11 | attribute access on objects typed too broadly |
 | `union-attr` | 6 | `Optional` values used without a narrowing check |
-| `index` | 6 | indexing a value whose type is a union |
 | `comparison-overlap` | 6 | equality checks mypy says can never be true |
 | `no-any-return` | 5 | returns that are `Any` from functions declared to return a concrete type |
+| `index` | 4 | indexing a value whose type is a union |
 | `assignment`, `misc`, `var-annotated`, `operator`, `call-arg` | 10 | one-off findings |
 
 Start with the six `comparison-overlap` findings. One is in `sdk/python/organism_sdk/generative/code_pipeline.py`
@@ -106,3 +107,5 @@ in harness and test files.
 - `pytest -m 'not slow'` collects 591 tests.
 - Full tier on Windows at `77e110c`: 61 of 61 gates pass in 258.7 s.
 - Full tier on WSL Ubuntu at `77e110c`: 61 of 61 gates pass in 80.9 s. The first run failed `lint:mypy` on a stale `.mypy_cache`, and clearing the cache fixed it (see the troubleshooting section of [ci/README.md](../ci/README.md)). In a non-login shell the run needs `/root/.cargo/bin` on `PATH`.
+- Full tier on Windows at `4083925`: 60 of 61 gates pass. `v17:desktop_organism` fails its evolve budget on the local state, which is open as O11.
+- Full tier on WSL Ubuntu at `4083925`: 61 of 61 gates pass in 111.5 s.

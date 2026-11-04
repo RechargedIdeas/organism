@@ -24,7 +24,7 @@
 - `tests/ops/test_soak_ops.py`: the executable-bit check reads the git index mode (`100755`) on every platform. On Linux it also checks the file's mode bit.
 - **Versions** are aligned to 1.10.0. `sdk/python/pyproject.toml` was 1.4.0 and the Rust workspace was 1.3.0.
 - **Dependencies**: removed `pydantic`, `blake3` and `structlog` from the root project, and `pydantic` and `numpy` from the SDK package, because nothing imported them. The SDK package now declares `cryptography`, which signing uses.
-- **Typing**: mypy excludes the generated protobuf code. The in-repo packages under `modules/` are typed `Any` at the import boundary. Public SDK helpers and test fixtures are annotated. The hand-written mypy ratchet goes from 527 to 130.
+- **Typing**: mypy excludes the generated protobuf code. The in-repo packages under `modules/` are typed `Any` at the import boundary. Public SDK helpers, test fixtures, and the test and harness helpers are annotated. The hand-written mypy ratchet goes from 527 to 59.
 - **Logging**: 24 modules that caught exceptions silently now log them with the standard `logging` module.
 - `EVOLVE_BUDGET_MS` (`organism_sdk/generative/budgets.py`): the evolve wall-clock budget is per platform, 2000 ms on Windows and 1000 ms elsewhere. Windows `spawn` start-up dominates the measured cost.
 - **Rust clean-up**: `cargo fmt` applied to four files (formatting only), so the rustfmt baseline is zero. Clippy fixes in `organism-client` (index loops rewritten as iterators, same output) and `organism-workspace` (`is_empty` added beside `len`). Removed the unused `registered_at` field from `organism-registry`. `runtime/registry` no longer depends on `chrono`. The crate is still used by `runtime/workspace` and `organism-client`.
@@ -45,6 +45,7 @@
 - Three guardrail misses are recorded as strict xfails in `test_v111_moa_redteam.py`. See `docs/v1.11/MOA_LAYER.md`, section 10.
 - Routing recall gap: extraction queries built around "email address" route unsure. Adding the phrases lost precision (7/11), so the fix waits for a context rule. See `docs/v1.11/MOA_LAYER.md`, section 4.
 - Rust workspace tests need `protoc`. The local pipeline resolves it from `PROTOC`, then `.venv`, then `PATH`.
+- The desktop evolve budget gate (`v17:desktop_organism`) depends on the local `organism_data` state, which grows on every run. On Windows the gate failed its 2000 ms budget once that state had grown. Fresh state passes in about 6 s. See `docs/GAP_ANALYSIS.md`, item O11.
 
 ### Test baseline
 - `pytest -m 'not slow'` collects 591 tests (584 passed, 3 skipped, 4 xfailed). The `suite:fast` gate passes in the full tier on Windows and WSL.
