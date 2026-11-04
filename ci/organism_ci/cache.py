@@ -20,6 +20,17 @@ from organism_ci.hygiene import tree_files
 
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
+# Environment that can change a gate's outcome. The rest (session ids, shell bookkeeping, the
+# variables git sets for hooks) is left out of the key, so a pre-push run and a terminal run share
+# entries. Tool versions are keyed separately, through Tools.fingerprint.
+KEY_ENV_PREFIXES = ("ORGANISM_", "PYTHON", "CARGO", "RUST", "QT_", "PROTOC", "PYTEST_", "LANG", "LC_")
+
+
+def key_environment(env: dict[str, str], declared: Iterable[str]) -> dict[str, str]:
+    """The part of ``env`` that a cache key covers: declared names plus the outcome-relevant prefixes."""
+    names = set(declared)
+    return {name: value for name, value in env.items() if name in names or name.startswith(KEY_ENV_PREFIXES)}
+
 
 def _safe_name(gate_id: str) -> str:
     return _SAFE.sub("__", gate_id) + ".json"

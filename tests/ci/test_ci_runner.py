@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import _thread
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -114,6 +117,37 @@ def test_advisory_failure_is_not_failing(tmp_path):
     result = _run_one(tmp_path, _gate("soft:fail", "{python} -c 'import sys; sys.exit(1)'", blocking=False))
     assert result.status == FAIL
     assert result.failing is False
+
+
+def _interrupt_once_started(marker: Path) -> None:
+    """Deliver Ctrl-C to the main thread once the gate's process has written its PID."""
+    deadline = time.monotonic() + 30
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    _thread.interrupt_main()
+
+
+@pytest.mark.parametrize("exclusive", [False, True], ids=["parallel", "exclusive"])
+def test_interrupt_stops_the_running_gate_promptly(tmp_path, exclusive):
+    marker = tmp_path / "child.pid"
+    script = tmp_path / "hang.py"
+    script.write_text(
+        "import os, pathlib, time\n"
+        f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid()))\n"
+        "time.sleep(120)\n",
+        encoding="utf-8",
+    )
+    gate = _gate("hang:interrupt", "{python} " + script.as_posix(), timeout_s=300.0, exclusive=exclusive)
+    threading.Thread(target=_interrupt_once_started, args=(marker,), daemon=True).start()
+    started = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        Executor(_context(tmp_path)).run([gate], jobs=2)
+    assert time.monotonic() - started < 30, "the run waited for the gate instead of stopping"
+    pid = int(marker.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 10
+    while runs.pid_alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert not runs.pid_alive(pid), f"gate process {pid} survived the interrupt"
 
 
 def test_cache_skips_a_gate_whose_inputs_have_not_changed(tmp_path):

@@ -20,11 +20,16 @@ On Windows use `.venv\Scripts\python ci\run.py ...`. The runner re-executes itse
 | Tier | Runs | Typical time | When |
 |---|---|---|---|
 | `precommit` | staged-file hygiene, ruff ratchet | about 1 s | every commit (hook) |
-| `fast` | preflight, tree hygiene, lint and format ratchets, every blocking gate tagged `fast` | a few minutes; instant when nothing changed | every push (hook) |
+| `fast` | preflight, tree hygiene, lint and format ratchets, every blocking gate tagged `fast` | a few minutes; unchanged gates are skipped (`CACHED`), timing gates always run | every push (hook) |
 | `full` | `fast` plus gates tagged `full` (desktop smoke) | fast plus a few minutes | before merging |
 | `nightly` | `full` plus the opt-in slow suites (`ORGANISM_WALL_CLOCK_FULL`, `ORGANISM_SOAK_FULL`) | 30 minutes or more | scheduled |
 
 A gate runs in its own tier and every tier above it.
+
+A gate whose inputs are unchanged shows `CACHED` and is not run again. Gates that measure time
+(`cacheable: false`) always run, so an unchanged `fast` run still takes a couple of minutes. Ctrl-C
+stops every gate process the run started, and the run does not return until they are gone. Run
+directories older than the newest 20 are pruned at the start of each run.
 
 ## What a run does
 

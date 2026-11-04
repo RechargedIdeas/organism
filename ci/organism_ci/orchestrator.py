@@ -23,6 +23,7 @@ EXIT_CONFIG = 4
 EXIT_BUSY = 5
 EXIT_INTERRUPTED = 130
 CONFIG_DIR = Path("ci")
+KEEP_RUNS = 20  # older run directories are pruned at the start of each run, so disk use stays bounded
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ def _run_locked(
 ) -> int:
     tools = resolve_tools(root)
     run = runs.new_run(root, opts.tier)
+    runs.prune(root, KEEP_RUNS)
     state = _git_state(tools)
     say(f"Organism local pipeline | tier={opts.tier} | {len(gates)} gate(s) | run {run.path.name}")
 

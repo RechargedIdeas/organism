@@ -8,20 +8,20 @@ from __future__ import annotations
 
 import os
 import re
-import signal
 import subprocess
 import threading
 import time
 from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from organism_ci import steps
-from organism_ci.cache import ResultCache, TreeDigest, cache_key
+from organism_ci.cache import ResultCache, TreeDigest, cache_key, key_environment
 from organism_ci.config import ConfigError, Gate, Pipeline, split_command
 from organism_ci.environment import Tools, build_env
+from organism_ci.procs import LIVE, POLL_S, kill_tree, wait_polling
 from organism_ci.runs import RunDir
 
 PASS = "PASS"
@@ -114,21 +114,6 @@ def _read_tail(path: Path) -> str:
         return ""
 
 
-def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
-    if os.name == "nt":
-        taskkill = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "taskkill.exe"
-        subprocess.run(
-            [str(taskkill), "/PID", str(proc.pid), "/T", "/F"],
-            capture_output=True,
-            check=False,
-        )
-        return
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-
-
 def _supervise(argv: list[str], env: dict[str, str], cwd: Path, timeout_s: float, log: Path) -> _Attempt:
     """Run a command with output going straight to its log file, and kill its tree on timeout."""
     group: dict[str, Any] = (
@@ -147,14 +132,21 @@ def _supervise(argv: list[str], env: dict[str, str], cwd: Path, timeout_s: float
                 stderr=subprocess.STDOUT,
                 **group,
             )
-            try:
-                returncode = proc.wait(timeout=timeout_s)
-            except subprocess.TimeoutExpired:
-                _kill_tree(proc)
-                proc.wait()
-                return _Attempt(None, True, _read_tail(log))
     except OSError as exc:
         return _Attempt(None, False, f"cannot start {argv[0]}: {exc}")
+    LIVE.add(proc)  # raises Interrupted, after killing the process, if the run is already aborting
+    try:
+        returncode = wait_polling(proc, timeout_s)
+    except subprocess.TimeoutExpired:
+        kill_tree(proc)
+        proc.wait()
+        return _Attempt(None, True, _read_tail(log))
+    except BaseException:  # interrupted: a gate must never outlive the runner
+        kill_tree(proc)
+        proc.wait()
+        raise
+    finally:
+        LIVE.discard(proc)
     return _Attempt(returncode, False, _read_tail(log))
 
 
@@ -173,18 +165,35 @@ class Executor:
         self._stop = threading.Event()
 
     def run(self, gates: Sequence[Gate], jobs: int) -> list[GateResult]:
+        LIVE.reopen()
         results: dict[str, GateResult] = {}
         parallel = [g for g in gates if not g.exclusive]
         serial = [g for g in gates if g.exclusive]
-        if parallel:
-            with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-                futures = [pool.submit(self._guarded, gate) for gate in parallel]
-                for future in as_completed(futures):
-                    result = future.result()
-                    results[result.id] = result
-        for gate in serial:
-            results[gate.id] = self._guarded(gate)
+        try:
+            if parallel:
+                with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+                    pending = {pool.submit(self._guarded, gate) for gate in parallel}
+                    try:
+                        while pending:
+                            # Wake periodically: a blocking wait would hide Ctrl-C on Windows.
+                            done, pending = wait(pending, timeout=POLL_S, return_when=FIRST_COMPLETED)
+                            for future in done:
+                                result = future.result()
+                                results[result.id] = result
+                    except KeyboardInterrupt:
+                        self._abort()  # inside the with block: its exit waits for running gates
+                        raise
+            for gate in serial:
+                results[gate.id] = self._guarded(gate)
+        except KeyboardInterrupt:
+            self._abort()
+            raise
         return [results[gate.id] for gate in gates]
+
+    def _abort(self) -> None:
+        """Stop scheduling new gates and kill every gate process still running."""
+        self._stop.set()
+        LIVE.kill_all()
 
     def _guarded(self, gate: Gate) -> GateResult:
         result = GateResult(id=gate.id, tier=gate.tier, blocking=gate.blocking)
@@ -230,6 +239,7 @@ class Executor:
             result.note = f"missing: {', '.join(missing)}"
             return
 
+        declared = {*self.ctx.pipeline.env, *gate.env}
         if gate.builtin is not None:
             argv: tuple[str, ...] = (gate.builtin,)
             env = build_env(tools, self.ctx.pipeline.env, gate.env)
@@ -237,13 +247,14 @@ class Executor:
             command = split_command(gate.command or "", tools.placeholders())
             argv = (tools.program(command.argv[0]), *command.argv[1:])
             env = build_env(tools, self.ctx.pipeline.env, {**gate.env, **command.env})
+            declared.update(command.env)
 
         key = None
         if gate.cacheable and self.ctx.cache is not None:
             key = cache_key(
                 gate_id=gate.id,
                 argv=argv,
-                env=env,
+                env=key_environment(env, declared),
                 tools=tools,
                 tree_digest=self.ctx.tree.digest(gate.inputs or self.ctx.pipeline.inputs),
             )

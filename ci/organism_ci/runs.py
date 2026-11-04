@@ -55,7 +55,7 @@ def new_run(root: Path, tier: str) -> RunDir:
     return run
 
 
-def _pid_alive(pid: int) -> bool:
+def pid_alive(pid: int) -> bool:
     if os.name == "nt":
         out = capture(["tasklist", "/FI", f"PID eq {pid}", "/NH"], Path.cwd()) or ""
         return bool(re.search(rf"\b{pid}\b", out))
@@ -88,7 +88,7 @@ class RunLock:
                 fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             except FileExistsError:
                 holder = self._holder()
-                if holder is not None and _pid_alive(holder):
+                if holder is not None and pid_alive(holder):
                     raise LockBusy(holder) from None
                 try:
                     self.path.unlink()
