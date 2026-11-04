@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from typing import Any
 
 import pytest
 from organism_sdk.contract import ModuleRole
@@ -43,12 +45,14 @@ class _Stub(BaseExpert):
         return ExpertOutput(self.descriptor.expert_id, json.dumps({"from": self.descriptor.expert_id}), 0.9, self._valid)
 
 
-def _pipeline(extra=(), **kwargs) -> MoAPipeline:
+def _pipeline(extra: Iterable[BaseExpert] = (), **kwargs: Any) -> MoAPipeline:
     return MoAPipeline(list(reference_experts()) + list(extra), **kwargs)
 
 
-def _reference(pipeline_experts_map: MoAPipeline, expert_id: str):
-    return pipeline_experts_map._experts[expert_id]
+def _reference(pipeline_experts_map: MoAPipeline, expert_id: str) -> BaseExpert:
+    expert = pipeline_experts_map._experts[expert_id]
+    assert isinstance(expert, BaseExpert)
+    return expert
 
 
 def test_clear_query_runs_one_expert_at_full_tier_with_provenance() -> None:
@@ -148,7 +152,7 @@ def test_schema_invalid_output_on_every_path_falls_back_to_deterministic() -> No
 
 
 def test_custom_deterministic_fallback_is_used() -> None:
-    def fallback(query, form):
+    def fallback(query: str, form: str | None) -> ExpertOutput:
         return ExpertOutput("custom_fallback", json.dumps({"answer": "fixed"}), 1.0, True)
 
     pipeline = _pipeline(deterministic_fallback=fallback)

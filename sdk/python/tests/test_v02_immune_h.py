@@ -8,7 +8,7 @@ from organism_sdk.trace import ImmuneTraceEntry, TraceEmitter, V02TraceSink
 from organism_sdk.workspace import WorkspaceClient
 
 
-def _immune():
+def _immune() -> tuple[ImmuneLayer, WorkspaceClient, TraceEmitter]:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     sink = V02TraceSink()
     tr = TraceEmitter()
@@ -24,6 +24,7 @@ def test_l1_danger_surveil_binding_full_affects_control() -> None:
     assert d.classification in ("DANGER", "PAMP")
     assert d.decision in ("SURVEIL", "QUARANTINE")
     b = ws.read_by_tag(["immune_decision"])[-1]
+    assert b.payload is not None
     assert b.fidelity == "FULL" and b.affects_control and b.payload["safety"]["affects_control"]
     assert any(isinstance(e, ImmuneTraceEntry) for e in tr.entries)
 
@@ -67,5 +68,6 @@ def test_l6_replay_immune_decisions() -> None:
     antigen = Hypervector.random(seed=3)
     immune._detectors.insert(0, antigen)
     d = immune.ingress(antigen)
-    assert ws.read_by_tag(["immune_decision"])[-1].payload["decision"] == d.decision
+    payload = ws.read_by_tag(["immune_decision"])[-1].payload
+    assert payload is not None and payload["decision"] == d.decision
     assert [e for e in tr.entries if isinstance(e, ImmuneTraceEntry)][-1].decision == d.decision

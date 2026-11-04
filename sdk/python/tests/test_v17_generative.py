@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import concurrent.futures
 from pathlib import Path
+from typing import Any
 
 import pytest
 from organism_sdk.generative import (
@@ -15,6 +16,7 @@ from organism_sdk.generative import (
     LLMStubBackend,
     OrganismStore,
     PromoteRefused,
+    ProvenanceRecord,
     SafeSandbox,
     SkillRegistry,
     TemplateDraftBackend,
@@ -24,7 +26,7 @@ from organism_sdk.generative import (
 
 
 @pytest.fixture()
-def art(tmp_path: Path):
+def art(tmp_path: Path) -> ArtifactStore:
     return ArtifactStore(tmp_path / "artifacts")
 
 
@@ -76,7 +78,7 @@ def test_code_pipeline_rejects_shellish(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
 
     class Bad(TemplateDraftBackend):
-        def draft(self, intent, *, spec=None):
+        def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
             return "import os\ndef main():\n    return os.system('echo x')\n"
 
     b = pipe.evolve("hack", backend=Bad())
@@ -88,7 +90,7 @@ def test_code_pipeline_rejects_may_actuate_true(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
 
     class Bad(TemplateDraftBackend):
-        def draft(self, intent, *, spec=None):
+        def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
             return "may_actuate = True\ndef main():\n    return 1\n"
 
     b = pipe.evolve("bad", spec={"may_actuate": False}, backend=Bad())
@@ -117,7 +119,7 @@ def test_generator_backend_protocol(art: ArtifactStore) -> None:
     class Custom:
         name = "custom"
 
-        def draft(self, intent: str, *, spec=None) -> str:
+        def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
             return "def main(x=0, **kwargs):\n    return {'ok': True, 'score': 1.0, 'skill': 'c'}\n"
 
     assert isinstance(Custom(), GeneratorBackend)
@@ -159,7 +161,7 @@ def test_stage_progress_summary(art: ArtifactStore) -> None:
 def test_concurrent_artifact_store(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path / "art")
 
-    def writer(i: int):
+    def writer(i: int) -> ProvenanceRecord:
         return store.put(
             kind="code",
             body=f"def main():\n    return {i}\n",
@@ -345,7 +347,7 @@ def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore) -> None:
             self._src = src
             self.name = "fuzz"
 
-        def draft(self, intent, *, spec=None):
+        def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
             return self._src
 
     for src in payloads:
@@ -426,7 +428,7 @@ def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore) -> None:
     class Bad:
         name = "bad"
 
-        def draft(self, intent, *, spec=None):
+        def draft(self, intent: str, *, spec: dict[str, Any] | None = None) -> str:
             return "may_actuate = True\ndef main():\n    return 1\n"
 
     b = pipe.evolve("bad", backend=Bad(), auto_promote=False)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from organism_sdk.contract import ModuleRole, Severity
@@ -17,8 +18,8 @@ from organism_sdk.moa.reference import Extractor, IntentClassifier, reference_ex
 from organism_sdk.registry import RegistryClient
 
 
-def _descriptor(**overrides) -> CapabilityDescriptor:
-    base = {
+def _descriptor(**overrides: Any) -> CapabilityDescriptor:
+    base: dict[str, Any] = {
         "expert_id": "probe",
         "domain": "probe",
         "task_forms": ("pattern_recognition",),

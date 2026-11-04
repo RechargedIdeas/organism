@@ -5,7 +5,7 @@ import pytest
 from organism_sdk.metamodel import MetamodelDisabled, MetamodelTracker, SynthesisStage
 
 
-def _spec(**kw):
+def _spec(**kw: object) -> dict[str, object]:
     base = {
         "module_id": "adapter_alpha",
         "name": "adapter_alpha",

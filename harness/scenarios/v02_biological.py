@@ -6,11 +6,11 @@ import time
 from dataclasses import replace
 
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
-from organism_sdk.autonomic import AutonomicController, AutonomicConfig, RouterExposedParams
+from organism_sdk.autonomic import AutonomicConfig, AutonomicController, RouterExposedParams
 from organism_sdk.circadian import CircadianClock, kleiber_declared_share, metabolic_inefficiency
 from organism_sdk.contract import ReliabilityTier as RT
+from organism_sdk.contract import SubstrateContract
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import (
     HormoneBus,
@@ -30,13 +30,13 @@ from organism_sdk.trace import HormoneTraceEntry, ImmuneTraceEntry, TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
 
 
-def _tr():
+def _tr() -> TraceEmitter:
     tr = TraceEmitter()
     tr.attach_v02_sink(V02TraceSink())
     return tr
 
 
-def _t2_contract(module_id: str = "learned_apoptosis_t2"):
+def _t2_contract(module_id: str = "learned_apoptosis_t2") -> SubstrateContract:
     c = DeterministicEngine().declare_contract()
     return replace(
         c,

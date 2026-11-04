@@ -6,7 +6,7 @@ from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
 
 
-def _reg_with_engine():
+def _reg_with_engine() -> tuple[RegistryClient, DeterministicEngine]:
     eng = DeterministicEngine()
     reg = RegistryClient()
     c = eng.declare_contract()

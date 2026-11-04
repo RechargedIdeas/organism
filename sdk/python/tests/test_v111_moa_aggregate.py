@@ -48,7 +48,7 @@ def test_composite_recovers_every_fact_for_small_sets() -> None:
 
 
 @pytest.mark.parametrize("k", range(1, MAX_EXPERTS_PER_REQUEST + 1))
-def test_provenance_recovers_for_every_allowed_count(k):
+def test_provenance_recovers_for_every_allowed_count(k: int) -> None:
     rng = random.Random(1000 + k)
     outs = [
         _out(f"e{i}", f'{{"v": {rng.randrange(10_000)}}}', round(rng.random(), 2), rng.random() < 0.8)

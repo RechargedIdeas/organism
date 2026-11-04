@@ -19,7 +19,7 @@ from organism_sdk.trace import HormoneTraceEntry, TraceEmitter, V02TraceSink
 from organism_sdk.workspace import WorkspaceClient
 
 
-def _bus_ws():
+def _bus_ws() -> tuple[WorkspaceClient, HormoneBus, TraceEmitter, V02TraceSink]:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     sink = V02TraceSink()
     tr = TraceEmitter()
@@ -32,8 +32,10 @@ def test_k1_hormone_state_written_each_window() -> None:
     levels = bus.compute_release(stress_load=0.9, viability_score=0.4, crisis_precursor_count=1)
     rec = bus.write_telemetry_window(levels)
     assert "hormone_state" in rec.tags and rec.fidelity == "FULL" and rec.affects_control
-    assert rec.payload["cortisol"] > 0
-    assert abs(bus.read_workspace_hormone_state().cortisol - levels.cortisol) < 1e-9
+    assert rec.payload is not None and rec.payload["cortisol"] > 0
+    state = bus.read_workspace_hormone_state()
+    assert state is not None
+    assert abs(state.cortisol - levels.cortisol) < 1e-9
 
 
 def test_write_mirror_read_consistency() -> None:
@@ -56,7 +58,9 @@ def test_k2_staleness_in_trace_and_replay_uses_traced() -> None:
     assert he and he[-1].staleness_ms == reading.staleness_ms
     bus.write_telemetry_window(HormoneLevels(cortisol=0.99, window_id="w2"))
     assert abs(he[-1].cortisol - 0.55) < 1e-9
-    assert abs(bus.read_workspace_hormone_state().cortisol - 0.99) < 1e-9
+    state = bus.read_workspace_hormone_state()
+    assert state is not None
+    assert abs(state.cortisol - 0.99) < 1e-9
 
 
 def test_k5_kill_mirror_falls_back_to_workspace() -> None:
@@ -115,8 +119,9 @@ def test_j3_replay_interoceptive_binding() -> None:
     ise = InteroceptiveStateEstimator(ws)
     st = ise.estimate(HealthVector(thermal=0.8, energy=0.9))
     rec = ise.write_state(st)
-    assert rec.payload["viability_score"] == st.viability_score
-    assert ws.read_by_tag(["interoceptive_state"])[0].payload["viability_score"] == st.viability_score
+    assert rec.payload is not None and rec.payload["viability_score"] == st.viability_score
+    payload = ws.read_by_tag(["interoceptive_state"])[0].payload
+    assert payload is not None and payload["viability_score"] == st.viability_score
 
 
 def test_j2_ise_offline_fallback_signal() -> None:

@@ -40,6 +40,7 @@ from organism_sdk.contract import (
 )
 from organism_sdk.degradation import BYZ_COUNT_L4, DegradationMachine, FaultInjector, HealthSignals, T_DOWN_FAST
 from organism_sdk.errors import JustificationMissing, RegistrationRejected
+from organism_sdk.health import HealthReport
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.immune import IMMUNE_MODULE_ID, ImmuneLayer, validate_control_binding
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
@@ -182,9 +183,7 @@ class _UnjustifiedActuator(OrganismModule):
     def handle(self, input: PerceptionInput) -> Emission:  # noqa: A002
         return Emission(action_class="control_actuation", payload={"ok": False}, metadata={})
 
-    def health(self):
-        from organism_sdk.health import HealthReport
-
+    def health(self) -> HealthReport:
         return HealthReport(status="HEALTHY", detail={})
 
     def justify(self, emission: Emission) -> None:

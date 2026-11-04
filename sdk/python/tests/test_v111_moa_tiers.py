@@ -19,7 +19,7 @@ from organism_sdk.moa.tiers import MoATier, TierController, TierInputs, select_t
         (TierInputs(active=3, healthy=3, gpu_blocked=False, global_level="L4"), MoATier.T4),
     ],
 )
-def test_select_tier_table(inp, expected):
+def test_select_tier_table(inp: TierInputs, expected: MoATier) -> None:
     assert select_tier(inp).tier == expected
 
 

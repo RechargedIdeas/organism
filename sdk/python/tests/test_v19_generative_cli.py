@@ -8,7 +8,7 @@ import pytest
 from organism_sdk.cli import main
 
 
-def _run(argv, tmp_path: Path, capsys):
+def _run(argv: list[str], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
     code = main([*argv, "--data-root", str(tmp_path)])
     captured = capsys.readouterr()
     return code, captured.out

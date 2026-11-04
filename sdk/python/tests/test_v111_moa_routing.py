@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
 from organism_sdk.contract import ModuleRole
 from organism_sdk.moa import shadow
-from organism_sdk.moa.experts import BaseExpert, CapabilityDescriptor, ExpertOutput
+from organism_sdk.moa.experts import BaseExpert, CapabilityDescriptor, Expert, ExpertOutput
 from organism_sdk.moa.reference import reference_experts
-from organism_sdk.moa.scorer import ROUTE_EXPERT, ROUTE_LLM_FALLBACK, ROUTE_UNSURE, LexicalScorer
+from organism_sdk.moa.scorer import (
+    ROUTE_EXPERT,
+    ROUTE_LLM_FALLBACK,
+    ROUTE_UNSURE,
+    LexicalScorer,
+    RouteDecision,
+)
 
 DATA = Path(__file__).parent / "data" / "moa_routing_synthetic.json"
 
@@ -126,11 +133,9 @@ def test_known_recall_gap_singular_email_is_routed_to_extractor() -> None:
 class _AlwaysFirst:
     """A deliberately poor scorer: always routes to the first candidate."""
 
-    def decide(self, query, experts):
-        from organism_sdk.moa.scorer import RouteDecision
-
-        experts = list(experts)
-        return RouteDecision(ROUTE_EXPERT, experts[0].descriptor.expert_id, (), 1.0, "always_first")
+    def decide(self, query: str, experts: Iterable[Expert]) -> RouteDecision:
+        candidates = list(experts)
+        return RouteDecision(ROUTE_EXPERT, candidates[0].descriptor.expert_id, (), 1.0, "always_first")
 
 
 def test_shadow_gate_fails_for_a_poor_scorer() -> None:

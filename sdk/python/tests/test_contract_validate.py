@@ -1,6 +1,8 @@
 """contract:validate gate — A.2 / FailureSignature escalation invariants."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from organism_sdk.contract import (
     CapabilityScopes,
@@ -35,7 +37,7 @@ from organism_sdk.contract import (
 from organism_sdk.errors import RegistrationRejected
 
 
-def _base_contract(**fail_kw) -> SubstrateContract:
+def _base_contract(**fail_kw: Any) -> SubstrateContract:
     failure = fail_kw.pop("failure", None)
     if failure is None:
         failure = FailureSignature(
