@@ -1,6 +1,7 @@
 # Lightspeed on Organism: system design and integration map
 
-Date: 2026-11-04. Status: design only. Nothing here is built, trained, benchmarked or committed.
+Date: 2026-11-04. Status: design only. Nothing here is trained or benchmarked. The Organism-side work for stage A (K1) is
+committed. The KotMoE-side work has not started. The next agent starts with `docs/HANDOVER.md` in the Organism repo.
 Companion to the KotMoE model plan (`LIGHTSPEED.md` in the KotMoE repo, owner-facing). That plan covers the weights
 and their training. This file covers the system the weights sit inside, and how Organism's substrate supplies it.
 
@@ -55,7 +56,7 @@ Every target below is a target until a gate measures it. Numbers already measure
 | Organism hypervectors | 10,000-bit binary vectors, bind, bundle, similarity | Python, Kotlin (`Hypervector.kt`), Rust helpers | Kotlin parity K0 done |
 | Organism op log | SQLite WAL op log, content-addressed snapshots, replay | `workspace.py` (durable) | Python. Kotlin planned (K4) |
 | Organism sandbox | Policy shape and rlimits. Linux namespaces best effort. Not confinement on Windows, macOS or Android | `sandbox/` | Insufficient for KotMoE's rule |
-| Organism Kotlin SDK | Hypervector and degradation parity, conformance test. Version `1.11.0-dev`, JVM 11, stdlib only, no publishing block yet | `sdk/kotlin` (branch `feat/kotlin-parity`) | K1 (contracts, registry) next, then K2 (eligibility, plans) |
+| Organism Kotlin SDK | Hypervector, degradation, contract validation, lifecycle ladder and registry, with conformance vectors. Version `1.11.0-dev`, JVM 11, stdlib only, private publish configured | `sdk/kotlin` (branch `feat/kotlin-parity`, commit `34c25a2`) | K1 partly done; K1b open; K2 (eligibility, plans) next |
 | Lightspeed core | Sparse MoE in Kotlin, speculative decoding, effort sampler, W4 expert paging | Not built | LS3 (KotMoE plan) |
 | Lightspeed decision records | Route, effort and tool decision records, hash-chained trace | Not built | LS4 |
 | LS-Bench, anonymiser | Benchmark schema and privacy tools | Not built | LS1, LS2 |

@@ -1,5 +1,10 @@
 # organism as a substrate for the next-generation KotMoE agent framework and RAMA
 
+> **Status (2026-11-04):** part of this analysis is superseded. Decision 1 is made: KotMoE consumes
+> `org.organism:organism-kotlin` as a dependency and does not reimplement the concepts. The artifact is published to a
+> private repository. See `LIGHTSPEED_ON_ORGANISM.md` section 7, `AI_MODEL_GAPS.md` and `HANDOVER.md`. The rest of this
+> document stands as a record of the analysis.
+
 Date: 2026-11-01. Analysis only. Nothing in the KotMoE repo was edited, and nothing from organism was run or installed.
 Sources: a shallow clone of `RechargedIdeas/organism` (336 tracked files, 1 commit, v1.10.0),
 the KotMoE repository on `p0-stabilise` (read-only), and the sibling KotMoE mapping report.

@@ -111,4 +111,5 @@ registered with Organism).
 - **Where the line is.** Organism should own contracts, lifecycle, eligibility, traces and gates. KotMoE should own
   experts, tools, platform adapters, data handling and the user interface. Gaps A2, B6, C2, E2 and G1 sit on that
   boundary, and each one needs an owner decision.
-- **Fixed in this change:** B3 (Kotlin registry synchronized). Everything else is still open.
+- **Fixed in K1:** B3 (Kotlin registry synchronized, commit `34c25a2`). Everything else is still open.
+- **Status 2026-11-04:** `docs/HANDOVER.md` has the working order for these gaps.

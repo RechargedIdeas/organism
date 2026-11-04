@@ -7,6 +7,16 @@ Goals, in the owner's words: add what Organism is missing, give everything that 
 systems and pipelines interoperable across languages (and future ones), build whatever KotMoE needs into Organism, then
 integrate with KotMoE as it goes, keeping docs and repos current.
 
+## Status (2026-11-04)
+
+- K0 is done. K1 is partly done (commit `34c25a2`): contracts, validation, lifecycle ladder, registry (synchronized),
+  and the conformance vectors `contract.json` and `lifecycle.json`. K1b (below) is open. K2 is next.
+- Decisions: KotMoE consumes this SDK as a dependency, not a reimplementation. The artifact is published to a
+  private repository (`./gradlew publish`). Both were decided on 2026-11-04.
+- The next agent starts with `docs/HANDOVER.md`. The full gap list, with priorities, is `docs/AI_MODEL_GAPS.md`.
+  The design for the KotMoE side is `docs/LIGHTSPEED_ON_ORGANISM.md`.
+- This branch is 12 commits behind `main`, which has the v1.11 MoA layer. Merge or rebase before any PR.
+
 ## Gaps found in Organism (to fill)
 
 | # | Gap | Plan |
@@ -31,7 +41,8 @@ integrate with KotMoE as it goes, keeping docs and repos current.
 | Phase | Content | Effort | State |
 |---|---|---|---|
 | K0 | Fork on X:, venv, baseline, conformance harness, Kotlin build, hypervector + degradation parity | S | **done** |
-| K1 | Contract, validation, registry + lifecycle ladder (Kotlin), vectors `contract.json`, `lifecycle.json` | M | next |
+| K1 | Contract, validation, registry + lifecycle ladder (Kotlin), vectors `contract.json`, `lifecycle.json` | M | **partly done** (`34c25a2`): contract field subset, validation, ladder, registry, vectors |
+| K1b | Output forms (text, token stream, tool call), tool contract, human-confirmation justification, Ed25519 signature verification, health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes, canonical JSON writer | M | open. The P0 rows of `docs/AI_MODEL_GAPS.md` come first |
 | K2 | Router, `DispatchPlan` canonical bytes, trace entries, eligibility mask + exclusions (Python+Kotlin), vectors | M | |
 | K3 | Hormone bus, autonomic, circadian, immune, interoception parity; plain-name modulators; level table as data | M | |
 | K4 | Workspace, ops log, snapshots, replay (JSONL + digest chain), vectors | M | |
@@ -43,7 +54,8 @@ integrate with KotMoE as it goes, keeping docs and repos current.
 
 ## KotMoE integration (per phase)
 
-KotMoE consumes `sdk/kotlin` as a pure-Kotlin dependency (JVM target 11, stdlib only). Integration is always additive,
+KotMoE consumes the Kotlin SDK as a pinned dependency, `org.organism:organism-kotlin`, from the private repository
+(JVM target 11, stdlib only). Integration is always additive,
 off by default, and lands as a KotMoE branch reviewed by the owner; Organism never gains a runtime need for KotMoE.
 
 | After | KotMoE change |

@@ -1,5 +1,9 @@
 # Where Organism fits: superagent mapping + pure-Kotlin agent loop + KotMoE
 
+> **Status (2026-11-04):** the dependency model in section 3 is confirmed: KotMoE depends on `org.organism:organism-kotlin`,
+> published to a private repository. Organism does not reimplement the concepts in KotMoE. Current state and next steps are
+> in `HANDOVER.md`.
+
 Date: 2026-11-01. Plan only. No KotMoE repo edits. Inputs: `KOTMOE_MAPPING.md` (D1-D27), `KOTMOE_AGENT_LOOP_PLAN.md` (phases A-H),
 `KOTMOE_SUBSTRATE.md` (Organism analysis), and the live Organism fork at this repository
 (branch `feat/kotlin-parity`, K0 done: Kotlin SDK with hypervector + degradation machine bit-exact against Python vectors;

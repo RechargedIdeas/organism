@@ -13,13 +13,18 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
    (compact, sorted keys, `schema` field). Vectors are checked in. A port is conformant for an area when it replays every
    case and gets the same output.
 2. **A vector change is an API change.** Regenerate only with a reviewed reference change; every SDK's tests must be
-   updated in the same PR (CI gate `conformance:all`).
+   updated in the same PR. The CI gate `conformance:all` is planned. Today only `conformance:kotlin` runs, and nothing
+   checks that the checked-in vectors match a fresh run (`docs/AI_MODEL_GAPS.md`, I5).
 3. **Wire formats are language neutral.** Messages use `proto/organism/v1` (gRPC) or the JSON forms in the vectors. Byte
    strings (hypervectors) are lower-case hex words, never language-native ints (64-bit safety).
 4. **Floats.** Vectors carry IEEE-754 doubles; ports must use the same operation order as the reference (the degradation
    thresholds are written as `1.0 - ALPHA - delta`, not folded). Canonical byte output (plans, traces) will use the
    reference's shortest round-trip float text; each SDK ships a formatter proven against the vectors.
+   The Kotlin SDK reads JSON only. The canonical encoder (gap C3 in `docs/AI_MODEL_GAPS.md`) is not written yet.
 5. **Randomness is not portable.** Vectors never depend on an RNG stream. Generators write explicit inputs.
+   **Comparison rules (contract area):** the vectors compare severity, code and field path, in order. Messages are for
+   people and are not conformance. The generator writes text with the host's newline, so on Windows the files are CRLF
+   and git stores them as LF. Compare normalised content.
 6. **Time is injected.** Anything with hysteresis takes a virtual clock so vectors are deterministic.
 7. **Safety invariants are tested in every language**: bio actuation refused, `may_actuate=False` for synthesised modules,
    shield parameters unreachable, promote ladder order, fail-closed defaults.
@@ -31,8 +36,8 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 |---|---|---|---|---|
 | Hypervector (bind, permute, similarity, bundle) | `hypervector.json` | reference | **conformant** | partial (no bundle/permute vectors yet) |
 | Degradation machine L0..L4 | `degradation.json` | reference | **conformant** (26 scenarios, all levels) | port exists, vectors pending |
-| Contract + validation | planned `contract.json` | reference | planned (K1) | planned |
-| Registry + lifecycle ladder | planned `lifecycle.json` | reference | planned (K1) | partial |
+| Contract + validation | `contract.json` (24 cases) | reference | **conformant** (K1; field subset, see `Contract.kt`) | planned |
+| Registry + lifecycle ladder | `lifecycle.json` (121 transitions, 11 mismatches, 8 queries) | reference | **conformant** (K1; registry is synchronized) | partial |
 | Router + canonical `DispatchPlan` bytes | planned `router.json` | reference | planned (K2) | partial |
 | Workspace + ops log + snapshots | planned `workspace.json` | reference | planned (K4) | partial |
 | Hormone bus / autonomic / immune / circadian | planned | reference | planned (K3) | none |
@@ -54,4 +59,6 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 PYTHONPATH=sdk/python:modules python conformance/generate.py
 # Kotlin
 cd sdk/kotlin && ./gradlew test
+# publish the Kotlin SDK to the private repository (default: sdk/kotlin/build/private-repo)
+cd sdk/kotlin && ./gradlew publish
 ```
