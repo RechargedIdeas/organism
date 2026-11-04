@@ -130,6 +130,7 @@ class DesktopService:
     _last_bundle_path: str | None = None
     bio_modules: dict[str, Any] = field(default_factory=dict)
     _repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
+    _data_root: Path | None = None
     _last_plan: DispatchPlan | None = None
     _last_pipeline: PipelineResult | None = None
     _last_contract_results: list[dict[str, Any]] = field(default_factory=list)
@@ -148,6 +149,7 @@ class DesktopService:
         cfg: DeployConfig | None = None,
         *,
         config_path: Path | str | None = None,
+        data_root: Path | None = None,
     ) -> DesktopService:
         path = Path(config_path) if config_path else None
         if cfg is None and path is not None:
@@ -168,7 +170,7 @@ class DesktopService:
             t_down=dict(T_DOWN_FAST),
             t_up=dict(T_UP_FAST),
         )
-        svc = cls(stack=stack, degrade=degrade, _active_config_path=path)
+        svc = cls(stack=stack, degrade=degrade, _active_config_path=path, _data_root=data_root)
         try:
             svc.hormone = HormoneBus(workspace=stack.workspace, trace=stack.trace)
         except TypeError:
@@ -234,9 +236,13 @@ class DesktopService:
         svc._init_generative()
         return svc
 
+    def _organism_data_root(self) -> Path:
+        """Local state for generative artifacts: ``data_root`` when given, else the repo's ``organism_data``."""
+        return self._data_root or self._repo_root / "organism_data"
+
     def _init_generative(self) -> None:
         """Wire Organism generative evolution pipelines (CPU-only artifact roots)."""
-        root = self._repo_root / "organism_data"
+        root = self._organism_data_root()
         art = ArtifactStore(root / "artifacts")
         self.artifact_store = art
         replay = DraftReplayLog(root / "artifacts" / "draft_replay.json")
@@ -2377,7 +2383,7 @@ class DesktopService:
         assert self.organism_store and self.skill_registry and self.asset_pipeline
         profile = self.organism_store.ensure_default()
         if dest is None:
-            out_dir = self._repo_root / "organism_data" / "bundles"
+            out_dir = self._organism_data_root() / "bundles"
             out_dir.mkdir(parents=True, exist_ok=True)
             dest = out_dir / f"{profile.organism_id}_bundle.zip"
         result = export_organism_bundle(
