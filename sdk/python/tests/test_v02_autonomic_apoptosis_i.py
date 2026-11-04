@@ -14,7 +14,7 @@ from organism_sdk.trace import AutonomicTraceEntry, TraceEmitter, V02TraceSink
 from organism_sdk.workspace import WorkspaceClient
 
 
-def test_m1_crisis_precursor_enters_crisis_traced():
+def test_m1_crisis_precursor_enters_crisis_traced() -> None:
     tr = TraceEmitter(); tr.attach_v02_sink(V02TraceSink())
     t = [0.0]
     ac = AutonomicController(trace=tr, config=AutonomicConfig(t_down_s=0.01), clock=lambda: t[0])
@@ -23,7 +23,7 @@ def test_m1_crisis_precursor_enters_crisis_traced():
     assert any(isinstance(e, AutonomicTraceEntry) for e in tr.entries)
 
 
-def test_m2_recovery_hysteresis_no_flap():
+def test_m2_recovery_hysteresis_no_flap() -> None:
     t = [0.0]
     ac = AutonomicController(config=AutonomicConfig(t_down_s=0.05, t_up_s=0.3, t_recovery_dwell_s=0.2), clock=lambda: t[0])
     ac.tick(viability=0.1, crisis_precursor=True)
@@ -39,7 +39,7 @@ def test_m2_recovery_hysteresis_no_flap():
     assert ac.mode in ("RECOVERY", "PARASYMPATHETIC")
 
 
-def test_m3_autonomic_cannot_select_module():
+def test_m3_autonomic_cannot_select_module() -> None:
     ac = AutonomicController()
     with pytest.raises(PermissionError):
         ac.select_module_for_task("task")
@@ -50,7 +50,7 @@ def test_m3_autonomic_cannot_select_module():
     assert plan.disposition == "DISPATCH"
 
 
-def test_m4_oscillation_bounded_by_hysteresis():
+def test_m4_oscillation_bounded_by_hysteresis() -> None:
     t = [0.0]
     ac = AutonomicController(config=AutonomicConfig(t_down_s=0.1, t_up_s=0.5), clock=lambda: t[0])
     before = len(ac.transitions)
@@ -60,7 +60,7 @@ def test_m4_oscillation_bounded_by_hysteresis():
     assert len(ac.transitions) - before <= 2
 
 
-def test_n1_self_terminate_with_successor():
+def test_n1_self_terminate_with_successor() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     tr = TraceEmitter(); tr.attach_v02_sink(V02TraceSink())
     svc = ApoptosisService(ws, trace=tr)
@@ -74,7 +74,7 @@ def test_n1_self_terminate_with_successor():
     assert ws.read_by_tag(["death_certificate"])
 
 
-def test_n2_t0_cannot_self_terminate():
+def test_n2_t0_cannot_self_terminate() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws)
     c = DeterministicEngine().declare_contract()
@@ -83,7 +83,7 @@ def test_n2_t0_cannot_self_terminate():
     assert not result.accepted and result.reason == "AP-2"
 
 
-def test_n3_control_affecting_without_successor_degraded():
+def test_n3_control_affecting_without_successor_degraded() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws)
     c = DeterministicEngine().declare_contract()
@@ -94,7 +94,7 @@ def test_n3_control_affecting_without_successor_degraded():
     assert not result.accepted and result.state == "DEGRADED" and result.reason == "AP-3"
 
 
-def test_autonomic_params_modulate_router():
+def test_autonomic_params_modulate_router() -> None:
     eng = DeterministicEngine(); reg = RegistryClient(); c = eng.declare_contract()
     reg.register(c, c.identity.artifact_digest, b"s", module=eng, test_bypass_promote="DELIBERATION")
     router = Router(reg, autonomic_params=RouterExposedParams(exploration_budget=0.0, preemption_class="PREEMPT_RESEARCH"))

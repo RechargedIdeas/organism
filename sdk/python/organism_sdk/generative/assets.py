@@ -322,8 +322,8 @@ def resolve_image_backend(name: str | None = None) -> ImageBackend:
 
     key = (name or os.environ.get("ORGANISM_IMAGE_BACKEND") or "procedural").strip().lower()
     if key in ("hosted", "hosted_image"):
-        return HostedImageBackend()  # type: ignore[return-value]
-    return ProceduralImageBackend()  # type: ignore[return-value]
+        return HostedImageBackend()
+    return ProceduralImageBackend()
 
 
 def _svg_banner(brief: str, *, w: int, h: int, palette: dict[str, str]) -> str:

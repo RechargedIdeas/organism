@@ -10,7 +10,7 @@ from organism_sdk.registry import CapabilityFilter, RegistryClient, ShadowValida
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 
-def test_register_query_promote_roundtrip():
+def test_register_query_promote_roundtrip() -> None:
     eng = DeterministicEngine()
     reg = RegistryClient()
     c = eng.declare_contract()
@@ -51,7 +51,7 @@ def test_register_query_promote_roundtrip():
     assert handles[0].module_id == "deterministic_engine"
 
 
-def test_workspace_bind_unbind_exactness():
+def test_workspace_bind_unbind_exactness() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     role = Hypervector.random()
     filler = Hypervector.random()
@@ -67,7 +67,7 @@ def test_workspace_bind_unbind_exactness():
     assert ws.read_by_binding_id(bound.binding_id) is None
 
 
-def test_workspace_write_rejects_out_of_scope_tags():
+def test_workspace_write_rejects_out_of_scope_tags() -> None:
     ws = WorkspaceClient(write_tags=("allowed",), read_tags=("*",))
     role = Hypervector.random()
     filler = Hypervector.random()

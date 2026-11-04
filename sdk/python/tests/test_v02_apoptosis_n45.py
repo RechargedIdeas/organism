@@ -27,7 +27,7 @@ def _t2(mid: str):
     )
 
 
-def test_n4_drain_killed_synthetic_no_succeeded():
+def test_n4_drain_killed_synthetic_no_succeeded() -> None:
     svc, ws = _svc()
     r = svc.begin_self_terminate(
         _t2("drain_mod"),
@@ -42,7 +42,7 @@ def test_n4_drain_killed_synthetic_no_succeeded():
     assert ws.read_by_tag(["lifecycle_synthetic"])[-1].payload["on_drain_outcome"] == "killed"
 
 
-def test_n5_fail_blocks_then_pass_promotes():
+def test_n5_fail_blocks_then_pass_promotes() -> None:
     svc, ws = _svc()
     assert svc.begin_self_terminate(
         _t2("parent"),

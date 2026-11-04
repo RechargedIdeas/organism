@@ -15,13 +15,13 @@ class FakeRouter:
         return "L0"
 
 
-def test_stub_without_router():
+def test_stub_without_router() -> None:
     em = TraceEmitter()  # M1 stub
     em.emit_routing(RoutingTraceEntry(task_id="t1", form="control_actuation"))
     assert len(em.entries) == 1
 
 
-def test_auto_populate():
+def test_auto_populate() -> None:
     em = TraceEmitter(FakeRouter())
     entry = RoutingTraceEntry(task_id="t1", form="x")
     em.emit_routing(entry)
@@ -30,7 +30,7 @@ def test_auto_populate():
     assert entry.policy_digest == b"\x11" * 32
 
 
-def test_caller_override_rejected():
+def test_caller_override_rejected() -> None:
     em = TraceEmitter(FakeRouter())
     entry = RoutingTraceEntry(task_id="t1", form="x", policy_id="evil")
     with pytest.raises(SDKInvariantViolation):

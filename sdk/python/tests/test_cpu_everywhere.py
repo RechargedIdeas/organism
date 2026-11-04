@@ -39,14 +39,14 @@ def test_prefer_gpu_falls_back_to_cpu_without_cuda(monkeypatch):
     assert sel.backend in {"numpy_cpu", "torch_cpu"}
 
 
-def test_requires_gpu_never_raises():
+def test_requires_gpu_never_raises() -> None:
     sel = resolve_requires_gpu(True)
     assert sel.runtime in {RuntimeId.CPU_GENERAL, RuntimeId.GPU_CUDA}
     # Must be a successful selection object, not an exception
     assert sel.backend
 
 
-def test_cpu_can_host_all_research_hardware():
+def test_cpu_can_host_all_research_hardware() -> None:
     for hw in CPU_HOSTABLE_HARDWARE:
         assert cpu_can_host(hw), hw
     assert cpu_can_host("NONE")
@@ -54,7 +54,7 @@ def test_cpu_can_host_all_research_hardware():
     assert cpu_can_host("HW_NEUROMORPHIC")
 
 
-def test_neuromorphic_research_sim_is_cpu():
+def test_neuromorphic_research_sim_is_cpu() -> None:
     sel = neuromorphic_cpu_backend()
     assert sel.runtime == RuntimeId.CPU_GENERAL
     assert sel.backend == CPU_RESEARCH_SIM_BACKEND or sel.backend == "research_sim_cpu"
@@ -68,7 +68,7 @@ def test_neuro_sim_caps_additive(monkeypatch):
     assert neuro_sim_enabled()
 
 
-def test_snn_spike_sim_runs_on_cpu_without_hw():
+def test_snn_spike_sim_runs_on_cpu_without_hw() -> None:
     from organism_sdk.workspace import WorkspaceClient
     from snn_sentinel.module import SNNSentinel
 
@@ -94,7 +94,7 @@ def test_gpu_twin_wave_on_cpu_under_prefer(monkeypatch):
         assert r.runtime_id == "CPU_GENERAL"
 
 
-def test_bio_modules_may_actuate_false():
+def test_bio_modules_may_actuate_false() -> None:
     from bio_digital.mycelium import MyceliumModule
     from bio_digital.slime_mold import SlimeMoldModule
 
@@ -103,7 +103,7 @@ def test_bio_modules_may_actuate_false():
         assert c.safety.may_actuate is False
 
 
-def test_missing_gpu_is_not_process_failure():
+def test_missing_gpu_is_not_process_failure() -> None:
     assert_never_hard_fail_missing_gpu(None)
     sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
     assert sel is not None
@@ -117,7 +117,7 @@ def test_prefer_accelerator_env(monkeypatch):
     assert prefer_accelerator() is True
 
 
-def test_torch_probe_is_bool():
+def test_torch_probe_is_bool() -> None:
     assert isinstance(torch_available(), bool)
 
 
@@ -171,7 +171,7 @@ def test_no_torch_mocked_stays_numpy(monkeypatch):
     assert sel.runtime == RuntimeId.CPU_GENERAL
 
 
-def test_accelerator_selection_summary_keys():
+def test_accelerator_selection_summary_keys() -> None:
     from organism_sdk.device import accelerator_selection_summary
 
     s = accelerator_selection_summary()

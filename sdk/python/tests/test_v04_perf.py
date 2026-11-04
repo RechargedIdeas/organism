@@ -16,24 +16,24 @@ from harness.scenarios.v04_perf import (
 )
 
 
-def test_perf_router_budgets():
+def test_perf_router_budgets() -> None:
     p = measure_router()
     assert p.p50 <= ROUTER_P50_MS, f"router p50 {p.p50} > {ROUTER_P50_MS}"
     assert p.p95 <= ROUTER_P95_MS, f"router p95 {p.p95} > {ROUTER_P95_MS}"
 
 
-def test_perf_workspace_budgets():
+def test_perf_workspace_budgets() -> None:
     m = measure_workspace()
     assert m["bind"].p95 <= WS_BIND_P95_MS
     assert m["query"].p95 <= WS_QUERY_P95_MS
     assert m["unbind"].p95 <= WS_UNBIND_P95_MS
 
 
-def test_perf_hormone_publish_budget():
+def test_perf_hormone_publish_budget() -> None:
     p = measure_hormone()
     assert p.p95 <= HORMONE_P95_MS, f"hormone p95 {p.p95} > {HORMONE_P95_MS}"
 
 
-def test_perf_degradation_confirm_budget():
+def test_perf_degradation_confirm_budget() -> None:
     p = measure_degradation_confirm()
     assert p.p95 <= DEGRADE_P95_MS, f"degrade p95 {p.p95} > {DEGRADE_P95_MS}"

@@ -169,7 +169,7 @@ def _cmd_evolve_looks(args: argparse.Namespace) -> int:
     if args.pack:
         result = g["assets"].evolve_pack(args.brief)
     else:
-        result = g["assets"].evolve_looks(args.brief, kind=args.kind)  # type: ignore[arg-type]
+        result = g["assets"].evolve_looks(args.brief, kind=args.kind)
     org = g["organisms"].get_active()
     if org is not None and (result.get("ok") if isinstance(result, dict) else True):
         g["organisms"].sync_appearance(org.organism_id, g["assets"].appearance)

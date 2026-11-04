@@ -514,8 +514,8 @@ class EvolutionRuntime:
         # when immune returns QUARANTINE/DEMOTE; if immune tolerated unexpectedly,
         # still demote failed-contract drafts and label as quarantine override.
         if errs and decision.decision not in ("QUARANTINE", "DEMOTE"):
-            decision.decision = "QUARANTINE"  # type: ignore[assignment]
-            decision.classification = "DANGER"  # type: ignore[assignment]
+            decision.decision = "QUARANTINE"
+            decision.classification = "DANGER"
         demoted = False
         if decision.decision in ("QUARANTINE", "DEMOTE"):
             # Ensure bundle cannot be promoted; demote if it somehow was.

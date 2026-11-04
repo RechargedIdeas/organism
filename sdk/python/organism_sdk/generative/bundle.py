@@ -87,7 +87,7 @@ def export_organism_bundle(
         ids.discard(None)
         for aid in ids:
             try:
-                a = asset_pipeline.assets.get(aid)  # type: ignore[attr-defined]
+                a = asset_pipeline.assets.get(aid)
             except Exception:
                 a = None
             if a is None:

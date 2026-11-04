@@ -16,7 +16,7 @@ def _immune():
     return ImmuneLayer(ws, trace=tr), ws, tr
 
 
-def test_l1_danger_surveil_binding_full_affects_control():
+def test_l1_danger_surveil_binding_full_affects_control() -> None:
     immune, ws, tr = _immune()
     antigen = Hypervector.random(seed=99)
     immune._detectors.insert(0, antigen)
@@ -28,7 +28,7 @@ def test_l1_danger_surveil_binding_full_affects_control():
     assert any(isinstance(e, ImmuneTraceEntry) for e in tr.entries)
 
 
-def test_l2_pamp_memory_hit_faster():
+def test_l2_pamp_memory_hit_faster() -> None:
     immune, ws, tr = _immune()
     antigen = Hypervector.random(seed=123)
     immune._detectors.insert(0, antigen)
@@ -39,7 +39,7 @@ def test_l2_pamp_memory_hit_faster():
     assert second.latency_ms <= first.latency_ms + 50.0
 
 
-def test_l3_safe_novelty_tolerated():
+def test_l3_safe_novelty_tolerated() -> None:
     immune, ws, tr = _immune()
     self_hv = Hypervector.random(seed=7)
     immune.learn_self(self_hv)
@@ -48,21 +48,21 @@ def test_l3_safe_novelty_tolerated():
     assert d.decision in ("PASS", "TOLERATE")
 
 
-def test_l4_high_cortisol_quarantine_not_kill():
+def test_l4_high_cortisol_quarantine_not_kill() -> None:
     immune, ws, tr = _immune()
     antigen = Hypervector.random(seed=55)
     immune._detectors.insert(0, antigen)
     assert immune.ingress(antigen, cortisol=0.8).decision == "QUARANTINE"
 
 
-def test_l5_immune_must_not_deregister():
+def test_l5_immune_must_not_deregister() -> None:
     immune, ws, tr = _immune()
     with pytest.raises(PermissionError):
         immune.deregister("anything")
     assert immune.direct_lifecycle_calls == 1
 
 
-def test_l6_replay_immune_decisions():
+def test_l6_replay_immune_decisions() -> None:
     immune, ws, tr = _immune()
     antigen = Hypervector.random(seed=3)
     immune._detectors.insert(0, antigen)

@@ -2,12 +2,12 @@
 from organism_sdk.hypervector import DIM, Hypervector
 
 
-def test_dim():
+def test_dim() -> None:
     assert Hypervector.dim() == 10000
     assert DIM == 10000
 
 
-def test_bind_unbind_exact():
+def test_bind_unbind_exact() -> None:
     a = Hypervector.random()
     b = Hypervector.random()
     bound = a.bind(b)
@@ -15,13 +15,13 @@ def test_bind_unbind_exact():
     assert bound.unbind(b).to_bytes_be() == a.to_bytes_be()
 
 
-def test_bytes_roundtrip():
+def test_bytes_roundtrip() -> None:
     hv = Hypervector.random()
     raw = hv.to_bytes_be()
     assert len(raw) == 1250
     assert Hypervector.from_bytes_be(raw).to_bytes_be() == raw
 
 
-def test_self_similarity():
+def test_self_similarity() -> None:
     hv = Hypervector.random()
     assert hv.similarity(hv) == 1.0

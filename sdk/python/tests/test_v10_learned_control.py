@@ -7,7 +7,7 @@ from organism_sdk.learned_ise import LearnedISE
 from organism_sdk.metamodel import MetamodelTracker, SynthesisStage
 
 
-def test_rldca_online_training_loop_improves():
+def test_rldca_online_training_loop_improves() -> None:
     ise = LearnedISE()
     samples = []
     for i in range(30):
@@ -20,7 +20,7 @@ def test_rldca_online_training_loop_improves():
     assert ise.weights.updates >= 30
 
 
-def test_promote_success_then_revoke_blocks_control():
+def test_promote_success_then_revoke_blocks_control() -> None:
     ise = LearnedISE()
     h = HealthVector(thermal=0.85)
     for _ in range(8):
@@ -38,7 +38,7 @@ def test_promote_success_then_revoke_blocks_control():
         ise.estimate(h, for_control=True)
 
 
-def test_live_nas_searches_and_shadow_validates_winners():
+def test_live_nas_searches_and_shadow_validates_winners() -> None:
     t = MetamodelTracker(enabled=True, exploration_mode=True)
     base = {
         "module_id": "nas_live",

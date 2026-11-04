@@ -51,7 +51,7 @@ def _reference(pipeline_experts_map: MoAPipeline, expert_id: str):
     return pipeline_experts_map._experts[expert_id]
 
 
-def test_clear_query_runs_one_expert_at_full_tier_with_provenance():
+def test_clear_query_runs_one_expert_at_full_tier_with_provenance() -> None:
     result = _pipeline().run("Schedule a meeting and remind me")
     assert result.route == ROUTE_EXPERT
     assert result.expert_id == "intent_classifier"
@@ -60,7 +60,7 @@ def test_clear_query_runs_one_expert_at_full_tier_with_provenance():
     assert result.provenance_ok is True
 
 
-def test_unsure_query_returns_no_answer_and_does_not_move_the_tier():
+def test_unsure_query_returns_no_answer_and_does_not_move_the_tier() -> None:
     pipeline = _pipeline()
     result = pipeline.run("Good morning")
     assert result.route == ROUTE_UNSURE
@@ -69,7 +69,7 @@ def test_unsure_query_returns_no_answer_and_does_not_move_the_tier():
     assert pipeline.tier == MoATier.T0
 
 
-def test_llm_fallback_route_passes_through_only_when_enabled():
+def test_llm_fallback_route_passes_through_only_when_enabled() -> None:
     from organism_sdk.moa.scorer import LexicalScorer
 
     result = _pipeline(scorer=LexicalScorer(allow_llm_fallback=True)).run("Good morning")
@@ -77,14 +77,14 @@ def test_llm_fallback_route_passes_through_only_when_enabled():
     assert result.tier is None
 
 
-def test_form_filter_limits_candidates():
+def test_form_filter_limits_candidates() -> None:
     result = _pipeline().run("Extract the dates and remind me", form="feature_extraction")
     assert result.route == ROUTE_EXPERT
     assert result.expert_id == "extractor"
     assert result.active == ("extractor",)
 
 
-def test_failure_drill_degrades_then_recovers_after_hysteresis():
+def test_failure_drill_degrades_then_recovers_after_hysteresis() -> None:
     pipeline = _pipeline()
     intent = _reference(pipeline, "intent_classifier")
 
@@ -105,7 +105,7 @@ def test_failure_drill_degrades_then_recovers_after_hysteresis():
     assert recovered.provenance_ok is True
 
 
-def test_all_active_experts_failing_falls_back_to_deterministic():
+def test_all_active_experts_failing_falls_back_to_deterministic() -> None:
     pipeline = _pipeline()
     _reference(pipeline, "intent_classifier").fail()
     _reference(pipeline, "extractor").fail()
@@ -116,7 +116,7 @@ def test_all_active_experts_failing_falls_back_to_deterministic():
     assert result.ran == ()
 
 
-def test_latency_budget_excludes_slow_experts():
+def test_latency_budget_excludes_slow_experts() -> None:
     # Intent is 3 ms and extractor is 4 ms. A 3.5 ms budget leaves only the intent classifier.
     result = _pipeline(latency_budget_ms=3.5).run(BOTH_ACTIVE)
     assert result.active == ("extractor", "intent_classifier")
@@ -124,7 +124,7 @@ def test_latency_budget_excludes_slow_experts():
     assert result.tier == MoATier.T2
 
 
-def test_gpu_blocked_expert_takes_the_cpu_tier_and_is_skipped():
+def test_gpu_blocked_expert_takes_the_cpu_tier_and_is_skipped() -> None:
     gpu = _Stub("render_gpu", ("render", "image", "picture"), requires_gpu=True)
     result = _pipeline(extra=[gpu], gpu_available=False).run("Render the image and remind me")
     assert result.active == ("render_gpu", "intent_classifier")
@@ -132,14 +132,14 @@ def test_gpu_blocked_expert_takes_the_cpu_tier_and_is_skipped():
     assert result.tier == MoATier.T3
 
 
-def test_gpu_available_runs_the_gpu_expert_at_full_tier():
+def test_gpu_available_runs_the_gpu_expert_at_full_tier() -> None:
     gpu = _Stub("render_gpu", ("render", "image", "picture"), requires_gpu=True)
     result = _pipeline(extra=[gpu], gpu_available=True).run("Render the image and remind me")
     assert result.tier == MoATier.T0
     assert set(result.ran) == {"render_gpu", "intent_classifier"}
 
 
-def test_schema_invalid_output_on_every_path_falls_back_to_deterministic():
+def test_schema_invalid_output_on_every_path_falls_back_to_deterministic() -> None:
     bad = _Stub("zebra", ("zebra",), valid=False)
     result = _pipeline(extra=[bad]).run("zebra facts")
     assert result.route == ROUTE_DETERMINISTIC
@@ -147,7 +147,7 @@ def test_schema_invalid_output_on_every_path_falls_back_to_deterministic():
     assert result.reason == "no_valid_output"
 
 
-def test_custom_deterministic_fallback_is_used():
+def test_custom_deterministic_fallback_is_used() -> None:
     def fallback(query, form):
         return ExpertOutput("custom_fallback", json.dumps({"answer": "fixed"}), 1.0, True)
 
@@ -159,25 +159,25 @@ def test_custom_deterministic_fallback_is_used():
     assert json.loads(result.payload) == {"answer": "fixed"}
 
 
-def test_global_level_l4_forces_deterministic_even_when_healthy():
+def test_global_level_l4_forces_deterministic_even_when_healthy() -> None:
     result = _pipeline().run("Schedule a meeting", global_level="L4")
     assert result.route == ROUTE_DETERMINISTIC
     assert result.reason.endswith("global_level_L4")
 
 
-def test_top_k_is_bounded_by_the_request_cap():
+def test_top_k_is_bounded_by_the_request_cap() -> None:
     with pytest.raises(ValueError, match="top_k"):
         _pipeline(top_k=0)
     with pytest.raises(ValueError, match="top_k"):
         _pipeline(top_k=MAX_EXPERTS_PER_REQUEST + 1)
 
 
-def test_duplicate_expert_ids_are_rejected():
+def test_duplicate_expert_ids_are_rejected() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         MoAPipeline([IntentClassifier(), IntentClassifier()])
 
 
-def test_pipeline_accepts_a_shared_tier_controller():
+def test_pipeline_accepts_a_shared_tier_controller() -> None:
     controller = TierController(recover_after=1)
     pipeline = _pipeline(controller=controller)
     _reference(pipeline, "extractor").fail()
@@ -187,6 +187,6 @@ def test_pipeline_accepts_a_shared_tier_controller():
     assert pipeline.run(BOTH_ACTIVE).tier == MoATier.T0
 
 
-def test_extractor_class_is_reachable_by_id():
+def test_extractor_class_is_reachable_by_id() -> None:
     pipeline = MoAPipeline([Extractor()])
     assert pipeline.run("extract the numbers 1 and 2").expert_id == "extractor"

@@ -33,7 +33,7 @@ from harness.scenarios.v04_security_fuzz import (
 )
 
 
-def test_malformed_contracts_rejected():
+def test_malformed_contracts_rejected() -> None:
     for c in (malformed_contract_empty_identity(), malformed_contract_required_modality_undeclared()):
         errors = [i for i in c.validate() if i.severity == Severity.ERROR]
         assert errors
@@ -41,12 +41,12 @@ def test_malformed_contracts_rejected():
             c.require_valid()
 
 
-def test_fuzz_malformed_contracts_fixed_seed():
+def test_fuzz_malformed_contracts_fixed_seed() -> None:
     stats = fuzz_malformed_contracts(seed=0x564F3433, trials=32)
     assert stats.rejected_contracts == 32
 
 
-def test_untrusted_learned_control_without_justification_rejected():
+def test_untrusted_learned_control_without_justification_rejected() -> None:
     from organism_sdk.contract import DataType
 
     mod = _UnjustifiedActuator()
@@ -73,7 +73,7 @@ def test_untrusted_learned_control_without_justification_rejected():
         run_handle(mod, inp)
 
 
-def test_byzantine_drives_l3_l4_and_degraded_plan():
+def test_byzantine_drives_l3_l4_and_degraded_plan() -> None:
     reg = RegistryClient()
     eng = DeterministicEngine()
     learned = LearnedModule(precalibrate=True)
@@ -111,7 +111,7 @@ def test_byzantine_drives_l3_l4_and_degraded_plan():
     assert plan.primary.module_id == "deterministic_engine"
 
 
-def test_capability_scope_violation_on_workspace_read():
+def test_capability_scope_violation_on_workspace_read() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("allowed_tag",))
     role = Hypervector.random(seed=9)
     filler = Hypervector.random(seed=10)
@@ -125,7 +125,7 @@ def test_capability_scope_violation_on_workspace_read():
         reader.read_by_tag(["secret"])
 
 
-def test_capability_scope_write_rejected():
+def test_capability_scope_write_rejected() -> None:
     ws = WorkspaceClient(write_tags=("allowed",), read_tags=("*",))
     role = Hypervector.random(seed=1)
     filler = Hypervector.random(seed=2)
@@ -143,7 +143,7 @@ def test_capability_scope_write_rejected():
     assert result.reason_code == "capability_scope_missing"
 
 
-def test_immune_quarantine_forgery_rejected():
+def test_immune_quarantine_forgery_rejected() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     role = Hypervector.random(seed=3)
     filler = Hypervector.random(seed=4)
@@ -174,7 +174,7 @@ def test_immune_quarantine_forgery_rejected():
     assert validate_control_binding(b)
 
 
-def test_fuzz_immune_forgeries_fixed_seed():
+def test_fuzz_immune_forgeries_fixed_seed() -> None:
     stats = fuzz_immune_forgeries(seed=0x494D4D46, trials=40)
     assert stats.rejected_forgeries >= 20  # most random combos are forgeries
     assert stats.trials == 40

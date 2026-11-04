@@ -28,32 +28,32 @@ def art(tmp_path: Path):
     return ArtifactStore(tmp_path / "artifacts")
 
 
-def test_sandbox_allows_pure_main():
+def test_sandbox_allows_pure_main() -> None:
     sb = SafeSandbox()
     src = "def main(x=1):\n    return x * 2\n"
     r = sb.run(src, args={"x": 3})
     assert r.ok and r.value == 6
 
 
-def test_sandbox_refuses_import_os():
+def test_sandbox_refuses_import_os() -> None:
     sb = SafeSandbox()
     r = sb.run("import os\ndef main():\n    return os.getcwd()\n")
     assert not r.ok and "SandboxRefused" in (r.error or "")
 
 
-def test_sandbox_refuses_subprocess_name():
+def test_sandbox_refuses_subprocess_name() -> None:
     sb = SafeSandbox()
     r = sb.run("def main():\n    return subprocess\n")
     assert not r.ok
 
 
-def test_sandbox_refuses_eval_and_getattr():
+def test_sandbox_refuses_eval_and_getattr() -> None:
     sb = SafeSandbox()
     assert not sb.run("def main():\n    return eval('1')\n").ok
     assert not sb.run("def main():\n    return getattr(dict, '__class__')\n").ok
 
 
-def test_code_pipeline_promote_gate(art: ArtifactStore):
+def test_code_pipeline_promote_gate(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
     b = pipe.evolve("Organism adder skill", spec={"skill_name": "adder", "may_actuate": False})
     assert b.stage.value == "SHADOW_SCORED"
@@ -72,7 +72,7 @@ def test_code_pipeline_promote_gate(art: ArtifactStore):
     assert dem.may_control is False
 
 
-def test_code_pipeline_rejects_shellish(art: ArtifactStore):
+def test_code_pipeline_rejects_shellish(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
 
     class Bad(TemplateDraftBackend):
@@ -84,7 +84,7 @@ def test_code_pipeline_rejects_shellish(art: ArtifactStore):
     assert b.static_errors
 
 
-def test_code_pipeline_rejects_may_actuate_true(art: ArtifactStore):
+def test_code_pipeline_rejects_may_actuate_true(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
 
     class Bad(TemplateDraftBackend):
@@ -96,7 +96,7 @@ def test_code_pipeline_rejects_may_actuate_true(art: ArtifactStore):
     assert any("may_actuate" in e for e in b.contract_errors)
 
 
-def test_llm_stub_backend_deterministic(art: ArtifactStore):
+def test_llm_stub_backend_deterministic(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
     a = pipe.evolve("same", backend=LLMStubBackend(), auto_promote=True)
     b = pipe.evolve("same", backend=LLMStubBackend(), auto_promote=True)
@@ -104,7 +104,7 @@ def test_llm_stub_backend_deterministic(art: ArtifactStore):
     assert a.may_control and b.may_control
 
 
-def test_template_library_richer(art: ArtifactStore):
+def test_template_library_richer(art: ArtifactStore) -> None:
     assert "navigator" in list_templates()
     assert "classifier" in list_templates()
     pipe = CodePipeline(art)
@@ -113,7 +113,7 @@ def test_template_library_richer(art: ArtifactStore):
     assert b.stage.value == "SHADOW_SCORED"
 
 
-def test_generator_backend_protocol(art: ArtifactStore):
+def test_generator_backend_protocol(art: ArtifactStore) -> None:
     class Custom:
         name = "custom"
 
@@ -121,12 +121,12 @@ def test_generator_backend_protocol(art: ArtifactStore):
             return "def main(x=0, **kwargs):\n    return {'ok': True, 'score': 1.0, 'skill': 'c'}\n"
 
     assert isinstance(Custom(), GeneratorBackend)
-    pipe = CodePipeline(art, backend=Custom())  # type: ignore[arg-type]
+    pipe = CodePipeline(art, backend=Custom())
     b = pipe.evolve("custom", auto_promote=True)
     assert b.may_control
 
 
-def test_replayable_drafts(art: ArtifactStore, tmp_path: Path):
+def test_replayable_drafts(art: ArtifactStore, tmp_path: Path) -> None:
     log = DraftReplayLog(tmp_path / "replay.json")
     pipe = CodePipeline(art, replay_log=log)
     b = pipe.start("replay me", spec={"skill_name": "adder"})
@@ -136,7 +136,7 @@ def test_replayable_drafts(art: ArtifactStore, tmp_path: Path):
     assert again.intent == b.intent
 
 
-def test_rollback_last_promote(art: ArtifactStore):
+def test_rollback_last_promote(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
     a = pipe.evolve("first", auto_promote=True)
     b = pipe.evolve("second", auto_promote=True)
@@ -148,7 +148,7 @@ def test_rollback_last_promote(art: ArtifactStore):
     assert pipe.last_promoted_id == a.bundle_id
 
 
-def test_stage_progress_summary(art: ArtifactStore):
+def test_stage_progress_summary(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
     b = pipe.evolve("progress", auto_promote=False)
     prog = pipe.stage_progress_summary(b.bundle_id)
@@ -156,7 +156,7 @@ def test_stage_progress_summary(art: ArtifactStore):
     assert prog["stage"] == "SHADOW_SCORED"
 
 
-def test_concurrent_artifact_store(tmp_path: Path):
+def test_concurrent_artifact_store(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path / "art")
 
     def writer(i: int):
@@ -177,7 +177,7 @@ def test_concurrent_artifact_store(tmp_path: Path):
     assert v["ok"]
 
 
-def test_artifact_integrity_mismatch(art: ArtifactStore, tmp_path: Path):
+def test_artifact_integrity_mismatch(art: ArtifactStore, tmp_path: Path) -> None:
     rec = art.put(kind="code", body="def main():\n    return 1\n", backend="t", stage="DRAFT", suffix=".py")
     path = Path(rec.metadata["path"])
     path.write_text("tampered", encoding="utf-8")
@@ -185,7 +185,7 @@ def test_artifact_integrity_mismatch(art: ArtifactStore, tmp_path: Path):
         art.read_body(rec)
 
 
-def test_asset_pipeline_looks(art: ArtifactStore, tmp_path: Path):
+def test_asset_pipeline_looks(art: ArtifactStore, tmp_path: Path) -> None:
     ap = AssetPipeline(art, assets_root=tmp_path / "assets")
     r = ap.evolve_looks("teal Organism", kind="avatar")
     assert r["ok"]
@@ -198,7 +198,7 @@ def test_asset_pipeline_looks(art: ArtifactStore, tmp_path: Path):
     assert theme["asset"]["contrast_ok"] is True
 
 
-def test_asset_pack_multi(art: ArtifactStore, tmp_path: Path):
+def test_asset_pack_multi(art: ArtifactStore, tmp_path: Path) -> None:
     ap = AssetPipeline(art, assets_root=tmp_path / "assets")
     r = ap.evolve_pack("coral Organism pack")
     assert r["ok"]
@@ -207,14 +207,14 @@ def test_asset_pack_multi(art: ArtifactStore, tmp_path: Path):
     assert r["appearance"]["revision"] >= 3
 
 
-def test_asset_rejects_forbidden_brief(art: ArtifactStore, tmp_path: Path):
+def test_asset_rejects_forbidden_brief(art: ArtifactStore, tmp_path: Path) -> None:
     ap = AssetPipeline(art, assets_root=tmp_path / "assets")
     a = ap.generate("weaponize something", kind="icon")
     ap.validate(a.asset_id)
     assert a.stage.value == "REJECTED"
 
 
-def test_asset_rejects_oversized(art: ArtifactStore, tmp_path: Path):
+def test_asset_rejects_oversized(art: ArtifactStore, tmp_path: Path) -> None:
     ap = AssetPipeline(art, assets_root=tmp_path / "assets")
     huge = "<svg>" + ("x" * 300_000) + "</svg>"
     a = ap.generate("big", kind="avatar", body_override=huge)
@@ -223,18 +223,18 @@ def test_asset_rejects_oversized(art: ArtifactStore, tmp_path: Path):
     assert any("size" in e for e in a.validation_errors)
 
 
-def test_asset_rejects_malformed_svg(art: ArtifactStore, tmp_path: Path):
+def test_asset_rejects_malformed_svg(art: ArtifactStore, tmp_path: Path) -> None:
     ap = AssetPipeline(art, assets_root=tmp_path / "assets")
     a = ap.generate("bad", kind="icon", body_override="<div>not svg</div>")
     ap.validate(a.asset_id)
     assert a.stage.value == "REJECTED"
 
 
-def test_theme_contrast_helper():
+def test_theme_contrast_helper() -> None:
     assert contrast_ratio("#ffffff", "#000000") > 20
 
 
-def test_skills_and_organism_store(art: ArtifactStore, tmp_path: Path):
+def test_skills_and_organism_store(art: ArtifactStore, tmp_path: Path) -> None:
     pipe = CodePipeline(art)
     skills = SkillRegistry(art)
     store = OrganismStore(tmp_path / "organisms")
@@ -254,7 +254,7 @@ def test_skills_and_organism_store(art: ArtifactStore, tmp_path: Path):
     assert "sophont" not in got.organism_id.lower()
 
 
-def test_skill_dependency_dag(art: ArtifactStore):
+def test_skill_dependency_dag(art: ArtifactStore) -> None:
     from organism_sdk.generative.skills import SkillDescriptor
 
     pipe = CodePipeline(art)
@@ -280,7 +280,7 @@ def test_skill_dependency_dag(art: ArtifactStore):
         )
 
 
-def test_improve_from_trace(art: ArtifactStore, tmp_path: Path):
+def test_improve_from_trace(art: ArtifactStore, tmp_path: Path) -> None:
     pipe = CodePipeline(art)
     skills = SkillRegistry(art)
     store = OrganismStore(tmp_path / "organisms")
@@ -301,7 +301,7 @@ def test_improve_from_trace(art: ArtifactStore, tmp_path: Path):
     assert bundle.stage.value in ("SHADOW_SCORED", "PROMOTED", "REJECTED")
 
 
-def test_promote_skill_requires_shadow_threshold(art: ArtifactStore):
+def test_promote_skill_requires_shadow_threshold(art: ArtifactStore) -> None:
     pipe = CodePipeline(art, min_shadow=0.9)
     skills = SkillRegistry(art, min_shadow_for_promote=0.99)
     skill, bundle = skills.generate_skill(
@@ -322,7 +322,7 @@ def test_promote_skill_requires_shadow_threshold(art: ArtifactStore):
         skills.promote_skill(skill.skill_id, code_pipeline=pipe)
 
 
-def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore):
+def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore) -> None:
     """Fuzz unsafe code drafts — every payload must be REJECTED or sandbox-fail."""
     pipe = CodePipeline(art)
     payloads = [
@@ -364,7 +364,7 @@ def test_fuzz_unsafe_code_drafts_must_refuse(art: ArtifactStore):
 # ----- v1.7.2 runtime integration -----
 
 
-def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path):
+def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path) -> None:
     from organism_sdk.generative.runtime import EVOLVE_P95_MS, EvolutionRuntime
     from organism_sdk.registry import RegistryClient
     from organism_sdk.trace import EvolutionTraceEntry, TraceEmitter
@@ -404,7 +404,7 @@ def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path):
     assert EVOLVE_P95_MS >= 100.0
 
 
-def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
+def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore) -> None:
     import sys
 
     from organism_sdk.generative.runtime import EvolutionRuntime
@@ -429,7 +429,7 @@ def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
         def draft(self, intent, *, spec=None):
             return "may_actuate = True\ndef main():\n    return 1\n"
 
-    b = pipe.evolve("bad", backend=Bad(), auto_promote=False)  # type: ignore[arg-type]
+    b = pipe.evolve("bad", backend=Bad(), auto_promote=False)
     assert b.stage.value == "REJECTED"
     meta = rt.after_reject(b, code_pipeline=pipe, organism_id="organism_primary")
     q = meta["quarantine"]
@@ -439,7 +439,7 @@ def test_immune_quarantine_demotes_failed_draft(art: ArtifactStore):
     assert b.may_control is False
 
 
-def test_hormone_pulse_on_promote(art: ArtifactStore):
+def test_hormone_pulse_on_promote(art: ArtifactStore) -> None:
     import sys
 
     from organism_sdk.generative.runtime import EvolutionRuntime
@@ -472,7 +472,7 @@ def test_hormone_pulse_on_promote(art: ArtifactStore):
     assert reading.dopamine > 0.1
 
 
-def test_wall_clock_budgets_recorded(art: ArtifactStore):
+def test_wall_clock_budgets_recorded(art: ArtifactStore) -> None:
     pipe = CodePipeline(art)
     b = pipe.evolve("budget check", auto_promote=True)
     assert "evolve_ms" in pipe.last_timings

@@ -10,7 +10,7 @@ from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.snapshot import DurableWorkspace, query_digest
 
 
-def test_snapshot_and_replay(tmp_path: Path):
+def test_snapshot_and_replay(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws")
     role = Hypervector.random()
     filler = Hypervector.random()
@@ -34,7 +34,7 @@ def test_snapshot_and_replay(tmp_path: Path):
     assert dig_before == dig_after
 
 
-def test_dimension_mismatch(tmp_path: Path):
+def test_dimension_mismatch(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws2")
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     snap = dw.snapshot()
@@ -47,7 +47,7 @@ def test_dimension_mismatch(tmp_path: Path):
         dw.load_snapshot(bad)
 
 
-def test_crash_recovery(tmp_path: Path):
+def test_crash_recovery(tmp_path: Path) -> None:
     root = tmp_path / "ws3"
     dw = DurableWorkspace(root)
     ids = []
@@ -62,7 +62,7 @@ def test_crash_recovery(tmp_path: Path):
     assert recovered.read_by_binding_id(ids[1]) is not None
 
 
-def test_snapshot_integrity_merkle(tmp_path: Path):
+def test_snapshot_integrity_merkle(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws4")
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     snap = dw.snapshot()

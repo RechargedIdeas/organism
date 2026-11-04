@@ -187,7 +187,7 @@ class _UnjustifiedActuator(OrganismModule):
 
         return HealthReport(status="HEALTHY", detail={})
 
-    def justify(self, emission: Emission):
+    def justify(self, emission: Emission) -> None:
         return None  # deliberately missing
 
 

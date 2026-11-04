@@ -20,7 +20,7 @@ def _spec(**kw):
     return base
 
 
-def test_disabled_still_raises_metamodel_disabled():
+def test_disabled_still_raises_metamodel_disabled() -> None:
     t = MetamodelTracker(enabled=False)
     assert not t.reproductive_path_enabled()
     with pytest.raises(MetamodelDisabled):
@@ -28,7 +28,7 @@ def test_disabled_still_raises_metamodel_disabled():
     assert t.attempts[-1]["reason"] == "E.8_metamodel_reproductive_disabled"
 
 
-def test_synthesize_sandbox_shadow_promote():
+def test_synthesize_sandbox_shadow_promote() -> None:
     t = MetamodelTracker(enabled=True, exploration_mode=True)
     organ = t.synthesize(_spec())
     assert organ.stage == SynthesisStage.SYNTHESIZED
@@ -48,7 +48,7 @@ def test_synthesize_sandbox_shadow_promote():
     assert t.can_register_deliberation(organ.organ_id)
 
 
-def test_shadow_reject_blocks_actuation_and_deliberation():
+def test_shadow_reject_blocks_actuation_and_deliberation() -> None:
     t = MetamodelTracker(enabled=True)
     organ = t.synthesize(_spec(module_id="adapter_bad"))
     t.sandbox(organ.organ_id)
@@ -60,13 +60,13 @@ def test_shadow_reject_blocks_actuation_and_deliberation():
     assert not t.can_register_deliberation(organ.organ_id)
 
 
-def test_non_exploration_blocks_synthesis():
+def test_non_exploration_blocks_synthesis() -> None:
     t = MetamodelTracker(enabled=True, exploration_mode=False)
     with pytest.raises(MetamodelDisabled):
         t.synthesize(_spec())
 
 
-def test_four_part_contract_required():
+def test_four_part_contract_required() -> None:
     t = MetamodelTracker(enabled=True)
     with pytest.raises(ValueError, match="four-part"):
         t.synthesize({"module_id": "x"})  # missing perception/emission

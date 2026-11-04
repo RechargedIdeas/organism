@@ -19,7 +19,7 @@ def test_list_templates_cli(capsys):
     assert out["ok"] and "scorer" in out["templates"]
 
 
-def test_evolve_promote_rollback_cli(tmp_path: Path, capsys):
+def test_evolve_promote_rollback_cli(tmp_path: Path, capsys) -> None:
     # Single-process auto-promote exercises gate + hot-register.
     code, out = _run(
         ["evolve-code", "--intent", "Organism CLI scorer", "--auto-promote"],
@@ -57,7 +57,7 @@ def test_evolve_promote_rollback_cli(tmp_path: Path, capsys):
     assert orgs["ok"] and orgs["organisms"]
 
 
-def test_promote_code_cross_process(tmp_path: Path, capsys):
+def test_promote_code_cross_process(tmp_path: Path, capsys) -> None:
     """Bundle state must hydrate across separate CLI invocations."""
     code, out = _run(["evolve-code", "--intent", "Organism CLI scorer"], tmp_path, capsys)
     assert code == 0, out
@@ -75,7 +75,7 @@ def test_promote_code_cross_process(tmp_path: Path, capsys):
     assert json.loads(out)["bundle"]["stage"] == "ROLLBACK"
 
 
-def test_bundle_roundtrip_cli(tmp_path: Path, capsys):
+def test_bundle_roundtrip_cli(tmp_path: Path, capsys) -> None:
     root = tmp_path / "data"
     code, out = _run(["evolve-looks", "--brief", "bundle look", "--pack"], root, capsys)
     assert code == 0, out

@@ -20,14 +20,14 @@ from organism_sdk.generative import (
 )
 
 
-def test_templates_expanded():
+def test_templates_expanded() -> None:
     names = list_templates()
     assert len(names) >= 10
     for n in ("normalizer", "ranker", "smoother", "gate", "scorer"):
         assert n in names
 
 
-def test_hosted_llm_never_default_on():
+def test_hosted_llm_never_default_on() -> None:
     os.environ.pop("ORGANISM_LLM_ENABLED", None)
     b = HostedLLMBackend()
     with pytest.raises(HostedLLMRefused):
@@ -44,7 +44,7 @@ def test_hosted_llm_requires_url_key(monkeypatch):
         b.draft("x")
 
 
-def test_sandbox_process_isolation_ok():
+def test_sandbox_process_isolation_ok() -> None:
     sb = SafeSandbox(isolate=True, timeout_s=2.0, max_rss_mb=256)
     r = sb.run("def main(**k):\n    return {'ok': True, 'score': 3}\n")
     assert r.ok
@@ -52,7 +52,7 @@ def test_sandbox_process_isolation_ok():
     assert r.value["score"] == 3
 
 
-def test_sandbox_timeout():
+def test_sandbox_timeout() -> None:
     sb = SafeSandbox(isolate=True, timeout_s=0.2, max_rss_mb=256)
     # busy loop without imports — may timeout
     src = "def main(**k):\n    n = 0\n    while n < 10**9:\n        n = n + 1\n    return {'ok': True}\n"
@@ -61,14 +61,14 @@ def test_sandbox_timeout():
     assert "Timeout" in (r.error or "") or "Sandbox" in (r.error or "")
 
 
-def test_sandbox_ast_still_blocks_import():
+def test_sandbox_ast_still_blocks_import() -> None:
     sb = SafeSandbox(isolate=True, timeout_s=2.0)
     r = sb.run("import os\ndef main(**k):\n    return os.getcwd()\n")
     assert r.ok is False
     assert "SandboxRefused" in (r.error or "")
 
 
-def test_image_backend_procedural(tmp_path: Path):
+def test_image_backend_procedural(tmp_path: Path) -> None:
     art = ArtifactStore(tmp_path / "art")
     pipe = AssetPipeline(art, image_backend=ProceduralImageBackend())
     asset = pipe.generate("ocean organism theme", kind="theme")
@@ -78,14 +78,14 @@ def test_image_backend_procedural(tmp_path: Path):
     assert "<svg" in skin.body
 
 
-def test_hosted_image_refuses_until_enabled():
+def test_hosted_image_refuses_until_enabled() -> None:
     b = HostedImageBackend()
     with pytest.raises(HostedImageRefused):
         b.render("x", kind="avatar", width=64, height=64, palette={"primary": "#111", "accent": "#222", "background": "#000", "foreground": "#fff"})
     assert resolve_image_backend("procedural").name.startswith("procedural")
 
 
-def test_promote_product_limit_documented():
+def test_promote_product_limit_documented() -> None:
     # Structural: GeneratedSkillModule / hot-register path keeps may_actuate False
     from organism_sdk.generative.runtime import GeneratedSkillModule
 
