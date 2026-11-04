@@ -285,6 +285,17 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_pipeline.py"
 
+  - id: v111:moa_guardrails
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_guardrails.py"
+
+  # Non-blocking first: the red-team suite reports guardrail misses without failing the run.
+  # Flip to blocking once the xfail markers in it are resolved or accepted.
+  - id: v111:moa_redteam
+    tier: fast
+    blocking: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_redteam.py"
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   - id: desktop:smoke
     tier: full

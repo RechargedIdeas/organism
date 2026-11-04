@@ -8,7 +8,13 @@ from organism_sdk.moa.experts import (
     ExpertOutput,
     register_experts,
 )
-from organism_sdk.moa.pipeline import ROUTE_DETERMINISTIC, MoAPipeline, MoAResult
+from organism_sdk.moa.guardrails import (
+    GroundednessGuard,
+    GuardrailSpec,
+    GuardVerdict,
+    InjectionGuard,
+)
+from organism_sdk.moa.pipeline import ROUTE_BLOCKED, ROUTE_DETERMINISTIC, MoAPipeline, MoAResult
 from organism_sdk.moa.reference import Extractor, IntentClassifier, reference_experts
 from organism_sdk.moa.scorer import LexicalScorer, RouteDecision
 from organism_sdk.moa.shadow import PRECISION_GATE, RoutingReport, evaluate, load_labeled
@@ -17,6 +23,7 @@ from organism_sdk.moa.tiers import MoATier, TierController, TierInputs, select_t
 __all__ = [
     "MAX_EXPERTS_PER_REQUEST",
     "PRECISION_GATE",
+    "ROUTE_BLOCKED",
     "ROUTE_DETERMINISTIC",
     "AggregationResult",
     "BaseExpert",
@@ -24,6 +31,10 @@ __all__ = [
     "Expert",
     "ExpertOutput",
     "Extractor",
+    "GroundednessGuard",
+    "GuardVerdict",
+    "GuardrailSpec",
+    "InjectionGuard",
     "IntentClassifier",
     "LexicalScorer",
     "MoAPipeline",
