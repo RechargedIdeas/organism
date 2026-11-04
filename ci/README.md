@@ -97,6 +97,8 @@ powershell -ExecutionPolicy Bypass -File ci\schedule\windows_nightly.ps1 -Remove
 
 On Linux, the equivalent is a cron line: `0 2 * * * cd /path/to/Organism && python3 ci/run.py run --tier nightly`.
 
+GitHub runs the same nightly tier at 02:00 UTC from `.github/workflows/nightly.yml`, and that workflow also runs an advisory dependency audit (`pip-audit` and `cargo audit`). The audit reports but never fails the run. Use `workflow_dispatch` to start either job by hand.
+
 ## Configuration
 
 - [gates.yaml](gates.yaml): the gates. Every field is documented at the top of the file.
