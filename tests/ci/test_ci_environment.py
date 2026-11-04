@@ -25,8 +25,9 @@ def test_cache_key_environment_ignores_session_noise_and_keeps_what_matters() ->
     # Before this, every session-specific variable changed the key, so a pre-push run and a
     # terminal run never shared a cache entry.
     terminal = {"PYTHONUTF8": "1", "PATH": "/usr/bin", "TERM_SESSION_ID": "a", "ORGANISM_SANDBOX_ISOLATE": "1"}
+    # Git for Windows adds LC_CTYPE to hook environments; this difference used to split the cache.
     hook = {"PYTHONUTF8": "1", "PATH": "/hook/bin", "TERM_SESSION_ID": "b", "GIT_INDEX_FILE": "x",
-            "ORGANISM_SANDBOX_ISOLATE": "1"}
+            "LC_CTYPE": "C.UTF-8", "ORGANISM_SANDBOX_ISOLATE": "1"}
     declared = {"PYTHONUTF8"}
     assert key_environment(terminal, declared) == key_environment(hook, declared)
     assert key_environment(terminal, declared) == {"PYTHONUTF8": "1", "ORGANISM_SANDBOX_ISOLATE": "1"}

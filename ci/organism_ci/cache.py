@@ -20,10 +20,12 @@ from organism_ci.hygiene import tree_files
 
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
-# Environment that can change a gate's outcome. The rest (session ids, shell bookkeeping, the
-# variables git sets for hooks) is left out of the key, so a pre-push run and a terminal run share
-# entries. Tool versions are keyed separately, through Tools.fingerprint.
-KEY_ENV_PREFIXES = ("ORGANISM_", "PYTHON", "CARGO", "RUST", "QT_", "PROTOC", "PYTEST_", "LANG", "LC_")
+# Environment that can change a gate's outcome. The rest is left out of the key, so a pre-push run
+# and a terminal run share entries: session ids, shell bookkeeping, and what the launcher adds.
+# Git for Windows adds LC_CTYPE to hook environments, and a terminal does not, so locale names are
+# not keyed (PYTHONUTF8 pins the encoding that matters). Tool versions are keyed separately, through
+# Tools.fingerprint.
+KEY_ENV_PREFIXES = ("ORGANISM_", "PYTHON", "CARGO", "RUST", "QT_", "PROTOC", "PYTEST_")
 
 
 def key_environment(env: dict[str, str], declared: Iterable[str]) -> dict[str, str]:
