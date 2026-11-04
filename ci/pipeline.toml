@@ -21,8 +21,8 @@ ORGANISM_SANDBOX_ISOLATE = "1"
 min_python = [3, 11]
 # Imported from the venv before any gate runs. Missing ones fail preflight with an install hint.
 modules = [
-    "pytest", "ruff", "mypy", "grpc_tools", "yaml", "numpy", "pydantic", "blake3",
-    "cryptography", "structlog", "google.protobuf", "PySide6",
+    "pytest", "ruff", "mypy", "grpc_tools", "yaml", "numpy", "cryptography", "google.protobuf",
+    "PySide6",
 ]
 min_free_gib = 2.0
 collect_timeout_s = 300
