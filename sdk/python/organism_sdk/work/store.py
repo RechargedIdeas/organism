@@ -1,6 +1,6 @@
 """The work store: durable state of the work agent (v1.12). Design record: docs/v1.12/WORK_AGENT.md.
 
-This is the only module of the work package that does I/O. It keeps state in SQLite in WAL
+This is the only top-level module of the work package that does I/O. The adapters in `sources/` do too. It keeps state in SQLite in WAL
 mode, as the workspace ops log does (`organism_sdk.snapshot`). Opening a store takes a writer
 lock on its `.lock` file. A second writer, in this process or another, is refused at once with
 `StoreInUse`, and the OS drops the lock when a process dies, so a crash leaves nothing to clear.
@@ -79,6 +79,12 @@ CREATE TABLE IF NOT EXISTS receipts (
   text TEXT NOT NULL,
   status TEXT NOT NULL,
   reason TEXT
+);
+CREATE TABLE IF NOT EXISTS source_errors (
+  source TEXT NOT NULL,
+  item TEXT NOT NULL,
+  message TEXT NOT NULL,
+  PRIMARY KEY (source, item)
 );
 """
 
@@ -402,6 +408,35 @@ class WorkStore:
             status=ReceiptStatus(row[4]),
             reason=row[5],
         )
+
+    # Source outcomes
+
+    def record_source_outcomes(
+        self, source: str, *, failed: Mapping[str, str], succeeded: Iterable[str]
+    ) -> None:
+        """Keep each failed item's own error, and clear the error of each item that succeeded.
+
+        A caller inside `transaction()` makes these writes part of its round.
+        """
+        with self.transaction():
+            for item in succeeded:
+                self._conn.execute(
+                    "DELETE FROM source_errors WHERE source = ? AND item = ?", (source, item)
+                )
+            for item, message in failed.items():
+                self._conn.execute(
+                    "INSERT INTO source_errors (source, item, message) VALUES (?, ?, ?) "
+                    "ON CONFLICT (source, item) DO UPDATE SET message = excluded.message",
+                    (source, item, message[:ERROR_CHARS]),
+                )
+
+    def source_errors(self, source: str) -> dict[str, str]:
+        """The errors of the items of one Source that have not succeeded since they failed."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT item, message FROM source_errors WHERE source = ? ORDER BY item", (source,)
+            ).fetchall()
+        return {str(item): str(message) for item, message in rows}
 
     # Effects
 

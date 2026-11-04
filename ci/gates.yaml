@@ -311,6 +311,11 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_restart.py"
 
+  # The GitHub source, read only (v1.12 W3): one repository through a fake gh, with no network.
+  - id: work:github_fake
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_github.py"
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   - id: desktop:smoke
     tier: full

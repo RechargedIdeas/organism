@@ -209,7 +209,8 @@ FORBIDDEN_IMPORTS = {
     "urllib",
 }
 FORBIDDEN_CALLS = {"input", "open", "print"}
-# The store is the only module that does I/O (v1.12 W2); the rest stay pure.
+# The store is the only top-level module that does I/O (v1.12 W2); the rest stay pure.
+# The adapters in sources/ do I/O too, and are not scanned here.
 IO_MODULES = {"store.py"}
 
 

@@ -1,6 +1,6 @@
 # Work Agent Layer: Design Record (v1.12)
 
-**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain) and W2 (store and effects queue) implemented. W3 onward not started.
+**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue) and W3 (GitHub source, read only) implemented. W4 onward not started.
 
 **Covers:** [docs/SUPERAGENT_COMPARISON.md](../SUPERAGENT_COMPARISON.md), the comparison with dsh-superagent and the build-out plan this record follows.
 
@@ -65,7 +65,8 @@ These come from the superagent's domain document and are kept as rules:
 | `gate.py` | `admit`, the deterministic first layer of Eval. Returns an `Admission`. |
 | `policy.py` | `AcceptMode`, `Cell`, `AdmissionRow`, `Rule`, `SourcePolicy`, `Policy`, `policy_version`, `may_accept_inferred`. |
 | `codec.py` | `encode`, `decode`, `to_text`, `from_text`: the JSON form of the domain, read from each dataclass's annotations. Pure. |
-| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag and the writer lock. The only module that does I/O. |
+| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag, the writer lock and source errors. The only top-level module that does I/O. |
+| `sources/github.py` | `GitHubSource`, `GhCli`, `RoundReport`: reads one repository through `gh api`, read only. An I/O adapter, so it lives in `sources/`. |
 
 ## 6. W1 behaviour
 
@@ -99,7 +100,7 @@ The version is `sha256:` followed by the digest of the Policy's canonical JSON: 
 
 ### Store
 
-`store.py` is the only module of the package that does I/O. It keeps its state in SQLite in WAL mode with `synchronous=FULL`, as the ops log in `snapshot.py` does. Opening a store takes a writer lock: an OS lock on the store's `.lock` file, held until the store closes or its process dies. A second writer, in this process or another, is refused at once with `StoreInUse`. A crash leaves nothing to clear, because the OS releases the lock. Threads in one process are serialized by an in-process lock. WAL lets readers run beside the writer, which the operator views of W7 will use.
+`store.py` is the only top-level module of the package that does I/O. The adapters in `sources/` do I/O too. It keeps its state in SQLite in WAL mode with `synchronous=FULL`, as the ops log in `snapshot.py` does. Opening a store takes a writer lock: an OS lock on the store's `.lock` file, held until the store closes or its process dies. A second writer, in this process or another, is refused at once with `StoreInUse`. A crash leaves nothing to clear, because the OS releases the lock. Threads in one process are serialized by an in-process lock. WAL lets readers run beside the writer, which the operator views of W7 will use.
 
 A round of intake is one transaction. Its Triggers, the Source's cursor and the effects it queues commit together or not at all, so a restart neither drops a Trigger nor stores one twice.
 
@@ -130,7 +131,23 @@ An outbound message is queued once, by id, as pending. It is then settled as sen
 
 A child that opens a store another process holds is refused with `StoreInUse`, and a crashed writer releases the lock for the next process.
 
-## 8. Not yet built
+## 8. W3 behaviour
+
+### The GitHub source
+
+`work/sources/github.py` reads one repository, named `owner/name`, and never writes to GitHub. It asks `gh api` for that repository's notifications, with `all=true`, and after the first round with `since` set to the cursor. For each notification on an Issue or pull request, it reads that item's comments, and for a pull request also its review comments. Each new comment becomes a Trigger. Its thread is `github:owner/name#number`. A comment that @-mentions the agent's login is addressed (`MENTION`). A comment from a Bot account is not human. The agent's own comments are never Triggers.
+
+Reads go through `gh api --paginate` with an argument list and no shell, so a repository name cannot become a command. The source takes its `gh` as a `GhCli`, and the tests replace it with a fake script. The live smoke test runs only when `ORGANISM_GH_SMOKE_REPO` is set.
+
+### Cursor and failures
+
+The cursor is the newest notification time read, and it is stored under `github:owner/name`, so one store can follow several repositories. A round sorts its notifications by time. If one item fails, its error is stored against that item in `source_errors`, and the cursor stops before its notification. The items after it are still stored, and they are read again next round, where intake de-duplicates them by id. When the item recovers, its error is cleared and the cursor advances. The round's Triggers, cursor and error records commit in one transaction. A failed notifications listing fails the whole round and stores nothing.
+
+### Gate
+
+`work:github_fake` runs `test_v112_work_github.py` against a fake `gh`. It makes no network calls.
+
+## 9. Not yet built
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
 - Eval batching, deadlines and `unavailable`: W4.
@@ -138,7 +155,7 @@ A child that opens a store another process holds is refused with `StoreInUse`, a
 - Subscriptions, follow-up ownership, hand-back and release: W8.
 - Context-only follows, which do not admit anything: W8.
 
-## 9. Gates
+## 10. Gates
 
 `work:domain` (fast tier) runs three files:
 
@@ -148,6 +165,6 @@ A child that opens a store another process holds is refused with `StoreInUse`, a
 - `test_v112_work_store.py` (`work:store`, fast tier): intake, rounds and their transactions, Tickets, Assignments, Receipts, effects, the pause flag and the codec.
 - `test_v112_work_restart.py` (`work:restart`, fast tier): a process killed mid-round and mid-effect, what the replay leaves behind, and a second writer refused while the store is held.
 
-## 10. Changing this record
+## 11. Changing this record
 
 Changing the canonical form of the Policy digest changes the version of every Policy, and so the recorded version of every Mandate. Treat that as a breaking change to stored records. Make it only with a migration.
