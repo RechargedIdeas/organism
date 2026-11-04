@@ -16,6 +16,7 @@ from organism_sdk.contract import (
 )
 from organism_sdk.errors import RegistrationRejected
 from organism_sdk.health import HealthReport
+from organism_sdk.signing import TrustStore, promotion_payload, registration_payload, verify_any
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
 
 LifecycleState = Literal[
@@ -109,14 +110,42 @@ _TIER_RANK = {
 }
 
 
-class RegistryClient:
-    """In-process registry for M1. Validates contracts, stores modules, probes health."""
+def _bad_signature(field_path: str, role: str) -> ValidationIssue:
+    return ValidationIssue(
+        Severity.ERROR,
+        "signature_invalid",
+        field_path,
+        f"no trusted {role} key verifies this signature",
+    )
 
-    def __init__(self, trace: TraceEmitter | None = None) -> None:
+
+class RegistryClient:
+    """In-process registry for M1. Validates contracts, stores modules, probes health.
+
+    With a ``trust_store``, registration needs an author signature and promotion needs an approver
+    signature, each from a trusted key. Without one, signatures are not checked. That is the
+    default for local development and for the internal callers that pass placeholder bytes.
+    """
+
+    def __init__(
+        self, trace: TraceEmitter | None = None, *, trust_store: TrustStore | None = None
+    ) -> None:
         self._lock = threading.RLock()
         self._modules: dict[str, _Entry] = {}
         self._trace = trace or TraceEmitter()
         self._audit: list[dict[str, Any]] = []
+        self._trust_store = trust_store
+
+    def _note_rejected(self, role: str, module_id: str) -> None:
+        with self._lock:
+            self._audit.append(
+                {
+                    "event": "signature_rejected",
+                    "module_id": module_id,
+                    "role": role,
+                    "at": datetime.now(UTC).isoformat(),
+                }
+            )
 
     def register(
         self,
@@ -133,6 +162,16 @@ class RegistryClient:
         if errors:
             raise RegistrationRejected(errors)
 
+        if self._trust_store is not None and not verify_any(
+            self._trust_store.authors,
+            author_signature,
+            registration_payload(
+                contract.identity.module_id, contract.identity.version, artifact_digest
+            ),
+        ):
+            self._note_rejected("author", contract.identity.module_id)
+            raise RegistrationRejected([_bad_signature("author_signature", "author")])
+
         digest = hashlib.sha256(contract.identity.module_id.encode() + artifact_digest).digest()
         state: LifecycleState = test_bypass_promote or initial_state
         mid = contract.identity.module_id
@@ -145,7 +184,12 @@ class RegistryClient:
                 contract_digest=digest,
             )
             self._audit.append(
-                {"event": "register", "module_id": mid, "at": datetime.now(UTC).isoformat()}
+                {
+                    "event": "register",
+                    "module_id": mid,
+                    "at": datetime.now(UTC).isoformat(),
+                    "signature_checked": self._trust_store is not None,
+                }
             )
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=mid, from_state="", to_state=state, event="register")
@@ -229,6 +273,16 @@ class RegistryClient:
     ) -> PromoteResponse:
         with self._lock:
             entry = self._modules[module_id]
+            if self._trust_store is not None and not verify_any(
+                self._trust_store.approvers,
+                approver_signature,
+                promotion_payload(module_id, from_state, to_state, shadow_records),
+            ):
+                self._note_rejected("approver", module_id)
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[_bad_signature("approver_signature", "approver")],
+                )
             if entry.state != from_state and not test_bypass_validation:
                 return PromoteResponse(
                     accepted=False,
