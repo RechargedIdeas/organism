@@ -1,8 +1,8 @@
 {
   "version": 1,
   "tool": "ruff",
-  "generated": "2026-11-04T15:31:41Z",
-  "total": 200,
+  "generated": "2026-11-04T15:58:13Z",
+  "total": 170,
   "counts": {
     "desktop/organism_desktop/app.py::BLE001": 6,
     "desktop/organism_desktop/app.py::S110": 1,
@@ -23,18 +23,14 @@
     "modules/bio_digital/hypervisor_map.py::S110": 1,
     "modules/bio_digital/telemetry_bridge.py::BLE001": 1,
     "modules/bio_digital/telemetry_bridge.py::S110": 1,
-    "modules/bio_digital/tests/test_bio_digital.py::F841": 1,
     "modules/bio_digital/vendor_loader.py::BLE001": 3,
     "modules/bio_digital/vendor_loader.py::S112": 1,
-    "modules/bio_digital/wetlab/hal.py::RUF059": 1,
-    "modules/energy_hopfield/tests/test_energy.py::RUF059": 2,
     "modules/generative/tests/test_generative_module.py::PIE810": 1,
     "sdk/python/organism_sdk/__init__.py::F401": 1,
     "sdk/python/organism_sdk/cli.py::BLE001": 1,
     "sdk/python/organism_sdk/device.py::BLE001": 3,
     "sdk/python/organism_sdk/device.py::S110": 2,
     "sdk/python/organism_sdk/distributed/multiprocess.py::BLE001": 4,
-    "sdk/python/organism_sdk/distributed/multiprocess.py::F841": 1,
     "sdk/python/organism_sdk/distributed/multiprocess.py::S110": 3,
     "sdk/python/organism_sdk/generative/artifacts.py::BLE001": 1,
     "sdk/python/organism_sdk/generative/backends.py::BLE001": 1,
@@ -67,11 +63,6 @@
     "sdk/python/organism_sdk/sandbox/jail.py::BLE001": 11,
     "sdk/python/organism_sdk/sandbox/jail.py::PLW1509": 1,
     "sdk/python/organism_sdk/sandbox/jail.py::S110": 6,
-    "sdk/python/organism_sdk/snapshot.py::F841": 3,
-    "sdk/python/organism_sdk/workspace.py::SIM102": 3,
-    "sdk/python/tests/test_v02_apoptosis_n45.py::RUF059": 1,
-    "sdk/python/tests/test_v02_hormone_g.py::RUF059": 12,
-    "sdk/python/tests/test_v02_immune_h.py::RUF059": 8,
-    "sdk/python/tests/test_workspace_m5.py::F841": 1
+    "sdk/python/organism_sdk/workspace.py::SIM102": 3
   }
 }

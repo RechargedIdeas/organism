@@ -25,7 +25,7 @@ def test_snapshot_and_replay(tmp_path: Path) -> None:
     # Mutate after snapshot
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     # Replay snapshot only (without post-snap ops) by using seq_end
-    rebuilt = dw.replay_from_snapshot(snap.path, ops_from=snap.seq_end + 1)
+    _rebuilt = dw.replay_from_snapshot(snap.path, ops_from=snap.seq_end + 1)
     # Wait — ops_from = seq_end+1 means apply ops after snapshot; snapshot already has state
     # So rebuilt should match post-snapshot if we include later ops.
     # For zero-mismatch with pre-mutation digest, replay snapshot with no further ops:

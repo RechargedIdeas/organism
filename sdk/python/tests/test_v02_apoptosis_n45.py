@@ -43,7 +43,7 @@ def test_n4_drain_killed_synthetic_no_succeeded() -> None:
 
 
 def test_n5_fail_blocks_then_pass_promotes() -> None:
-    svc, ws = _svc()
+    svc, _ws = _svc()
     assert svc.begin_self_terminate(
         _t2("parent"),
         cause="entropy",

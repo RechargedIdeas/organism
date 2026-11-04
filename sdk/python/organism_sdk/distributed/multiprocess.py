@@ -201,7 +201,7 @@ class ProcessCluster:
             time.sleep(0.01)
 
         # Measure lag
-        now = time.monotonic()
+        _now = time.monotonic()
         lags = []
         for m in mirrors:
             # observed lag ≈ max(0, now - emitted) but delivery intended at deliver_at

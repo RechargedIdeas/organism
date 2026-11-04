@@ -163,7 +163,7 @@ class DurableWorkspace:
 
     def snapshot(self, *, parent: bytes | None = None) -> SnapshotMeta:
         # Content-addressed: merkle over binding checksums sorted by id
-        bindings = []
+        _bindings = []
         # Access internal store via similar scan of all — use ops rebuild view
         # For M5: read from in-memory via ops max
         # Collect by re-querying known ids from ops
@@ -214,11 +214,11 @@ class DurableWorkspace:
         if obj["dimension"] != DIM:
             raise DimensionMismatch(DIM, obj["dimension"])
         # Verify content address
-        expected = hashlib.sha256(raw).hexdigest()
+        _expected = hashlib.sha256(raw).hexdigest()
         # file name is digest
         if path.stem != hashlib.sha256(raw).hexdigest():
             # allow if body self-consistent
-            recomputed = hashlib.sha256(
+            _recomputed = hashlib.sha256(
                 json.dumps(
                     {k: obj[k] for k in sorted(obj.keys())},
                     sort_keys=True,

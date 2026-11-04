@@ -17,7 +17,7 @@ def test_energy_minimize_and_cert():
     mod = EnergyHopfieldModule()
     assert not [i for i in mod.declare_contract().validate() if i.severity == Severity.ERROR]
     mod.store_pattern([1, 1, -1, -1, 1, -1, 1, -1])
-    x, e, ok = mod.minimize([0.5] * 8)
+    x, _e, _ok = mod.minimize([0.5] * 8)
     assert len(x) == 8
     data = struct.pack("<" + "f" * 8, *([0.6] * 8))
     ws = WorkspaceClient()

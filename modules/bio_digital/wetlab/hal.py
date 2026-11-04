@@ -104,7 +104,7 @@ class WetLabHAL:
 
     def try_open_device(self) -> DeviceStatus:
         """Attempt real GPIO open. Default: refuse or device_missing."""
-        allowed, reason = self.policy.may_actuate(
+        allowed, _reason = self.policy.may_actuate(
             gpio_env=gpio_env_enabled(), substrate_healthy=self.is_healthy()
         )
         if not allowed:

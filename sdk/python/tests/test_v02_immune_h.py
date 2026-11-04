@@ -29,7 +29,7 @@ def test_l1_danger_surveil_binding_full_affects_control() -> None:
 
 
 def test_l2_pamp_memory_hit_faster() -> None:
-    immune, ws, tr = _immune()
+    immune, _ws, _tr = _immune()
     antigen = Hypervector.random(seed=123)
     immune._detectors.insert(0, antigen)
     first = immune.ingress(antigen, cortisol=0.0)
@@ -40,7 +40,7 @@ def test_l2_pamp_memory_hit_faster() -> None:
 
 
 def test_l3_safe_novelty_tolerated() -> None:
-    immune, ws, tr = _immune()
+    immune, _ws, _tr = _immune()
     self_hv = Hypervector.random(seed=7)
     immune.learn_self(self_hv)
     d = immune.ingress(self_hv, cortisol=0.0)
@@ -49,14 +49,14 @@ def test_l3_safe_novelty_tolerated() -> None:
 
 
 def test_l4_high_cortisol_quarantine_not_kill() -> None:
-    immune, ws, tr = _immune()
+    immune, _ws, _tr = _immune()
     antigen = Hypervector.random(seed=55)
     immune._detectors.insert(0, antigen)
     assert immune.ingress(antigen, cortisol=0.8).decision == "QUARANTINE"
 
 
 def test_l5_immune_must_not_deregister() -> None:
-    immune, ws, tr = _immune()
+    immune, _ws, _tr = _immune()
     with pytest.raises(PermissionError):
         immune.deregister("anything")
     assert immune.direct_lifecycle_calls == 1

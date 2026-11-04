@@ -28,7 +28,7 @@ def _bus_ws():
 
 
 def test_k1_hormone_state_written_each_window() -> None:
-    ws, bus, tr, sink = _bus_ws()
+    _ws, bus, _tr, _sink = _bus_ws()
     levels = bus.compute_release(stress_load=0.9, viability_score=0.4, crisis_precursor_count=1)
     rec = bus.write_telemetry_window(levels)
     assert "hormone_state" in rec.tags and rec.fidelity == "FULL" and rec.affects_control
@@ -37,7 +37,7 @@ def test_k1_hormone_state_written_each_window() -> None:
 
 
 def test_write_mirror_read_consistency() -> None:
-    ws, bus, tr, sink = _bus_ws()
+    _ws, bus, tr, _sink = _bus_ws()
     levels = HormoneLevels(cortisol=0.7, dopamine=0.1, melatonin=0.2, window_id="wtest")
     bus.write_telemetry_window(levels)
     reading = bus.read_mirror(consumer="test")
@@ -47,7 +47,7 @@ def test_write_mirror_read_consistency() -> None:
 
 
 def test_k2_staleness_in_trace_and_replay_uses_traced() -> None:
-    ws, bus, tr, sink = _bus_ws()
+    _ws, bus, tr, _sink = _bus_ws()
     bus.write_telemetry_window(HormoneLevels(cortisol=0.55, window_id="w1"))
     time.sleep(0.02)
     reading = bus.read_mirror(consumer="router")
@@ -60,7 +60,7 @@ def test_k2_staleness_in_trace_and_replay_uses_traced() -> None:
 
 
 def test_k5_kill_mirror_falls_back_to_workspace() -> None:
-    ws, bus, tr, sink = _bus_ws()
+    _ws, bus, _tr, _sink = _bus_ws()
     bus.write_telemetry_window(HormoneLevels(cortisol=0.4, window_id="w"))
     bus.kill_mirror()
     reading = bus.read_mirror(consumer="router")
@@ -88,7 +88,7 @@ def test_k4_hormone_cannot_override_shield() -> None:
 
 
 def test_router_disposition_in_decision_trace() -> None:
-    ws, bus, tr, sink = _bus_ws()
+    _ws, bus, tr, _sink = _bus_ws()
     bus.write_telemetry_window(HormoneLevels(cortisol=0.75, window_id="disp"))
     eng = DeterministicEngine()
     reg = RegistryClient(trace=tr)

@@ -182,7 +182,7 @@ def test_twin_bridge_to_workspace_and_hormone():
 def test_hypervisor_hot_swap_after_drain():
     reg = RegistryClient()
     active = SlimeMoldModule(node_id="active")
-    standby = SlimeMoldModule(node_id="standby")
+    _standby = SlimeMoldModule(node_id="standby")
     ca = active.declare_contract()
     # Distinct module ids for roles
     # register under distinct ids by mutating identity via fresh modules with patched ids
