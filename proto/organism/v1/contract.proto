@@ -100,6 +100,9 @@ enum OutputForm {
   OUTPUT_ASSIGNMENT_CERTIFICATE = 7;
   OUTPUT_FEATURE_VECTOR         = 8;
   OUTPUT_JUSTIFICATION_TOKEN    = 9;
+  OUTPUT_TEXT                   = 10;
+  OUTPUT_TOKEN_STREAM           = 11;
+  OUTPUT_TOOL_CALL              = 12;
 }
 
 enum UncertaintyKind {
@@ -331,6 +334,7 @@ enum JustificationKind {
   JUSTIFICATION_RULE_TRACE      = 4;
   JUSTIFICATION_ENERGY_CERT     = 5;
   JUSTIFICATION_SYMBOLIC_PROOF  = 6;
+  JUSTIFICATION_HUMAN_CONFIRMATION = 7;
 }
 
 // ---- Lifecycle --------------------------------------------------

@@ -18,6 +18,16 @@ Bio/wet-lab actuation remains hard-refused. CPU Everywhere holds. Naming is
 
 See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md).
 
+## Kotlin parity build-out (branch `feat/kotlin-parity`, 2026-11-04)
+
+- **K0 done:** Kotlin SDK with hypervector and degradation, both conformant to the vectors.
+- **K1 partly done:** Kotlin contract validation, lifecycle ladder and registry (`34c25a2`), with contract and lifecycle
+  vectors. The field subset and open items are in [docs/KOTLIN_PARITY_PLAN.md](docs/KOTLIN_PARITY_PLAN.md) (K1b).
+- **Private publish:** the Kotlin SDK publishes to a private repository. Decision made 2026-11-04.
+- **Next:** K1b, then K2. Start with [docs/HANDOVER.md](docs/HANDOVER.md).
+- **Gaps:** [docs/AI_MODEL_GAPS.md](docs/AI_MODEL_GAPS.md) lists 40 gaps for KotMoE, Lightspeed and future models.
+- **Branch note:** this branch includes `main` (the v1.11 MoA layer and the v1.12 work agent) through the merge
+  commit. Review that merge before any PR.
 ## v1.11 in progress: MoA layer
 
 Phases 0 to 3 of the [upgrade plan](docs/UPGRADE_AND_EXPANSION_PLAN.md) are implemented

@@ -42,7 +42,11 @@ def test_register_query_promote_roundtrip() -> None:
             to,
             shadow_records=[
                 ShadowValidationRecord(
-                    invocations=100, incumbent_error=0.1, candidate_error=0.09, p95_latency_ms=2.0
+                    invocations=100,
+                    incumbent_error=0.1,
+                    candidate_error=0.09,
+                    p95_latency_ms=2.0,
+                    evidence_digest=b"\x01" * 32,  # gated promotions need attributable evidence (K6)
                 )
             ],
             approver_signature=b"approve",
