@@ -221,6 +221,12 @@ def _shadow_score(sandbox: SandboxResult) -> tuple[float, ShadowMetrics]:
     return metrics.total, metrics
 
 
+def _rejected(bundle: CodeBundle) -> bool:
+    """Whether a step has rejected the bundle. A step sets the stage in place, so the check reads it
+    through a call: mypy would otherwise keep the stage it saw before the step ran."""
+    return bundle.stage == CodeStage.REJECTED
+
+
 class CodePipeline:
     """Production generative code evolution path for Organisms."""
 
@@ -467,15 +473,15 @@ class CodePipeline:
         t0 = time.perf_counter()
         b = self.start(intent, spec=spec, backend=backend)
         self.run_static(b.bundle_id)
-        if b.stage == CodeStage.REJECTED:
+        if _rejected(b):
             self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_contract(b.bundle_id, spec=spec)
-        if b.stage == CodeStage.REJECTED:
+        if _rejected(b):
             self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_sandbox(b.bundle_id)
-        if b.stage == CodeStage.REJECTED:
+        if _rejected(b):
             self._last_timings["evolve_ms"] = (time.perf_counter() - t0) * 1000.0
             return b
         self.run_shadow(b.bundle_id)

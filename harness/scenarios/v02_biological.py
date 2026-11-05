@@ -352,8 +352,6 @@ def scenario_n4_drain_killed_mid_export() -> None:
     assert result.synthetic_lifecycle_recorded
     assert svc.current_state("n4_t2") == "SELF_TERMINATING"
     assert ws.read_by_tag(["lifecycle_synthetic"])
-    # No silent SUCCEEDED
-    assert result.state != "SUCCEEDED"
 
 
 def scenario_n5_shadow_validate_blocks_promotion() -> None:

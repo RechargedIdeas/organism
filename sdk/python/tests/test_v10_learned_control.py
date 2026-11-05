@@ -57,7 +57,7 @@ def test_live_nas_searches_and_shadow_validates_winners() -> None:
     assert winners, "expected at least one shadow-validated NAS winner"
     assert winners[0].stage == SynthesisStage.SHADOW_VALIDATED
     assert not winners[0].may_actuate
-    t.promote_nas_winner(winners[0].organ_id)
-    assert winners[0].stage == SynthesisStage.PROMOTED
+    promoted = t.promote_nas_winner(winners[0].organ_id)
+    assert promoted.stage == SynthesisStage.PROMOTED
     assert winners[0].may_actuate
     assert t.can_register_deliberation(winners[0].organ_id)

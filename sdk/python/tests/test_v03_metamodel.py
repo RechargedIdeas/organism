@@ -35,14 +35,14 @@ def test_synthesize_sandbox_shadow_promote() -> None:
     assert not organ.may_actuate
     assert not t.can_register_deliberation(organ.organ_id)
 
-    t.sandbox(organ.organ_id)
+    organ = t.sandbox(organ.organ_id)
     assert organ.stage == SynthesisStage.SANDBOXED
 
-    t.shadow_validate(organ.organ_id, pass_rate=0.95)
+    organ = t.shadow_validate(organ.organ_id, pass_rate=0.95)
     assert organ.stage == SynthesisStage.SHADOW_VALIDATED
     assert not organ.may_actuate
 
-    t.promote(organ.organ_id)
+    organ = t.promote(organ.organ_id)
     assert organ.stage == SynthesisStage.PROMOTED
     assert organ.may_actuate
     assert t.can_register_deliberation(organ.organ_id)

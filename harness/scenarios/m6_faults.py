@@ -44,10 +44,10 @@ def scenario_no_flapping_on_restore() -> DegradationMachine:
     assert len(m.transitions) == before, "flapping detected"
     assert m.level == "L2"
     m.advance(240.0)  # total 300 from arm
-    assert m.level == "L1", m.level
+    assert str(m.level) == "L1", m.level  # str() reads the level through a call, as mypy needs
     m.tick()  # re-arm L1→L0 (cleared on transition)
     m.advance(120.0)
-    assert m.level == "L0", m.level
+    assert str(m.level) == "L0", m.level
     assert len([t for t in m.transitions if t[2] == "recovery"]) >= 2
     return m
 
