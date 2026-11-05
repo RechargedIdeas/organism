@@ -34,6 +34,11 @@ PANELS: tuple[PanelSpec, ...] = (
     ),
     PanelSpec("contracts", "Contracts / Assert", "Last SubstrateContract.validate() results"),
     PanelSpec("ops", "Ops", "Multi-profile deploy, soak, CPU Everywhere, wet-lab policy"),
+    PanelSpec(
+        "envvars",
+        "Environment",
+        "Secret variables · masked · explicit reveal · OS credential store",
+    ),
     PanelSpec("docs", "Docs / Help", "CPU Everywhere, soak runbook, API freeze, packaging"),
 )
 

@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from organism_sdk.envstore import apply_to_environ
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -277,6 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.setApplicationName("Organism Desktop")
     app.setFont(QFont("Segoe UI", 11))
 
+    apply_to_environ()
     service = DesktopService.create()
     win = MainWindow(service)
     if args.smoke or args.screenshot:

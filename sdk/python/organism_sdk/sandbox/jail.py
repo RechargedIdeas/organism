@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from organism_sdk.envstore import without_stored
 from organism_sdk.sandbox.policy import SandboxPolicy
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,7 @@ class ProcessJail:
             for k in list(child_env):
                 if k.startswith(prefix) or k == prefix.rstrip("_"):
                     child_env.pop(k, None)
+        child_env = without_stored(child_env)
         child_env["ORGANISM_IN_JAIL"] = "1"
         child_env["ORGANISM_JAIL_LABEL"] = self.policy.label
 

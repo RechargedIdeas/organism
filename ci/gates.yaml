@@ -331,6 +331,12 @@ gates:
     tier: fast
     command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_needs_you_panel.py desktop/tests/test_nav.py"
 
+  # The environment store and panel (v1.12): a secret value stays out of the masked UI, logs,
+  # error messages, status and CLI output, and sandboxed children. Test values are fake.
+  - id: env:store_and_panel
+    tier: fast
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_envstore.py desktop/tests/test_envvars_panel.py desktop/tests/test_nav.py"
+
   # The status route of serve (v1.12 W7): answers beside the writer, and 404s without a store.
   - id: work:serve_status
     tier: fast

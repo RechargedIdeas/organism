@@ -6,6 +6,7 @@ from organism_desktop.panels.bio import BioPanel
 from organism_desktop.panels.catalog import CatalogPanel
 from organism_desktop.panels.contracts import ContractsPanel
 from organism_desktop.panels.docs import DocsPanel
+from organism_desktop.panels.envvars import EnvVarsPanel
 from organism_desktop.panels.home import HomePanel
 from organism_desktop.panels.metamodel import MetamodelPanel
 from organism_desktop.panels.needs_you import NeedsYouPanel
@@ -31,6 +32,7 @@ PANEL_CLASSES = {
     "traces": TracesPanel,
     "contracts": ContractsPanel,
     "ops": OpsPanel,
+    "envvars": EnvVarsPanel,
     "docs": DocsPanel,
 }
 

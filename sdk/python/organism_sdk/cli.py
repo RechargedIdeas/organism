@@ -53,7 +53,9 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_serve(args: argparse.Namespace) -> int:
     from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
     from organism_sdk.deploy.serve import serve_stack
+    from organism_sdk.envstore import apply_to_environ
 
+    apply_to_environ()
     cfg = load_deploy_config(args.config)
     issues = validate_deploy_config(cfg)
     if issues and not args.force:

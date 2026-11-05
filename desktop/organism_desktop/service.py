@@ -1687,8 +1687,11 @@ class DesktopService:
     def rust_runtime_status(self, *, probe_cargo: bool = True) -> dict[str, Any]:
         """Read-only Rust workspace parity probe (no build forced on every refresh)."""
         import json
+        import os
         import shutil
         import subprocess
+
+        from organism_sdk.envstore import without_stored
 
         root = self._repo_root
         cargo_toml = root / "Cargo.toml"
@@ -1732,6 +1735,7 @@ class DesktopService:
                 proc = subprocess.run(
                     [cargo_bin, "metadata", "--no-deps", "--format-version", "1"],
                     cwd=str(root),
+                    env=without_stored(os.environ),
                     capture_output=True,
                     text=True,
                     timeout=20,
