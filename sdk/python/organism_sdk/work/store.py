@@ -28,9 +28,9 @@ from pathlib import Path
 from typing import Any, Self
 
 from organism_sdk.work import codec
-from organism_sdk.work.domain import Assignment, Decision, Ticket, Trigger
+from organism_sdk.work.domain import Assignment, Decision, Ticket, Trigger, Verdict
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 BACKOFF_BASE_S = 5.0
 BACKOFF_CAP_S = 300.0
 ERROR_CHARS = 500
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS triggers (
   id TEXT PRIMARY KEY,
   thread TEXT NOT NULL,
   at TEXT NOT NULL,
+  received REAL NOT NULL,
   body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS triggers_thread ON triggers (thread, at, id);
@@ -53,8 +54,14 @@ CREATE TABLE IF NOT EXISTS decisions (
 CREATE INDEX IF NOT EXISTS decisions_trigger ON decisions (trigger_id);
 CREATE TABLE IF NOT EXISTS tickets (
   id TEXT PRIMARY KEY,
+  thread TEXT,
   ended INTEGER NOT NULL,
   body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tickets_thread ON tickets (thread, ended);
+CREATE TABLE IF NOT EXISTS labels (
+  decision_id TEXT PRIMARY KEY,
+  verdict TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS assignments (
   id TEXT PRIMARY KEY,
@@ -299,8 +306,8 @@ class WorkStore:
 
     def _insert_trigger(self, trigger: Trigger) -> bool:
         cursor = self._conn.execute(
-            "INSERT OR IGNORE INTO triggers (id, thread, at, body) VALUES (?, ?, ?, ?)",
-            (trigger.id, trigger.thread, trigger.at, codec.to_text(trigger)),
+            "INSERT OR IGNORE INTO triggers (id, thread, at, received, body) VALUES (?, ?, ?, ?, ?)",
+            (trigger.id, trigger.thread, trigger.at, self._clock(), codec.to_text(trigger)),
         )
         return cursor.rowcount == 1
 
@@ -333,9 +340,10 @@ class WorkStore:
         """Store a Ticket, replacing the stored facts of the same id."""
         with self.transaction():
             self._conn.execute(
-                "INSERT INTO tickets (id, ended, body) VALUES (?, ?, ?) "
-                "ON CONFLICT (id) DO UPDATE SET ended = excluded.ended, body = excluded.body",
-                (ticket.id, int(ticket.ended), codec.to_text(ticket)),
+                "INSERT INTO tickets (id, thread, ended, body) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (id) DO UPDATE SET thread = excluded.thread, "
+                "ended = excluded.ended, body = excluded.body",
+                (ticket.id, ticket.thread, int(ticket.ended), codec.to_text(ticket)),
             )
 
     def ticket(self, ticket_id: str) -> Ticket | None:
@@ -437,6 +445,64 @@ class WorkStore:
                 "SELECT item, message FROM source_errors WHERE source = ? ORDER BY item", (source,)
             ).fetchall()
         return {str(item): str(message) for item, message in rows}
+
+    # Evaluation
+
+    def now(self) -> float:
+        """The store's clock. Eval measures deadlines against it."""
+        return self._clock()
+
+    def undecided(self, policy_version: str) -> list[tuple[Trigger, float]]:
+        """The Triggers with no Decision under this Policy version, each with its receipt time.
+
+        The Decision's key is the Trigger id, "@", then the version (see `decision_key`). Oldest
+        first, so a backlog is worked in the order it arrived.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT body, received FROM triggers WHERE NOT EXISTS ("
+                "SELECT 1 FROM decisions WHERE decisions.id = triggers.id || '@' || ?) "
+                "ORDER BY received, id",
+                (policy_version,),
+            ).fetchall()
+        return [(codec.from_text(Trigger, body), float(received)) for body, received in rows]
+
+    def ticket_for_thread(self, thread: str) -> Ticket | None:
+        """The newest open Ticket of a Thread, or None when the Thread has none."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT body FROM tickets WHERE thread = ? AND ended = 0 "
+                "ORDER BY rowid DESC LIMIT 1",
+                (thread,),
+            ).fetchone()
+        return None if row is None else codec.from_text(Ticket, row[0])
+
+    def all_decisions(self) -> list[Decision]:
+        with self._lock:
+            rows = self._conn.execute("SELECT body FROM decisions ORDER BY rowid").fetchall()
+        return [codec.from_text(Decision, row[0]) for row in rows]
+
+    def label(self, decision_id: str, verdict: Verdict) -> None:
+        """Record a person's verdict on a Decision. The latest verdict stands.
+
+        An unknown Decision raises KeyError.
+        """
+        with self.transaction():
+            known = self._conn.execute(
+                "SELECT 1 FROM decisions WHERE id = ?", (decision_id,)
+            ).fetchone()
+            if known is None:
+                raise KeyError(decision_id)
+            self._conn.execute(
+                "INSERT INTO labels (decision_id, verdict) VALUES (?, ?) "
+                "ON CONFLICT (decision_id) DO UPDATE SET verdict = excluded.verdict",
+                (decision_id, verdict.value),
+            )
+
+    def labels(self) -> dict[str, Verdict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT decision_id, verdict FROM labels").fetchall()
+        return {str(decision_id): Verdict(verdict) for decision_id, verdict in rows}
 
     # Effects
 

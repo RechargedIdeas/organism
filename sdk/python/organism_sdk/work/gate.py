@@ -1,7 +1,7 @@
 """The gate: the deterministic first layer of Eval (002). Design record: docs/v1.12/WORK_AGENT.md.
 
 Pure. A Trigger, its receiving scope and a Policy give a strength and its basis. No model
-is consulted. Judging proactive candidates is a later layer (W4).
+is consulted. Judging proactive candidates by rule is the assessment and Eval (W4).
 """
 
 from __future__ import annotations

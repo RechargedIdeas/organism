@@ -44,6 +44,13 @@ class Outcome(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class Verdict(str, Enum):
+    """A person's judgment of a Decision: would starting the work have been right? (W4)"""
+
+    AGREE = "agree"
+    DISAGREE = "disagree"
+
+
 class Report(str, Enum):
     """What an Executor reports to its Ticket."""
 
@@ -66,6 +73,11 @@ class AssignmentState(str, Enum):
 def thread_key(source: str, native_id: str) -> str:
     """The key of a Thread: its Source, then the Source's own id."""
     return f"{source}:{native_id}"
+
+
+def decision_key(trigger_id: str, policy_version: str) -> str:
+    """The key of a Decision: its Trigger, then "@", then the Policy version it was made under."""
+    return f"{trigger_id}@{policy_version}"
 
 
 @dataclass(frozen=True)
@@ -133,6 +145,7 @@ class Ticket:
     attention: bool = False
     delivery_failed: bool = False
     person_message_after_report: bool = False
+    thread: str | None = None
 
 
 @dataclass(frozen=True)

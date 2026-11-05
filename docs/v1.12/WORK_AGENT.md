@@ -1,6 +1,6 @@
 # Work Agent Layer: Design Record (v1.12)
 
-**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue) and W3 (GitHub source, read only) implemented. W4 onward not started.
+**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W5 onward not started.
 
 **Covers:** [docs/SUPERAGENT_COMPARISON.md](../SUPERAGENT_COMPARISON.md), the comparison with dsh-superagent and the build-out plan this record follows.
 
@@ -60,12 +60,16 @@ These come from the superagent's domain document and are kept as rules:
 
 | Module | Holds |
 |---|---|
-| `domain.py` | `Trigger`, `Thread`, `Mandate`, `Assignment`, `Ticket`, `Decision` and their enums. Plain values. |
+| `domain.py` | `Trigger`, `Thread`, `Mandate`, `Assignment`, `Ticket`, `Decision` and their enums, including `Verdict`. `thread_key` and `decision_key` build the keys. Plain values. |
 | `stage.py` | The Ticket stage table from the superagent's execution document (003): `Stage`, `stage_of`, `waits_for_person`. |
 | `gate.py` | `admit`, the deterministic first layer of Eval. Returns an `Admission`. |
-| `policy.py` | `AcceptMode`, `Cell`, `AdmissionRow`, `Rule`, `SourcePolicy`, `Policy`, `policy_version`, `may_accept_inferred`. |
+| `policy.py` | `AcceptMode`, `Cell`, `AdmissionRow`, `Rule` (with `pattern` and `auto`), `SourcePolicy`, `Policy`, `policy_version`, `may_accept_inferred`. |
+| `assess.py` | `RuleAssessor`, `Assessment`: which enabled rule patterns a Trigger matches. Pure. |
+| `decide.py` | `decide`, `EvalReason`, `rule_reason`: one Decision per Trigger and Policy version. Pure. |
+| `promote.py` | `shadow_gate`, `graduate`, `ShadowGate`: when a rule may graduate from observe to auto. Pure. |
+| `runner.py` | `evaluate`, `EvalReport`, `DEADLINE_S`: runs Eval over a store. It does no I/O itself; the store does. |
 | `codec.py` | `encode`, `decode`, `to_text`, `from_text`: the JSON form of the domain, read from each dataclass's annotations. Pure. |
-| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag, the writer lock and source errors. The only top-level module that does I/O. |
+| `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag, the writer lock, source errors, Decisions, labels and the Triggers still undecided. The only top-level module that does I/O. |
 | `sources/github.py` | `GitHubSource`, `GhCli`, `RoundReport`: reads one repository through `gh api`, read only. An I/O adapter, so it lives in `sources/`. |
 
 ## 6. W1 behaviour
@@ -147,15 +151,58 @@ The cursor is the newest notification time read, and it is stored under `github:
 
 `work:github_fake` runs `test_v112_work_github.py` against a fake `gh`. It makes no network calls.
 
-## 9. Not yet built
+## 9. W4 behaviour
+
+### Rules
+
+A Rule has an id, an instruction, `enabled`, an optional `pattern` and `auto`. The pattern is a regular expression of at most 200 characters, compiled when the Rule is made, and searched case-insensitively in a Trigger's text. A Rule with no pattern is never matched, because judging it needs a model, which is not adopted (W-D2). `auto` is graduation: a Rule starts work on its own only once it has passed the shadow gate below.
+
+### Decision
+
+`decide` returns one Decision per Trigger and Policy version. Its id is the Trigger id, then "@", then the version, so each Trigger is decided once per version. The first reason is always the gate's own. The outcome is decided in this order:
+
+1. Not admitted by the gate: ignored.
+2. Late, meaning received more than an hour earlier: ignored, with `deadline_passed`. This applies to explicit requests too.
+3. Explicit: accepted.
+4. Inferred, and the assessor failed: unavailable. Nothing is stored, so the next run tries again, until the Trigger is late.
+5. Inferred, in auto mode, and a matched rule has graduated: accepted.
+6. Inferred, and a matched rule has not graduated: ignored as a `would_accept`. This is the shadow evidence.
+7. Inferred, and no rule matched: ignored, with `no_rule_matched`.
+
+`evaluate` runs this over the store. It skips a Trigger that already has a Decision under the Policy version, so a repeated run decides nothing twice.
+
+### Deadline
+
+A new Policy version evaluates every stored Trigger again, so a graduation would otherwise start work on the old backlog. The deadline stops that. It is an hour from the time the store received the Trigger, read from the store's clock. It applies to explicit requests as well, so a request that waited too long is recorded as ignored.
+
+### Graduation
+
+`graduate` marks a Rule `auto` only when its shadow gate passes:
+
+- the Rule has a pattern and an instruction, and is enabled;
+- at least 20 of its would-accept Decisions under the current Policy version carry a verdict;
+- at least 90% of those verdicts agree.
+
+A verdict is a person's `Verdict` on one Decision, stored with `WorkStore.label`, and the latest verdict stands. Decisions made under an earlier Policy version are not evidence, so any change to the Policy starts the evidence again. `graduate` returns a new Policy. Nothing adopts it until the operator does (W7 and W9).
+
+### Changes from W3
+
+- `Rule` gained `pattern` and `auto`, so every Policy with a rule has a new digest. The digest of the empty Policy is unchanged. No Mandate is stored yet, so no recorded version is affected. Section 12 applies from the first Mandate on.
+- `may_accept_inferred` requires a graduated rule. Before W4, auto mode accepted any enabled matched rule.
+- The store is at schema 2. `triggers` records when each Trigger was received, `tickets` records its Thread, and `labels` is new. A schema 1 store is refused, as before.
+
+## 10. Not yet built
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
-- Eval batching, deadlines and `unavailable`: W4.
-- Mandate revalidation and Policy-change notices: W4 and W9.
+- A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
+- Mandates from accepted Decisions, and the Executor: W5.
+- Stop requests. `Outcome.STOP` is in the domain, but Eval does not produce it. A stop needs a Ticket to stop: W5.
+- Operator labelling, and adopting a graduated Policy: W7 and W9.
+- Mandate revalidation and Policy-change notices: W9.
 - Subscriptions, follow-up ownership, hand-back and release: W8.
 - Context-only follows, which do not admit anything: W8.
 
-## 10. Gates
+## 11. Gates
 
 `work:domain` (fast tier) runs three files:
 
@@ -164,7 +211,10 @@ The cursor is the newest notification time read, and it is stored under `github:
 - `test_v112_work_policy.py`: the version digest, the shape of admission rows, `may_accept_inferred`, a pinned digest of the empty Policy, and the purity check, which allows I/O only in `store.py`.
 - `test_v112_work_store.py` (`work:store`, fast tier): intake, rounds and their transactions, Tickets, Assignments, Receipts, effects, the pause flag and the codec.
 - `test_v112_work_restart.py` (`work:restart`, fast tier): a process killed mid-round and mid-effect, what the replay leaves behind, and a second writer refused while the store is held.
+- `test_v112_work_admission.py` (`work:admission`, fast tier): the rule assessment, and the decision for one Trigger with no store, through each outcome and each reason.
+- `test_v112_work_shadow_promote.py` (`work:shadow_promote`, fast tier): the shadow gate's thresholds, the current-version rule, and graduation.
+- `test_v112_work_eval.py` (`work:eval`, fast tier): Eval over a real store. It covers once per version, the unavailable retry, the deadline, followups on open and ended Tickets, labels, and a graduated rule accepting new work but not the old backlog.
 
-## 11. Changing this record
+## 12. Changing this record
 
 Changing the canonical form of the Policy digest changes the version of every Policy, and so the recorded version of every Mandate. Treat that as a breaking change to stored records. Make it only with a migration.

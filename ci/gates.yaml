@@ -316,6 +316,21 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_github.py"
 
+  # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
+  - id: work:admission
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_admission.py"
+
+  # Shadow promotion (v1.12 W4): a rule graduates only on enough agreeing verdicts from its version.
+  - id: work:shadow_promote
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_shadow_promote.py"
+
+  # Eval over the store (v1.12 W4): each Trigger decided once per version, retried when unavailable.
+  - id: work:eval
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_eval.py"
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   - id: desktop:smoke
     tier: full

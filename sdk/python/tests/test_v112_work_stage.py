@@ -31,10 +31,22 @@ def ticket(
     *,
     state: AssignmentState | None = None,
     report: Report | None = None,
-    **facts: bool,
+    attention: bool = False,
+    delivery_failed: bool = False,
+    person_message_after_report: bool = False,
+    ended: bool = False,
 ) -> Ticket:
     assignment = None if state is None else Assignment(id="a1", ticket_id="t1", state=state)
-    return Ticket(id="t1", mandate=MANDATE, assignment=assignment, latest_report=report, **facts)
+    return Ticket(
+        id="t1",
+        mandate=MANDATE,
+        assignment=assignment,
+        latest_report=report,
+        attention=attention,
+        delivery_failed=delivery_failed,
+        person_message_after_report=person_message_after_report,
+        ended=ended,
+    )
 
 
 @pytest.mark.parametrize(

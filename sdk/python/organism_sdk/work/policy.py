@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 from typing import Any
+
+MAX_PATTERN = 200  # characters in a rule's pattern
 
 
 class AcceptMode(str, Enum):
@@ -50,11 +53,31 @@ class AdmissionRow:
 
 @dataclass(frozen=True)
 class Rule:
-    """A kind of proactive work the team allows (002). Judged on every assessment."""
+    """A kind of proactive work the team allows (002). Judged on every assessment.
+
+    ``pattern`` is the deterministic test a rule assessor applies to a Trigger's text: a
+    case-insensitive regular expression of at most MAX_PATTERN characters. A rule without one
+    can only be judged by a model, and none is adopted yet (W-D2).
+
+    ``auto`` is graduation. A rule may start work on its own only once its shadow records have
+    passed the promote gate (W4), so the default is observe.
+    """
 
     id: str
     instruction: str
     enabled: bool = True
+    pattern: str | None = None
+    auto: bool = False
+
+    def __post_init__(self) -> None:
+        if self.pattern is None:
+            return
+        if len(self.pattern) > MAX_PATTERN:
+            raise ValueError(f"rule {self.id!r}: pattern is longer than {MAX_PATTERN} characters")
+        try:
+            re.compile(self.pattern)
+        except re.error as error:
+            raise ValueError(f"rule {self.id!r}: invalid pattern: {error}") from None
 
 
 @dataclass(frozen=True)
@@ -115,11 +138,15 @@ def policy_version(policy: Policy) -> str:
 
 
 def may_accept_inferred(policy: Policy, matched: Iterable[str]) -> bool:
-    """A proactive accept needs auto mode and at least one matched rule that is enabled (002)."""
+    """A proactive accept needs auto mode and a matched rule that is enabled and graduated.
+
+    002 asks for auto mode and an enabled rule. W4 adds graduation: a rule that has not passed
+    the promote gate stays in observe, even in auto mode.
+    """
     if policy.mode is not AcceptMode.AUTO:
         return False
-    enabled = {rule.id for rule in policy.rules if rule.enabled}
-    return any(rule_id in enabled for rule_id in matched)
+    graduated = {rule.id for rule in policy.rules if rule.enabled and rule.auto}
+    return any(rule_id in graduated for rule_id in matched)
 
 
 def _plain(value: Any) -> Any:

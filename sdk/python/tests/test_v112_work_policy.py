@@ -181,8 +181,20 @@ def test_a_source_part_is_found_by_name() -> None:
 def test_inferred_accept_needs_auto_and_a_matched_enabled_rule(
     mode: AcceptMode, matched: list[str], expected: bool
 ) -> None:
-    pol = Policy(mode=mode, rules=(Rule(id="ci-fix", instruction="fix CI"),))
+    pol = Policy(mode=mode, rules=(Rule(id="ci-fix", instruction="fix CI", auto=True),))
     assert may_accept_inferred(pol, matched) is expected
+
+
+def test_an_ungraduated_rule_stays_in_observe_even_in_auto_mode() -> None:
+    pol = Policy(mode=AcceptMode.AUTO, rules=(Rule(id="ci-fix", instruction="fix CI"),))
+    assert may_accept_inferred(pol, ["ci-fix"]) is False
+
+
+def test_a_pattern_must_compile_and_stay_short() -> None:
+    with pytest.raises(ValueError, match="invalid pattern"):
+        Rule(id="x", instruction="a", pattern="(")
+    with pytest.raises(ValueError, match="longer than"):
+        Rule(id="x", instruction="a", pattern="a" * 201)
 
 
 def test_a_disabled_rule_does_not_admit_inferred_work() -> None:
