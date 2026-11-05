@@ -101,7 +101,9 @@ def scenario_k1_cortisol_release() -> None:
     bus = HormoneBus(ws, trace=_tr())
     levels = bus.compute_release(stress_load=0.9, viability_score=0.2, crisis_precursor_count=2)
     bus.write_telemetry_window(levels)
-    assert bus.read_workspace_hormone_state().cortisol > 0.3
+    state = bus.read_workspace_hormone_state()
+    assert state is not None
+    assert state.cortisol > 0.3
 
 
 def scenario_k2_staleness_trace() -> None:

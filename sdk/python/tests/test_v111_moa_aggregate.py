@@ -21,12 +21,16 @@ def _out(eid: str, payload: str, confidence: float, valid: bool = True) -> Exper
 
 def test_select_picks_highest_confidence_schema_valid_output() -> None:
     outs = [_out("a", "{}", 0.4), _out("b", "{}", 0.9), _out("c", "{}", 0.7)]
-    assert select(outs).expert_id == "b"
+    picked = select(outs)
+    assert picked is not None
+    assert picked.expert_id == "b"
 
 
 def test_select_ignores_schema_invalid_outputs_even_when_most_confident() -> None:
     outs = [_out("a", "{}", 0.2), _out("b", "{}", 0.99, valid=False)]
-    assert select(outs).expert_id == "a"
+    picked = select(outs)
+    assert picked is not None
+    assert picked.expert_id == "a"
 
 
 def test_select_returns_none_when_nothing_is_schema_valid() -> None:
@@ -35,7 +39,9 @@ def test_select_returns_none_when_nothing_is_schema_valid() -> None:
 
 def test_select_breaks_confidence_ties_on_expert_id() -> None:
     outs = [_out("zeta", "{}", 0.5), _out("alpha", "{}", 0.5)]
-    assert select(outs).expert_id == "alpha"
+    picked = select(outs)
+    assert picked is not None
+    assert picked.expert_id == "alpha"
 
 
 def test_composite_recovers_every_fact_for_small_sets() -> None:
@@ -83,6 +89,7 @@ def test_aggregate_refuses_more_experts_than_the_cap() -> None:
 def test_aggregate_returns_selection_and_provenance_together() -> None:
     outs = [_out("a", '{"v": 1}', 0.3), _out("b", '{"v": 2}', 0.8)]
     result = aggregate(outs)
+    assert result.selected is not None
     assert result.selected.expert_id == "b"
     assert result.provenance_ok is True
     assert set(result.recovered) == {"a", "b"}

@@ -63,6 +63,7 @@ def test_level_gating_l4_deterministic_only() -> None:
     )
     assert plan.plan_type == "DegradedDispatchPlan"
     assert plan.disposition == "DISPATCH"
+    assert plan.primary is not None
     assert plan.primary.module_id == "deterministic_engine"
 
 
