@@ -122,8 +122,13 @@ def _qobject_count() -> int:
     return len([o for o in gc.get_objects() if isinstance(o, QObject)])
 
 
-def test_generative_evolve_promote_rollback_soak(svc: DesktopService):
+def test_generative_evolve_promote_rollback_soak(
+    svc: DesktopService, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """N evolve→promote→rollback cycles must not leak registry modules or explode bundles."""
+    # Each draft runs in a child Python, which a busy machine can keep past the 2 s default. The
+    # soak checks leaks, not the clock, so it gets the same 20 s budget as test_v17_generative.
+    monkeypatch.setenv("ORGANISM_SANDBOX_TIMEOUT_S", "20")
     n = 24
     registry = svc.stack.registry
     before_ids = set(registry.list_module_ids())

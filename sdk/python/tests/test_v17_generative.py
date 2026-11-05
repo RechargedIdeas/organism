@@ -30,6 +30,16 @@ def art(tmp_path: Path) -> ArtifactStore:
     return ArtifactStore(tmp_path / "artifacts")
 
 
+@pytest.fixture(autouse=True)
+def _roomy_draft_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A draft runs in a child Python, which a busy machine can keep past the 2 s default.
+
+    These tests check the evolution, not the clock, so they get a 20 s wall budget. The default
+    stays 2 s for production.
+    """
+    monkeypatch.setenv("ORGANISM_SANDBOX_TIMEOUT_S", "20")
+
+
 def test_sandbox_allows_pure_main() -> None:
     sb = SafeSandbox()
     src = "def main(x=1):\n    return x * 2\n"

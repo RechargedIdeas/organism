@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from organism_sdk import multinode
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.multinode import MultiNodeCluster
@@ -18,11 +19,25 @@ def test_default_gate_still_fail_closed() -> None:
     assert not gate.is_distributed_supported()
 
 
-def test_mirror_lag_slo() -> None:
+class _Clock:
+    """Stands in for the time module in multinode: time moves only when the test moves it."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def test_mirror_lag_slo(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A real 25 ms sleep can overshoot the 40 ms SLO on a loaded machine (a 47 ms run failed this
+    # check). On a fake clock the wait is exactly 25 ms, so the check tests the SLO and nothing else.
+    monkeypatch.setattr(multinode, "time", _Clock())
     cluster = MultiNodeCluster(["a", "b"], default_lag_ms=5.0, lag_slo_ms=40.0)
     cluster.release_and_mirror("a", lag_ms=5.0, stress_load=0.7, viability_score=0.5)
-    # 25 ms, not 8. The lag is 5 ms, but Windows clocks tick about every 15.6 ms, so an 8 ms wait
-    # missed the delivery in 25 of 60 runs. 25 ms missed none. It stays under the 40 ms SLO.
     applied = cluster.advance(wait_ms=25.0)
     assert applied >= 1
     cluster.assert_lag_slo()
