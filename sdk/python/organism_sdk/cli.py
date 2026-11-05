@@ -373,12 +373,14 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
 
 
 def _cmd_work(args: argparse.Namespace) -> int:
-    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt"""
+    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt|drive"""
     from organism_sdk.work import operator
     from organism_sdk.work.store import WorkStore, default_store_path
 
     path = Path(args.store) if args.store else default_store_path()
     action = args.work_action
+    if action == "drive":
+        return _work_drive(args, path)
     reads_only = action in ("status", "tickets", "attention")
     if reads_only and not path.exists():
         _print({"ok": False, "error": f"no work store at {path}"})
@@ -433,6 +435,27 @@ def _cmd_work(args: argparse.Namespace) -> int:
                 _print({"ok": False, "error": str(error)})
                 return 1
             _print({"ok": True, "decided": report.decided, "unavailable": report.unavailable})
+    return 0
+
+
+def _work_drive(args: argparse.Namespace, path: Path) -> int:
+    """Open Tickets for accepted Decisions and run them, through the executor file's settings."""
+    from dataclasses import asdict
+
+    from organism_sdk.work import driver
+    from organism_sdk.work.executors import load_executor
+    from organism_sdk.work.store import WorkStore
+
+    try:
+        executor = load_executor(Path(args.executor))
+    except (OSError, ValueError) as error:
+        _print({"ok": False, "error": str(error)})
+        return 1
+    report = driver.drive(lambda: WorkStore(path), executor, limit=args.limit)
+    if report.halted is not None:
+        _print({"ok": False, "error": report.halted})
+        return 1
+    _print({"ok": True, **asdict(report)})
     return 0
 
 
@@ -602,6 +625,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--trust", required=True, help="Trust store file: approver and author public keys, hex"
     )
     p_wadopt.set_defaults(func=_cmd_work)
+    p_wdrive = work_sub.add_parser(
+        "drive",
+        parents=[store_option],
+        help="Open Tickets for accepted Decisions and run them through the executor",
+    )
+    p_wdrive.add_argument(
+        "--executor", required=True, help="Executor settings, as JSON: root, argv, prepare, slots"
+    )
+    p_wdrive.add_argument("--limit", type=int, default=10, help="Most Tickets to run in one pass")
+    p_wdrive.set_defaults(func=_cmd_work)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:

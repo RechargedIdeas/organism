@@ -1,6 +1,6 @@
 # Work Agent Layer: Design Record (v1.12)
 
-**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W5 (the Executor and the `work_executor` jail profile) implemented in part, section 10: the Ticket driver that calls it is not built. W6 (reply channel, off by default), W7 (operator surface), W8 (Thread ownership routing) and W9 (signed Policy adoption) implemented in part, sections 11 to 14.
+**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W5 (the Executor, the `work_executor` jail profile and the Ticket driver) implemented in part, section 10: the network allowlist is not enforced, and the deployment config does not yet name the executor. W6 (reply channel, off by default), W7 (operator surface), W8 (Thread ownership routing) and W9 (signed Policy adoption) implemented in part, sections 11 to 14.
 
 **Covers:** [docs/SUPERAGENT_COMPARISON.md](../SUPERAGENT_COMPARISON.md), the comparison with dsh-superagent and the build-out plan this record follows.
 
@@ -11,7 +11,7 @@
 | ID | Decision | Status |
 |---|---|---|
 | W-D1 | The executor is an external coding-agent CLI, run in non-interactive mode inside the `ProcessJail`. | Decided 2026-11-04 |
-| W-D1a | Which CLI: Claude Code, run in non-interactive print mode, as the only CLI in the argv template. Before W5 starts, install it in the jail environment, check its print-mode and permission flags against the installed version, and allow only its API host and its one key variable in the `work_executor` profile. | Decided 2026-11-04. W5 still needs the CLI installed and its flags checked |
+| W-D1a | Which CLI: Claude Code, run in non-interactive print mode, as the only CLI in the argv template. Before W5 starts, install it in the jail environment, check its print-mode and permission flags against the installed version, and allow only its API host and its one key variable in the `work_executor` profile. | Decided 2026-11-04. Checked against Claude Code 2.1.318 (section 10) |
 | W-D2 | Whether a hosted LLM may classify proactive candidates. Rules first. An LLM, when revisited, is off by default, sees only inferred candidates, redacts before sending, and only proposes. | Decided 2026-11-04: no hosted LLM yet. The LLM part of W4 stays unbuilt |
 | W-D3 | First Source: GitHub. | Working default |
 | W-D4 | No auto-merge in v1. | Working default |
@@ -65,7 +65,7 @@ These come from the superagent's domain document and are kept as rules:
 | `gate.py` | `admit`, the deterministic first layer of Eval. Returns an `Admission`. |
 | `policy.py` | `AcceptMode`, `Cell`, `AdmissionRow`, `Rule` (with `pattern` and `auto`), `SourcePolicy`, `Policy`, `policy_version`, `may_accept_inferred`. |
 | `assess.py` | `RuleAssessor`, `Assessment`: which enabled rule patterns a Trigger matches. Pure. |
-| `decide.py` | `decide`, `EvalReason`, `rule_reason`: one Decision per Trigger and Policy version. Pure. |
+| `decide.py` | `decide`, `EvalReason`, `rule_reason`: one Decision per Trigger and Policy version. An accepted Decision carries its Mandate. Pure. |
 | `promote.py` | `shadow_gate`, `graduate`, `ShadowGate`: when a rule may graduate from observe to auto. Pure. |
 | `runner.py` | `evaluate`, `EvalReport`, `DEADLINE_S`: runs Eval over a store. It does no I/O itself; the store does. |
 | `codec.py` | `encode`, `decode`, `to_text`, `from_text`: the JSON form of the domain, read from each dataclass's annotations. Pure. |
@@ -74,7 +74,8 @@ These come from the superagent's domain document and are kept as rules:
 | `routing.py` | `route`, `ThreadOwnershipError`: the open Ticket that owns a human message's Thread. Pure. |
 | `governance.py` | `adopt`, `affected_tickets`, `is_approved`, `policy_payload`, `PolicyRejected`: signed Policy adoption and the notices it queues. Pure apart from `adopt`, which writes through the store. |
 | `operator.py` | `status`, `tickets`, `attention`, `stop`, `pause`, `resume`, `retry`, `evaluate_triggers`: what the CLI and the `needs_you` panel both show and change. |
-| `executors/` | `ProcessExecutor`, `Slots`, `Execution`, `recover`, `containment_gap`: the Executor that runs the CLI for one Ticket, inside the jail (W5). An I/O adapter, so it lives in `executors/`. |
+| `executors/` | `ProcessExecutor`, `Slots`, `Execution`, `recover`, `containment_gap`, `load_executor`: the Executor that runs the CLI for one Ticket, inside the jail, and the reader of its settings file (W5). An I/O adapter, so it lives in `executors/`. |
+| `driver.py` | `drive`, `open_accepted`, `DriveReport`, `task_for`, `ticket_id_for`: takes an accepted Decision to a Ticket and runs it through the Executor (W5). It opens the store in short steps and starts no process itself. |
 | `channels/` | `GitHubChannel`, `ChannelGone`, `queue_reply`, `queue_next_reply`, `reply_handlers`: the reply channel. An I/O adapter, so it lives in `channels/`. |
 
 ## 6. W1 behaviour
@@ -225,17 +226,37 @@ A run creates the Ticket's own directory under the root, runs the prepare argv f
 
 `recover(store)` runs after a restart. Each running Assignment ends, and one recovery note is queued per Ticket. `attention` shows the note, and nothing reruns. A retry starts a new Assignment in the same directory (D2), and that retry is not built.
 
+### The Ticket driver
+
+`driver.py` takes an accepted Decision to a Ticket, and runs the Ticket through the Executor. An accepted Decision carries the Mandate it was granted under (`Decision.mandate`), and the Ticket opens with that Mandate. Only Decisions under the Policy in force open Tickets. A Ticket's id is hashed from its Decision's id, so one Decision never opens two Tickets, and a stopped Ticket is not reopened. A Decision stored before the Mandate was carried has none, and is not opened.
+
+- **One open Ticket per Thread.** A second accepted Decision on a Thread that has an open Ticket is held. It opens once the Thread has no open Ticket, so a request made during a run is not lost. Follow-ups are not delivered to the running Ticket, because hand-back is not built (W8).
+- **The store is held only in short steps.** A claim marks the Assignment running, and is committed before any process starts. The run holds no store, and then the result is written. So `pause` and `stop` from another process work during a run. A stop takes effect when the process ends. A restart ends a running Assignment through `recover`.
+- **The result.** A run that succeeds leaves its Ticket ready for a person (stage `person/review`). A refusal, a non-zero exit, a timeout, or an error raised by the runner leaves it failed (stage `person/blocked`) until a person writes. The reason is the refusal or the exit code, never the output. A run that finds no free slot returns its Assignment to pending, and the pass stops there.
+- **The task.** The Executor gets the Policy's instructions for the rules the Mandate names, then the message that started the work, labelled as text from the source. An argv element equal to `{task}` is replaced by that text. No shell is involved.
+- **Halts.** Nothing is opened or run while the store is paused. When the executor reports a blocked reason (no Linux containment, a blocked program, or no key variable), a pass changes nothing, so a host that cannot run work does not fail every Ticket.
+
+`organism work drive --executor FILE [--limit N]` runs one pass. `FILE` is a JSON object:
+
+```json
+{"root": "tickets", "argv": ["claude", "-p", "{task}"], "prepare": ["git", "init"], "slots": 2}
+```
+
+`root` and `argv` are required. `prepare` is optional. `slots` is at least two, and defaults to two, because one slot stays free for a person.
+
 ### Platforms
 
 | Host | linux | rlimits | unshare | Executor |
 |---|---|---|---|---|
 | Windows | no | no | no | refused |
-| WSL (Ubuntu 22.04) | yes | yes | yes | runs; the real-jail test passes |
+| WSL (Ubuntu 22.04) | yes | yes | yes | runs; the real-jail tests pass |
 
 ### Not built
 
-- The Ticket driver. No command or service takes a Mandate to a Ticket and calls the Executor, so nothing runs a CLI yet. This is the next step of W5.
-- The argv template in the deployment config. The executor takes its argv as a parameter, and the config reader is not written.
+- The argv in the deployment config. The executor file names the argv for now, and the `deploy` config does not read it.
+- Output. A run's stdout and stderr go to the caller and are not stored. Only the result and its reason are kept.
+- Retry after a restart (D2). A recovered Ticket waits for a new Assignment, and nothing creates one yet.
+- Delivery of a follow-up to a running Ticket (W8).
 - Network enforcement, described above.
 
 ## 11. W6 behaviour
@@ -262,7 +283,7 @@ The reads (`status`, `tickets`, `attention`) open the store read-only. They run 
 
 ### Operator actions
 
-`stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. Nothing cancels a running process, because the Executor does not exist until W5. `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
+`stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. A running process is not cancelled: the stop takes effect when it ends (section 10). `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
 
 ### Verdicts and adoption
 
@@ -286,7 +307,7 @@ A Ticket owns its Thread while it is open. `route` sends a human message on an o
 
 ### Not called yet
 
-Nothing in the SDK calls `route` yet, so its result has no consumer until the Executor (W5) exists. Hand-back, release and pull-request following (D7 and D9) wait for shadow data, and are not built.
+Nothing calls `route` yet. The Ticket driver (section 10) holds a second accepted request on an owned Thread, rather than routing it. Hand-back, release and pull-request following (D7 and D9) wait for shadow data, and are not built.
 
 ## 14. W9 behaviour
 
@@ -308,9 +329,8 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
-- Mandates from accepted Decisions, and the Ticket driver that takes a Mandate to a Ticket and calls the Executor (section 10). The Executor exists; nothing calls it yet.
 - The network allowlist of the `work_executor` profile is recorded, not enforced (section 10).
-- Stopping a running process. `stop` ends the Ticket and drops its waiting replies, but cannot cancel a process until the Ticket driver calls the Executor (section 10). `Outcome.STOP` is in the domain, but Eval does not produce it.
+- Cancelling a running process. `stop` ends the Ticket and drops its waiting replies, but the process runs to its end (section 10). `Outcome.STOP` is in the domain, but Eval does not produce it.
 - Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
 - Mandate revalidation and the instruction artifacts: W9, section 14.
 - Subscriptions, hand-back and release, and pull-request following: W8. `route` exists (section 13), but nothing calls it yet.
@@ -339,6 +359,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.
 - `test_v112_work_executor.py` (`work:executor_fake`, fast tier): the refusals, the Ticket's own directory, prepare before run, the worker slots, recovery, and on Linux only, the real jail giving the child only `ANTHROPIC_API_KEY`.
+- `test_v112_work_driver.py` (`work:driver`, fast tier): an accepted Decision opens one Ticket with its Mandate, held and stopped Tickets, the task, the result of each kind of run, slots, pause and halt, the executor file, and the CLI. On Linux only, a run through the real jail, both directly and through `organism work drive`.
 
 ## 17. Changing this record
 

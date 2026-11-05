@@ -31,11 +31,18 @@ PREPARE_TIMEOUT_S = 600.0
 PERSON_RESERVE = 1  # D4: one worker slot stays free for a person's message
 TICKET_DIRECTORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 RECOVERY = "recovery"
+SLOT_BUSY = "no worker slot is free"
+# An argv element equal to this is replaced by the Ticket's task. No shell expands it.
+TASK_PLACEHOLDER = "{task}"
 
 
 @dataclass(frozen=True)
 class Execution:
-    """What one run did. `refused` is set when nothing ran; the other fields then stay empty."""
+    """What one run did. `refused` is set when nothing ran; the other fields then stay empty.
+
+    `busy` is True when the only reason nothing ran is that no worker slot was free. The Ticket
+    can then run later, so it is not a failure.
+    """
 
     ticket_id: str
     ok: bool
@@ -45,10 +52,15 @@ class Execution:
     workdir: str | None = None
     stdout: str = ""
     stderr: str = ""
+    busy: bool = False
 
 
 class Executor(Protocol):
-    def run(self, ticket_id: str, *, person: bool = False) -> Execution: ...
+    def blocked_reason(self) -> str | None:
+        """Why nothing can run on this host or in this configuration, or None when runs can start."""
+        ...
+
+    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution: ...
 
 
 class Runner(Protocol):
@@ -149,7 +161,10 @@ class ProcessExecutor:
         self.containment_check = containment_check
         self.slot_wait_s = slot_wait_s
 
-    def run(self, ticket_id: str, *, person: bool = False) -> Execution:
+    def blocked_reason(self) -> str | None:
+        return self._refusal()
+
+    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
         refusal = self._refusal()
         if refusal is not None:
             return Execution(ticket_id, ok=False, refused=refusal)
@@ -158,9 +173,9 @@ class ProcessExecutor:
         except ValueError as error:
             return Execution(ticket_id, ok=False, refused=str(error))
         if not self.slots.acquire(person=person, timeout=self.slot_wait_s):
-            return Execution(ticket_id, ok=False, refused="no worker slot is free")
+            return Execution(ticket_id, ok=False, refused=SLOT_BUSY, busy=True)
         try:
-            return self._run_in_directory(ticket_id, directory)
+            return self._run_in_directory(ticket_id, directory, task)
         finally:
             self.slots.release()
 
@@ -177,14 +192,15 @@ class ProcessExecutor:
             return "none of the variables the profile passes is set: " + ", ".join(names)
         return None
 
-    def _run_in_directory(self, ticket_id: str, directory: Path) -> Execution:
+    def _run_in_directory(self, ticket_id: str, directory: Path, task: str) -> Execution:
         directory.mkdir(parents=True, exist_ok=True)
         where = str(directory)
         if self.prepare is not None:
             step = self.jail(self.prepare_policy).run(self.prepare, cwd=where)
             if not step.ok:
                 return _from_jail(ticket_id, step, where)
-        result = self.jail(self.policy).run(self.argv, cwd=where)
+        argv = [task if item == TASK_PLACEHOLDER else item for item in self.argv]
+        result = self.jail(self.policy).run(argv, cwd=where)
         return _from_jail(ticket_id, result, where)
 
 

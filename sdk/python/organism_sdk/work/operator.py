@@ -102,8 +102,8 @@ def attention(store: WorkStore) -> list[dict[str, Any]]:
 def stop(store: WorkStore, ticket_id: str) -> None:
     """End a Ticket, and drop its replies still waiting to be sent.
 
-    A Ticket that is not open raises KeyError. Nothing is cancelled in the Executor here: it does
-    not exist yet (W5), so ending the Ticket is the whole of the stop for now.
+    A Ticket that is not open raises KeyError. A process that is already running is not cancelled:
+    the stop takes effect when it ends, and its result is still recorded (section 10 of the record).
     """
     ticket = store.ticket(ticket_id)
     if ticket is None or ticket.ended:

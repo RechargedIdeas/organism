@@ -134,7 +134,8 @@ class Ticket:
 
     The fields are the facts the stage table reads. The store (W2) keeps them current.
     ``latest_report`` is None until the Executor reports. ``person_message_after_report``
-    is True when a person has written to the Ticket since that report.
+    is True when a person has written to the Ticket since that report. ``trigger_id`` is the
+    Trigger the Ticket opened from, so the driver can give the Executor its task.
     """
 
     id: str
@@ -146,13 +147,18 @@ class Ticket:
     delivery_failed: bool = False
     person_message_after_report: bool = False
     thread: str | None = None
+    trigger_id: str | None = None
 
 
 @dataclass(frozen=True)
 class Decision:
-    """The result of Eval for one Trigger (001). ``reasons`` are codes, not prose."""
+    """The result of Eval for one Trigger (001). ``reasons`` are codes, not prose.
+
+    ``mandate`` is set only when the outcome is ACCEPT: it is the Mandate the Ticket opens with.
+    """
 
     id: str
     trigger_id: str
     outcome: Outcome
     reasons: tuple[str, ...] = ()
+    mandate: Mandate | None = None

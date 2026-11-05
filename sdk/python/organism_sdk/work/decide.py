@@ -11,7 +11,15 @@ from __future__ import annotations
 from enum import Enum
 
 from organism_sdk.work.assess import Assessment
-from organism_sdk.work.domain import Decision, Outcome, Strength, Trigger, decision_key
+from organism_sdk.work.domain import (
+    Decision,
+    Mandate,
+    Outcome,
+    Strength,
+    Trigger,
+    Via,
+    decision_key,
+)
 from organism_sdk.work.gate import Admission
 from organism_sdk.work.policy import Policy, may_accept_inferred
 
@@ -37,12 +45,14 @@ def decide(
     assessment: Assessment | None = None,
     *,
     late: bool = False,
+    row: str | None = None,
 ) -> Decision:
     """The Decision for one Trigger under one Policy version.
 
     ``assessment`` is None when the assessor was not asked or failed. ``late`` is True when the
     Trigger has waited past its deadline. A late Trigger is ignored, even an explicit one: a
     Policy change re-evaluates the backlog, and this stops old requests from starting work.
+    ``row`` is the admission row the Trigger arrived in, recorded on an accepted Mandate.
     The first reason is always the gate's own.
     """
     key = decision_key(trigger.id, policy.version)
@@ -52,13 +62,14 @@ def decide(
     if late:
         return _decision(key, trigger, Outcome.IGNORE, (first, EvalReason.DEADLINE_PASSED.value))
     if admission.strength is Strength.EXPLICIT:
-        return _decision(key, trigger, Outcome.ACCEPT, (first,))
+        return _accept(key, trigger, admission, policy, (first,), (), row)
     if assessment is None:
         unavailable = (first, EvalReason.ASSESSOR_UNAVAILABLE.value)
         return _decision(key, trigger, Outcome.UNAVAILABLE, unavailable)
     matched = tuple(rule_reason(rule_id) for rule_id in assessment.matched)
     if may_accept_inferred(policy, assessment.matched):
-        return _decision(key, trigger, Outcome.ACCEPT, (first, *matched))
+        reasons = (first, *matched)
+        return _accept(key, trigger, admission, policy, reasons, assessment.matched, row)
     if assessment.matched:
         would = (first, EvalReason.WOULD_ACCEPT.value, *matched)
         return _decision(key, trigger, Outcome.IGNORE, would)
@@ -67,3 +78,37 @@ def decide(
 
 def _decision(key: str, trigger: Trigger, outcome: Outcome, reasons: tuple[str, ...]) -> Decision:
     return Decision(id=key, trigger_id=trigger.id, outcome=outcome, reasons=reasons)
+
+
+def _accept(
+    key: str,
+    trigger: Trigger,
+    admission: Admission,
+    policy: Policy,
+    reasons: tuple[str, ...],
+    rules: tuple[str, ...],
+    row: str | None,
+) -> Decision:
+    """An accepted Decision, with the Mandate its Ticket opens with."""
+    mandate = Mandate(
+        policy_version=policy.version,
+        strength=admission.strength,
+        via=_basis(admission),
+        source=trigger.source,
+        row=row,
+        sender=trigger.actor,
+        rules=rules,
+    )
+    return Decision(
+        id=key,
+        trigger_id=trigger.id,
+        outcome=Outcome.ACCEPT,
+        reasons=reasons,
+        mandate=mandate,
+    )
+
+
+def _basis(admission: Admission) -> Via:
+    if admission.via is None:
+        raise ValueError("an admission without a basis cannot be accepted")
+    return admission.via

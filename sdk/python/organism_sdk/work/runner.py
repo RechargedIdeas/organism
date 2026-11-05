@@ -43,12 +43,13 @@ def evaluate(
     unavailable = 0
     for trigger, received in store.undecided(policy.version):
         ticket = store.ticket_for_thread(trigger.thread)
-        admission = admit(trigger, scope_of(trigger), policy, has_tickets=ticket is not None)
+        scope = scope_of(trigger)
+        admission = admit(trigger, scope, policy, has_tickets=ticket is not None)
         late = now - received > deadline_s
         assessment = None
         if admission.strength is Strength.INFERRED and not late:
             assessment = _assess(assessor, trigger)
-        decision = decide(trigger, admission, policy, assessment, late=late)
+        decision = decide(trigger, admission, policy, assessment, late=late, row=scope.row)
         if decision.outcome is Outcome.UNAVAILABLE:
             unavailable += 1
             continue

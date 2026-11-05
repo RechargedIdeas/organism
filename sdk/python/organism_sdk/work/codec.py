@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import types
 from collections.abc import Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import MISSING, fields, is_dataclass
 from enum import Enum
 from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
@@ -56,8 +56,15 @@ def decode(hint: Any, data: Any) -> Any:
     if is_dataclass(hint):
         hints = get_type_hints(hint)
         constructor: Any = hint
+        # A field the stored form lacks takes its default, so a row written before the field
+        # existed still reads. A field with no default must be present.
         return constructor(
-            **{item.name: decode(hints[item.name], data[item.name]) for item in fields(hint)}
+            **{
+                item.name: decode(hints[item.name], data[item.name])
+                for item in fields(hint)
+                if item.name in data
+                or (item.default is MISSING and item.default_factory is MISSING)
+            }
         )
     return data
 

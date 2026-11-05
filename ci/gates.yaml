@@ -348,6 +348,12 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_executor.py"
 
+  # The Ticket driver (v1.12 W5): accepted Decisions become Tickets, and Tickets run through the
+  # Executor, holding the store only in short steps. On Linux, also one run through the real jail.
+  - id: work:driver
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_driver.py"
+
   # The status route of serve (v1.12 W7): answers beside the writer, and 404s without a store.
   - id: work:serve_status
     tier: fast
