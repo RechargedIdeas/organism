@@ -243,7 +243,11 @@ def register_experts(
     *,
     initial_state: str = "EXPLORATION",
 ) -> list[RegisterResponse]:
-    """Register each expert's contract with the registry. Rejects invalid contracts."""
+    """Register each expert's contract with the registry. Rejects invalid contracts.
+
+    With a trust store, the registry must list the experts' ids as built-in
+    (``reference.reference_expert_ids``), or the placeholder signature is refused.
+    """
     responses = []
     for expert in experts:
         contract = expert.declare_contract()

@@ -156,6 +156,12 @@ CATALOG: tuple[CatalogEntry, ...] = (
     ),
 )
 
+# The desktop's own modules: the static catalog and the two bio modules that the desktop starts
+# (GAP_ANALYSIS D5, option b). With a trust store they register without an author signature.
+# Generative output is not listed, so it still needs one. A test checks the bio ids.
+BIO_MODULE_IDS = frozenset({"bio_digital.slime_mold", "bio_digital.mycelium"})
+DESKTOP_BUILTIN_IDS = frozenset(e.module_id for e in CATALOG) | BIO_MODULE_IDS
+
 
 def catalog_as_dicts(
     *,

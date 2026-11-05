@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
+import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +29,7 @@ from organism_sdk.generative import (
     contrast_ratio,
     list_templates,
 )
+from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 
 
 @pytest.fixture()
@@ -178,6 +182,47 @@ def test_replayable_drafts(art: ArtifactStore, tmp_path: Path) -> None:
     again = pipe.replay_draft(b.replay_id)
     assert again.source == b.source
     assert again.intent == b.intent
+
+
+def _digest_id(source: str) -> str:
+    return hashlib.sha256(source.encode()).hexdigest()[:16]
+
+
+def test_replay_log_keeps_only_the_newest_drafts(tmp_path: Path) -> None:
+    path = tmp_path / "replay.json"
+    log = DraftReplayLog(path, max_entries=3)
+    for i in range(5):
+        log.record(backend="custom", intent=f"draft {i}", source=f"x = {i}\n")
+    assert [e["intent"] for e in log.list_entries()] == ["draft 2", "draft 3", "draft 4"]
+    assert len(json.loads(path.read_text(encoding="utf-8"))) == 3
+    with pytest.raises(KeyError):
+        log.replay(_digest_id("x = 0\n"))
+    assert log.replay(_digest_id("x = 4\n")).intent == "draft 4"
+
+
+def test_replay_log_trims_a_longer_file_on_load(tmp_path: Path) -> None:
+    path = tmp_path / "replay.json"
+    longer = DraftReplayLog(path, max_entries=10)
+    for i in range(6):
+        longer.record(backend="custom", intent=f"draft {i}", source=f"x = {i}\n")
+    shorter = DraftReplayLog(path, max_entries=2)
+    assert [e["intent"] for e in shorter.list_entries()] == ["draft 4", "draft 5"]
+
+
+def test_replay_log_rejects_a_cap_below_one(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="max_entries"):
+        DraftReplayLog(tmp_path / "replay.json", max_entries=0)
+
+
+def test_sandbox_timeout_default_is_two_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The autouse fixture above raises the timeout for these tests, so remove it here.
+    monkeypatch.delenv("ORGANISM_SANDBOX_TIMEOUT_S", raising=False)
+    assert SafeSandbox().timeout_s == 2.0
+
+
+def test_evolve_budget_is_two_seconds_on_windows_and_one_elsewhere() -> None:
+    # The documented values (budgets.py, docs/GAP_ANALYSIS.md T1). A change needs new measurements.
+    assert EVOLVE_BUDGET_MS == (2000.0 if sys.platform == "win32" else 1000.0)
 
 
 def test_rollback_last_promote(art: ArtifactStore) -> None:

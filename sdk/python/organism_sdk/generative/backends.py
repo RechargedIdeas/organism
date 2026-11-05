@@ -239,11 +239,24 @@ class DraftReplayEntry:
         }
 
 
-class DraftReplayLog:
-    """Replayable draft journal — re-emit identical source from recorded intent/spec."""
+# The newest drafts the journal keeps. At the measured 825 bytes an entry, this is about 0.4 MB.
+DEFAULT_REPLAY_MAX_ENTRIES = 500
 
-    def __init__(self, path: Path | str | None = None) -> None:
+
+class DraftReplayLog:
+    """Replayable draft journal — re-emit identical source from recorded intent/spec.
+
+    The journal keeps the newest ``max_entries`` drafts, so the file stays bounded
+    (docs/GAP_ANALYSIS.md, O11). An older draft can no longer be replayed.
+    """
+
+    def __init__(
+        self, path: Path | str | None = None, *, max_entries: int = DEFAULT_REPLAY_MAX_ENTRIES
+    ) -> None:
+        if max_entries < 1:
+            raise ValueError(f"max_entries must be at least 1, not {max_entries}")
         self.path = Path(path) if path else None
+        self.max_entries = max_entries
         self._entries: list[DraftReplayEntry] = []
         self._lock = threading.RLock()
         if self.path and self.path.is_file():
@@ -265,9 +278,15 @@ class DraftReplayLog:
                         at=row["at"],
                     )
                 )
+            self._trim()
         except Exception:
             logger.warning("_load failed", exc_info=True)
             self._entries = []
+
+    def _trim(self) -> None:
+        overflow = len(self._entries) - self.max_entries
+        if overflow > 0:
+            del self._entries[:overflow]
 
     def _save(self) -> None:
         if self.path is None:
@@ -302,6 +321,7 @@ class DraftReplayLog:
                 at=datetime.now(UTC).isoformat(),
             )
             self._entries.append(entry)
+            self._trim()
             self._save()
             return entry
 

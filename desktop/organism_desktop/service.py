@@ -57,7 +57,7 @@ from organism_sdk.trace import (
 )
 from organism_sdk.workspace import BindingRecord
 
-from organism_desktop.catalog import catalog_as_dicts, find_entry, instantiate
+from organism_desktop.catalog import DESKTOP_BUILTIN_IDS, catalog_as_dicts, find_entry, instantiate
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class DesktopService:
                 cfg = load_deploy_config(default_path)
             else:
                 cfg = default_cpu_only_config()
-        stack = build_minimal_stack(cfg)
+        stack = build_minimal_stack(cfg, builtin_ids=DESKTOP_BUILTIN_IDS)
         stack.trace.attach_v02_sink(V02TraceSink())
         # Share TraceEmitter so physiology transitions appear in Traces panel.
         degrade = DegradationMachine(

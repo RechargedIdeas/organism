@@ -129,7 +129,7 @@ class RegistryClient:
 
     ``builtin_ids`` are the module ids that are the deployment's own code, not generative output.
     With a trust store, a module whose id is listed registers without an author signature, and is
-    audited as built in. Every other registration still needs one (OPEN_DECISIONS item D5, option b).
+    audited as built in. Every other registration still needs one (GAP_ANALYSIS D5, option b).
     The list is code, not configuration, so a config file cannot widen it.
     """
 

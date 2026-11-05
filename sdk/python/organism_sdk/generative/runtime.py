@@ -28,6 +28,7 @@ from organism_sdk.contract import (
     ReliabilityTier,
     UncertaintyKind,
 )
+from organism_sdk.errors import RegistrationRejected
 from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 from organism_sdk.generative.code_pipeline import (
     CodeBundle,
@@ -347,13 +348,28 @@ class EvolutionRuntime:
             )
             contract = mod.declare_contract()
             # Start at SANDBOXED (shadow gate entry), then climb with evidence.
-            self.registry.register(
-                contract,
-                artifact_digest=contract.identity.artifact_digest,
-                author_signature=b"generative-promote",
-                module=mod,
-                test_bypass_promote="SANDBOXED",
-            )
+            try:
+                self.registry.register(
+                    contract,
+                    artifact_digest=contract.identity.artifact_digest,
+                    author_signature=b"generative-promote",
+                    module=mod,
+                    test_bypass_promote="SANDBOXED",
+                )
+            except RegistrationRejected:
+                # With a trust store, generative output needs an approver-signed registration. This
+                # runtime holds no keys, so the module stays out (GAP_ANALYSIS D5, option b).
+                self.emit_evolution(
+                    kind="code_promote" if skill is None else "skill_promote",
+                    summary=f"Refused {module_id}: no signed registration from a trusted author",
+                    organism_id=organism_id,
+                    bundle_id=bundle.bundle_id,
+                    skill_id=skill.skill_id if skill else None,
+                    module_id=module_id,
+                    stage="refused",
+                    payload={"catalog_id": catalog_id},
+                )
+                return None
             gate_path = ["SANDBOXED"]
             shadow = ShadowValidationRecord(
                 invocations=max(1, int(bundle.shadow_score * 100)),

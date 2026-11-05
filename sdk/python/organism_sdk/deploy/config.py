@@ -32,7 +32,7 @@ class StackConfig:
     workspace_read_tags: list[str] = field(default_factory=lambda: ["*"])
     router_level: str = "L0"
     # A trust store file of public keys (signing.load_trust_store). Set, the registry checks the
-    # signatures on registrations and promotions; the built-in modules are exempt (OPEN_DECISIONS D5).
+    # signatures on registrations and promotions; the built-in modules are exempt (GAP_ANALYSIS D5).
     trust_store: str | None = None
 
 

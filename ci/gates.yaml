@@ -406,6 +406,12 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_approver_procedure.py"
 
+  # The trust store under the desktop, the reference experts and the generative runtime (GAP_ANALYSIS
+  # D5, option b): the stack's own modules register, and generative output is refused.
+  - id: v112:d5_trust_wiring
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_v112_d5_trust_wiring.py desktop/tests/test_v112_d5_desktop.py"
+
   # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
   - id: work:admission
     tier: fast

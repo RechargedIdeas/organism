@@ -140,3 +140,9 @@ class Extractor(BaseExpert):
 def reference_experts() -> list[BaseExpert]:
     """The two reference experts, in a fixed order."""
     return [IntentClassifier(), Extractor()]
+
+
+def reference_expert_ids() -> frozenset[str]:
+    """The module ids the reference experts register under. A registry with a trust store lists
+    these as built-in, so their registration needs no author signature (GAP_ANALYSIS D5, option b)."""
+    return frozenset(expert.module_id for expert in reference_experts())
