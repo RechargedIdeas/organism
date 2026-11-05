@@ -229,7 +229,10 @@ def recover(store: WorkStore) -> list[str]:
             for assignment in store.assignments_of(ticket.id):
                 if assignment.state is not AssignmentState.RUNNING:
                     continue
-                store.save_assignment(replace(assignment, state=AssignmentState.ENDED))
+                ended = replace(assignment, state=AssignmentState.ENDED)
+                store.save_assignment(ended)
+                if ticket.assignment == assignment:  # the Ticket keeps its own copy of it
+                    store.save_ticket(replace(ticket, assignment=ended))
                 store.enqueue(RECOVERY, ticket.id, {"assignment": assignment.id})
                 if ticket.id not in noted:
                     noted.append(ticket.id)

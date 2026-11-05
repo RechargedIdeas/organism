@@ -226,7 +226,7 @@ def test_a_restart_ends_running_assignments_and_queues_one_note(tmp_path: Path) 
         assert {
             "kind": "recovery",
             "id": "t-run",
-            "detail": "a run was interrupted by a restart; review its directory",
+            "detail": "a run was interrupted by a restart; rerun it or stop it",
         } in items
 
 

@@ -14,8 +14,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from organism_sdk.signing import TrustStore, verify_any
-from organism_sdk.work.domain import Ticket
-from organism_sdk.work.policy import Policy
+from organism_sdk.work.domain import Strength, Ticket
+from organism_sdk.work.policy import AcceptMode, Policy
 from organism_sdk.work.store import WorkStore
 
 POLICY_DOMAIN = b"organism.work.policy.v1\n"
@@ -37,6 +37,22 @@ def is_approved(policy: Policy, signature: bytes, trust: TrustStore) -> bool:
     An author key does not count, and an empty trust store approves nothing.
     """
     return verify_any(trust.approvers, signature, policy_payload(policy.version))
+
+
+def still_valid(ticket: Ticket, policy: Policy) -> bool:
+    """True when the Ticket's Mandate still stands under `policy`.
+
+    It stands when its Source part is still listed, every rule it names is still enabled, and an
+    inferred Mandate still has the auto mode, the only mode that accepts inferred work. A Mandate is
+    never rewritten: this only says whether it may still be relied on.
+    """
+    mandate = ticket.mandate
+    if policy.source(mandate.source) is None:
+        return False
+    if mandate.strength is Strength.INFERRED and policy.mode is not AcceptMode.AUTO:
+        return False
+    enabled = {rule.id for rule in policy.rules if rule.enabled}
+    return set(mandate.rules) <= enabled
 
 
 def affected_tickets(old: Policy, new: Policy, tickets: Iterable[Ticket]) -> list[Ticket]:

@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 from organism_sdk import cli
+from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
 from organism_sdk.work import codec, operator
 from organism_sdk.work.assess import RuleAssessor
 from organism_sdk.work.domain import (
@@ -29,9 +31,24 @@ from organism_sdk.work.domain import (
     Via,
     decision_key,
 )
-from organism_sdk.work.driver import DriveReport, drive, open_accepted, task_for, ticket_id_for
-from organism_sdk.work.executors import SLOT_BUSY, Execution, ProcessExecutor, load_executor
+from organism_sdk.work.driver import (
+    OUTPUT_CHARS,
+    DriveReport,
+    drive,
+    open_accepted,
+    requeue,
+    task_for,
+    ticket_id_for,
+)
+from organism_sdk.work.executors import (
+    SLOT_BUSY,
+    Execution,
+    ProcessExecutor,
+    load_executor,
+    recover,
+)
 from organism_sdk.work.gate import ScopeFacts
+from organism_sdk.work.governance import NOTICE
 from organism_sdk.work.policy import AcceptMode, AdmissionRow, Policy, Rule, SourcePolicy
 from organism_sdk.work.runner import evaluate
 from organism_sdk.work.stage import Stage, stage_of
@@ -135,7 +152,7 @@ def test_an_accepted_decision_opens_one_ticket_with_its_mandate(tmp_path: Path) 
     with WorkStore(path) as store:
         decision = store.all_decisions()[0]
         assert decision.outcome is Outcome.ACCEPT
-        opened, held = open_accepted(store)
+        opened, held, _ = open_accepted(store)
         assert held == []
         assert opened == [ticket_id_for(decision.id)]
         ticket = store.ticket(opened[0])
@@ -152,7 +169,7 @@ def test_an_accepted_decision_opens_one_ticket_with_its_mandate(tmp_path: Path) 
         assert ticket.assignment == Assignment(
             id=f"{opened[0]}-a1", ticket_id=opened[0], state=AssignmentState.PENDING
         )
-        assert open_accepted(store) == ([], [])  # a second pass opens nothing
+        assert open_accepted(store) == ([], [], [])  # a second pass opens nothing
 
 
 def test_an_explicit_request_opens_a_ticket_with_no_rules(tmp_path: Path) -> None:
@@ -171,7 +188,7 @@ def test_an_ignored_decision_opens_nothing(tmp_path: Path) -> None:
     store_with(path, message(1, "nothing to see here", addressed=Addressed.NONE))
     with WorkStore(path) as store:
         assert store.all_decisions()[0].outcome is Outcome.IGNORE
-        assert open_accepted(store) == ([], [])
+        assert open_accepted(store) == ([], [], [])
 
 
 def test_a_decision_stored_without_a_mandate_is_not_opened(tmp_path: Path) -> None:
@@ -188,12 +205,37 @@ def test_a_decision_stored_without_a_mandate_is_not_opened(tmp_path: Path) -> No
                 reasons=("cell_inferred",),
             )
         )
-        assert open_accepted(store) == ([], [])
+        assert open_accepted(store) == ([], [], [])
 
 
-def test_a_second_accepted_request_on_an_owned_thread_is_held_until_the_thread_is_free(
-    tmp_path: Path,
-) -> None:
+BOT_POLICY = Policy(
+    mode=AcceptMode.AUTO,
+    rules=(CI,),
+    sources=(
+        SourcePolicy(
+            source="github",
+            allowed=frozenset({"alice"}),
+            bots=frozenset({"ci-bot"}),
+            rows={"repo": AdmissionRow()},
+        ),
+    ),
+)
+
+
+def bot_message(n: int, text: str) -> Trigger:
+    return Trigger(
+        id=f"m{n}",
+        source="github",
+        thread="github:issue-1",
+        actor="ci-bot",
+        human=False,
+        addressed=Addressed.NONE,
+        at=f"2026-11-04T00:00:{n:02d}Z",
+        text=text,
+    )
+
+
+def test_a_persons_message_on_an_owned_thread_is_a_follow_up(tmp_path: Path) -> None:
     path = tmp_path / "work.sqlite"
     store_with(
         path,
@@ -201,22 +243,173 @@ def test_a_second_accepted_request_on_an_owned_thread_is_held_until_the_thread_i
         message(2, "and this too", addressed=Addressed.MENTION),
     )
     with WorkStore(path) as store:
-        opened, held = open_accepted(store)
+        opened, held, followed = open_accepted(store)
         assert len(opened) == 1
-        assert len(held) == 1
-        operator.stop(store, opened[0])
-        reopened, still_held = open_accepted(store)
-        assert reopened == [ticket_id_for(held[0])]
-        assert still_held == []
+        assert followed == opened  # the second request joins the first Ticket
+        assert held == []
+        assert open_accepted(store) == ([], [], [])  # a second pass changes nothing
+        (ticket_id,) = opened
+        assert [text for _, text in store.pending_followups(ticket_id)] == ["and this too"]
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None
+        assert ticket.person_message_after_report is True
+
+
+def test_a_ticket_whose_mandate_no_longer_stands_does_not_run(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    with WorkStore(path) as store:
+        (ticket_id,), _, _ = open_accepted(store)
+        store.enqueue(NOTICE, ticket_id, {"policy": "changed", "previous": POLICY.version})
+    disabled = replace(POLICY, rules=(replace(CI, enabled=False),))
+    with WorkStore(path) as store:
+        store.save_policy(disabled, signature=b"approved in test")
+        store.set_active_policy(disabled.version)
+    executor = FakeExecutor()
+    report = drive(opener(path), executor)
+    assert report.needs_person == [ticket_id]
+    assert report.ready == []
+    assert executor.runs == []
+    with WorkStore(path) as store:
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None
+        assert ticket.attention is True
+        notices = [effect.key for effect in store.pending_effects() if effect.kind == NOTICE]
+    assert notices == [ticket_id]
+
+
+def test_a_bot_message_on_an_owned_thread_is_held(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(
+        path,
+        message(1, "please fix it", addressed=Addressed.MENTION),
+        bot_message(2, "CI is red"),
+        pol=BOT_POLICY,
+    )
+    with WorkStore(path) as store:
+        assert store.all_decisions()[1].outcome is Outcome.ACCEPT
+        opened, held, followed = open_accepted(store)
+        assert len(opened) == 1
+        assert followed == []
+        assert held == [decision_key("m2", BOT_POLICY.version)]
+
+
+def test_a_follow_up_is_in_the_run_and_reaches_it_once(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(
+        path,
+        message(1, "please fix it", addressed=Addressed.MENTION),
+        message(2, "and this too", addressed=Addressed.MENTION),
+    )
+    executor = FakeExecutor()
+    report = drive(opener(path), executor)
+    assert report.followed == report.opened
+    (ticket_id,) = report.opened
+    (_, task) = executor.runs[0]
+    assert "Messages from the person since the last run" in task
+    assert "and this too" in task
+    with WorkStore(path) as store:
+        assert store.pending_followups(ticket_id) == []
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None
+        assert ticket.person_message_after_report is False
+
+
+def test_a_follow_up_after_a_finished_run_starts_the_next_assignment(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "please fix it", addressed=Addressed.MENTION))
+    executor = FakeExecutor()
+    (ticket_id,) = drive(opener(path), executor).ready
+    with WorkStore(path) as store:
+        store.receive(message(2, "and this too", addressed=Addressed.MENTION))
+        evaluate(store, POLICY, RuleAssessor(POLICY.rules), lambda _: OBSERVED)
+    report = drive(opener(path), executor)
+    assert report.followed == [ticket_id]
+    assert report.resumed == [ticket_id]
+    assert report.ready == [ticket_id]
+    (_, task) = executor.runs[1]
+    assert "and this too" in task
+    assert "please fix it" in task  # the Ticket's first message is still its context
+    with WorkStore(path) as store:
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None and ticket.assignment is not None
+        assert ticket.assignment.id == f"{ticket_id}-a2"
+        assert [run.assignment_id for run in store.runs_of(ticket_id)] == [
+            f"{ticket_id}-a1",
+            f"{ticket_id}-a2",
+        ]
+    assert drive(opener(path), executor) == DriveReport()  # nothing is left to do
+
+
+def test_a_busy_run_keeps_the_follow_ups_queued(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(
+        path,
+        message(1, "please fix it", addressed=Addressed.MENTION),
+        message(2, "and this too", addressed=Addressed.MENTION),
+    )
+    busy = Execution("x", ok=False, refused=SLOT_BUSY, busy=True)
+    report = drive(opener(path), FakeExecutor([busy]))
+    (ticket_id,) = report.opened
+    assert report.waiting == [ticket_id]
+    with WorkStore(path) as store:
+        assert [text for _, text in store.pending_followups(ticket_id)] == ["and this too"]
+
+
+def test_a_run_keeps_the_tail_of_its_output(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    failed = Execution("x", ok=False, exit_code=2, stdout="a" * 10_000 + "END", stderr="boom")
+    report = drive(opener(path), FakeExecutor([failed]))
+    (ticket_id,) = report.opened
+    with WorkStore(path) as store:
+        (run,) = store.runs_of(ticket_id)
+    assert run.assignment_id == f"{ticket_id}-a1"
+    assert run.ok is False
+    assert run.reason == "exit 2"
+    assert len(run.stdout) == OUTPUT_CHARS
+    assert run.stdout.endswith("END")
+    assert run.stderr == "boom"
+
+
+class Crash(BaseException):
+    """Stands for the process dying in the middle of a run. It is not an Exception, so the driver
+    does not catch it, and the Assignment is left running."""
+
+
+class CrashingExecutor(FakeExecutor):
+    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
+        raise Crash()
+
+
+def test_a_restart_interrupted_run_is_requeued_by_hand(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    with pytest.raises(Crash):
+        drive(opener(path), CrashingExecutor())
+    with WorkStore(path) as store:
+        (ticket,) = store.open_tickets()
+        assert recover(store) == [ticket.id]
+        assert requeue(store, ticket.id) == f"{ticket.id}-a2"
+        with pytest.raises(ValueError):
+            requeue(store, ticket.id)  # it is already waiting
+        assert [item for item in operator.attention(store) if item["kind"] == "recovery"] == []
+    assert drive(opener(path), FakeExecutor()).ready == [ticket.id]
+    with WorkStore(path) as store:
+        with pytest.raises(ValueError):
+            requeue(store, ticket.id)  # it has a report now: a person's follow-up resumes it
+        operator.stop(store, ticket.id)
+        with pytest.raises(KeyError):
+            requeue(store, ticket.id)  # a stopped Ticket is not rerun
 
 
 def test_a_stopped_ticket_is_not_opened_again(tmp_path: Path) -> None:
     path = tmp_path / "work.sqlite"
     store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
     with WorkStore(path) as store:
-        (ticket_id,), _ = open_accepted(store)
+        (ticket_id,), _, _ = open_accepted(store)
         operator.stop(store, ticket_id)
-        assert open_accepted(store) == ([], [])
+        assert open_accepted(store) == ([], [], [])
 
 
 def test_rows_written_before_the_new_fields_still_read(tmp_path: Path) -> None:
@@ -556,3 +749,94 @@ def test_the_cli_drive_runs_the_queued_ticket_through_the_jail(
     assert cli.main(["work", "tickets", "--store", str(path)]) == 0
     (ticket,) = json.loads(capsys.readouterr().out)
     assert ticket["stage"] == Stage.PERSON_REVIEW.value
+
+
+def test_the_cli_shows_each_run_of_a_ticket(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    failed = Execution("x", ok=False, exit_code=2, stdout="built 3 files", stderr="boom")
+    report = drive(opener(path), FakeExecutor([failed]))
+    (ticket_id,) = report.opened
+    assert cli.main(["work", "runs", ticket_id, "--store", str(path)]) == 0
+    (run,) = json.loads(capsys.readouterr().out)
+    assert {key: value for key, value in run.items() if key != "at"} == {
+        "assignment": f"{ticket_id}-a1",
+        "ok": False,
+        "reason": "exit 2",
+        "stdout": "built 3 files",
+        "stderr": "boom",
+    }
+    assert cli.main(["work", "runs", "t-nope", "--store", str(path)]) == 1
+    assert "no ticket t-nope" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_the_cli_reruns_a_ticket_a_restart_interrupted(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    with pytest.raises(Crash):
+        drive(opener(path), CrashingExecutor())
+    with WorkStore(path) as store:
+        (ticket,) = store.open_tickets()
+        recover(store)
+    assert cli.main(["work", "rerun", ticket.id, "--store", str(path)]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": True,
+        "ticket": ticket.id,
+        "assignment": f"{ticket.id}-a2",
+    }
+    assert cli.main(["work", "rerun", ticket.id, "--store", str(path)]) == 1
+    assert "not waiting for a rerun" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_the_cli_drive_needs_an_executor_from_the_flag_or_the_deploy_config(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ORGANISM_CONFIG", raising=False)
+    deploy = tmp_path / "deploy.json"
+    deploy.write_text("{}", encoding="utf-8")
+    path = tmp_path / "work.sqlite"
+    assert cli.main(["work", "drive", "--store", str(path), "--config", str(deploy)]) == 1
+    assert "no executor is configured" in json.loads(capsys.readouterr().out)["error"]
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the jail's containment is Linux")
+def test_the_cli_drive_takes_its_executor_from_the_deploy_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    settings = json.loads(fake_cli_settings(tmp_path).read_text(encoding="utf-8"))
+    deploy = tmp_path / "deploy.json"
+    deploy.write_text(json.dumps({"work": {"executor": settings}}), encoding="utf-8")
+    assert cli.main(["work", "drive", "--store", str(path), "--config", str(deploy)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is True
+    assert len(out["ready"]) == 1
+
+
+def test_a_deploy_config_names_its_executor(tmp_path: Path) -> None:
+    settings = {"root": str(tmp_path / "tickets"), "argv": ["claude", "-p", "{task}"]}
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {"executor": settings}}), encoding="utf-8")
+    cfg = load_deploy_config(path)
+    assert cfg.work.executor == settings
+    assert not [i for i in validate_deploy_config(cfg) if i.startswith("work.executor:")]
+
+
+def test_a_deploy_config_with_a_broken_executor_reports_it(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {"executor": {"argv": ["claude"]}}}), encoding="utf-8")
+    issues = validate_deploy_config(load_deploy_config(path))
+    assert any(issue.startswith("work.executor:") for issue in issues)
+
+
+def test_a_deploy_config_whose_executor_is_not_a_mapping_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {"executor": "claude"}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_deploy_config(path)

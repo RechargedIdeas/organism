@@ -101,6 +101,24 @@ CREATE TABLE IF NOT EXISTS policies (
   body TEXT NOT NULL,
   signature TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT NOT NULL,
+  assignment_id TEXT NOT NULL,
+  at REAL NOT NULL,
+  ok INTEGER NOT NULL,
+  reason TEXT,
+  stdout TEXT NOT NULL,
+  stderr TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS runs_ticket ON runs (ticket_id, seq);
+CREATE TABLE IF NOT EXISTS followups (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT NOT NULL,
+  trigger_id TEXT NOT NULL UNIQUE,
+  delivered INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS followups_ticket ON followups (ticket_id, delivered, seq);
 """
 
 
@@ -135,6 +153,20 @@ class Receipt:
     text: str
     status: ReceiptStatus
     reason: str | None
+
+
+@dataclass(frozen=True)
+class RunRecord:
+    """One run of a Ticket: its result, and the tail of the output it wrote. The output comes from
+    a program the agent does not trust, so it is kept as text and is never read as instructions."""
+
+    seq: int
+    assignment_id: str
+    at: float
+    ok: bool
+    reason: str | None
+    stdout: str
+    stderr: str
 
 
 @dataclass(frozen=True)
@@ -694,6 +726,83 @@ class WorkStore:
                 "UPDATE effects SET attempts = ?, due_at = ?, last_error = ? WHERE seq = ?",
                 (attempts, due_at, message, effect.seq),
             )
+
+    # Runs and follow-ups
+
+    def record_run(
+        self,
+        ticket_id: str,
+        assignment_id: str,
+        *,
+        ok: bool,
+        reason: str | None,
+        stdout: str,
+        stderr: str,
+    ) -> None:
+        """Keep one run's result and the tail of its output."""
+        with self.transaction():
+            self._conn.execute(
+                "INSERT INTO runs (ticket_id, assignment_id, at, ok, reason, stdout, stderr) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ticket_id, assignment_id, self._clock(), int(ok), reason, stdout, stderr),
+            )
+
+    def runs_of(self, ticket_id: str) -> list[RunRecord]:
+        """The runs of one Ticket, oldest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT seq, assignment_id, at, ok, reason, stdout, stderr FROM runs "
+                "WHERE ticket_id = ? ORDER BY seq",
+                (ticket_id,),
+            ).fetchall()
+        return [
+            RunRecord(
+                seq=int(row[0]),
+                assignment_id=str(row[1]),
+                at=float(row[2]),
+                ok=bool(row[3]),
+                reason=None if row[4] is None else str(row[4]),
+                stdout=str(row[5]),
+                stderr=str(row[6]),
+            )
+            for row in rows
+        ]
+
+    def add_followup(self, ticket_id: str, trigger_id: str) -> bool:
+        """Queue a person's message for the Ticket's next run. True when it was new: a message is
+        queued once, however many times it is seen."""
+        with self.transaction():
+            cursor = self._conn.execute(
+                "INSERT OR IGNORE INTO followups (ticket_id, trigger_id, delivered) VALUES (?, ?, 0)",
+                (ticket_id, trigger_id),
+            )
+        return cursor.rowcount == 1
+
+    def has_undelivered_followups(self, ticket_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM followups WHERE ticket_id = ? AND delivered = 0 LIMIT 1",
+                (ticket_id,),
+            ).fetchone()
+        return row is not None
+
+    def pending_followups(self, ticket_id: str) -> list[tuple[int, str]]:
+        """The Ticket's undelivered follow-ups as (sequence number, text), oldest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT followups.seq, triggers.body FROM followups "
+                "JOIN triggers ON triggers.id = followups.trigger_id "
+                "WHERE followups.ticket_id = ? AND followups.delivered = 0 "
+                "ORDER BY followups.seq",
+                (ticket_id,),
+            ).fetchall()
+        return [(int(seq), codec.from_text(Trigger, str(body)).text) for seq, body in rows]
+
+    def mark_followups_delivered(self, seqs: Iterable[int]) -> None:
+        """Mark follow-ups as delivered, so that they reach one run only."""
+        with self.transaction():
+            for seq in seqs:
+                self._conn.execute("UPDATE followups SET delivered = 1 WHERE seq = ?", (seq,))
 
     # Processing
 

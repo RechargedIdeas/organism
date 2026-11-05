@@ -373,7 +373,7 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
 
 
 def _cmd_work(args: argparse.Namespace) -> int:
-    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt|drive"""
+    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt|drive|runs|rerun"""
     from organism_sdk.work import operator
     from organism_sdk.work.store import WorkStore, default_store_path
 
@@ -381,7 +381,7 @@ def _cmd_work(args: argparse.Namespace) -> int:
     action = args.work_action
     if action == "drive":
         return _work_drive(args, path)
-    reads_only = action in ("status", "tickets", "attention")
+    reads_only = action in ("status", "tickets", "attention", "runs")
     if reads_only and not path.exists():
         _print({"ok": False, "error": f"no work store at {path}"})
         return 1
@@ -392,6 +392,22 @@ def _cmd_work(args: argparse.Namespace) -> int:
             _print(operator.tickets(store))
         elif action == "attention":
             _print(operator.attention(store))
+        elif action == "runs":
+            try:
+                _print(operator.runs(store, args.ticket))
+            except KeyError:
+                _print({"ok": False, "error": f"no ticket {args.ticket}"})
+                return 1
+        elif action == "rerun":
+            try:
+                assignment = operator.rerun(store, args.ticket)
+            except KeyError:
+                _print({"ok": False, "error": f"no open ticket {args.ticket}"})
+                return 1
+            except ValueError as error:
+                _print({"ok": False, "error": str(error)})
+                return 1
+            _print({"ok": True, "ticket": args.ticket, "assignment": assignment})
         elif action in ("pause", "resume"):
             (operator.pause if action == "pause" else operator.resume)(store)
             _print({"ok": True, "paused": action == "pause"})
@@ -442,13 +458,23 @@ def _work_drive(args: argparse.Namespace, path: Path) -> int:
     """Open Tickets for accepted Decisions and run them, through the executor file's settings."""
     from dataclasses import asdict
 
+    from organism_sdk.deploy.config import load_deploy_config
     from organism_sdk.work import driver
-    from organism_sdk.work.executors import load_executor
+    from organism_sdk.work.executors import executor_from_settings, load_executor
     from organism_sdk.work.store import WorkStore
 
     try:
-        executor = load_executor(Path(args.executor))
-    except (OSError, ValueError) as error:
+        if args.executor:
+            executor = load_executor(Path(args.executor))
+        else:
+            settings = load_deploy_config(args.config).work.executor
+            if settings is None:
+                raise ValueError(
+                    "no executor is configured: pass --executor, or set work.executor in the "
+                    "deploy config"
+                )
+            executor = executor_from_settings(settings)
+    except (OSError, ValueError) as error:  # a DeployConfigError is a ValueError
         _print({"ok": False, "error": str(error)})
         return 1
     report = driver.drive(lambda: WorkStore(path), executor, limit=args.limit)
@@ -631,10 +657,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Open Tickets for accepted Decisions and run them through the executor",
     )
     p_wdrive.add_argument(
-        "--executor", required=True, help="Executor settings, as JSON: root, argv, prepare, slots"
+        "--executor",
+        default=None,
+        help="Executor settings, as JSON: root, argv, prepare, slots. "
+        "Default: work.executor in the deploy config",
+    )
+    p_wdrive.add_argument(
+        "--config", "-c", default=None, help="Deploy config (default: $ORGANISM_CONFIG)"
     )
     p_wdrive.add_argument("--limit", type=int, default=10, help="Most Tickets to run in one pass")
     p_wdrive.set_defaults(func=_cmd_work)
+    p_wruns = work_sub.add_parser(
+        "runs", parents=[store_option], help="Each run of a Ticket, with the tail of its output"
+    )
+    p_wruns.add_argument("ticket")
+    p_wruns.set_defaults(func=_cmd_work)
+    p_wrerun = work_sub.add_parser(
+        "rerun", parents=[store_option], help="Start again a Ticket that a restart interrupted"
+    )
+    p_wrerun.add_argument("ticket")
+    p_wrerun.set_defaults(func=_cmd_work)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:

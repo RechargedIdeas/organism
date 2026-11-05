@@ -348,7 +348,8 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_executor.py"
 
-  # The Ticket driver (v1.12 W5): accepted Decisions become Tickets, and Tickets run through the
+  # The Ticket driver (v1.12 W5, W8, W9): accepted Decisions become Tickets, follow-ups reach the next
+  # run, a Ticket whose Mandate no longer stands waits for a person, and Tickets run through the
   # Executor, holding the store only in short steps. On Linux, also one run through the real jail.
   - id: work:driver
     tier: fast

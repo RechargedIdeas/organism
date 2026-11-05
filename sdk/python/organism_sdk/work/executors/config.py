@@ -1,6 +1,7 @@
-"""The executor's settings, read from a JSON file (v1.12 W5). Design record: docs/v1.12/WORK_AGENT.md.
+"""The executor's settings (v1.12 W5). Design record: docs/v1.12/WORK_AGENT.md.
 
-The file is a JSON object:
+The settings are a mapping, either the JSON object of an executor file or the `work.executor`
+section of the deploy config:
 
 - ``root``: the directory that holds each Ticket's own directory. Required.
 - ``argv``: the CLI's argv, a non-empty list of strings. The element ``{task}`` is replaced by the
@@ -23,21 +24,26 @@ DEFAULT_SLOTS = 2
 
 
 def load_executor(path: Path) -> ProcessExecutor:
-    """Build the ProcessExecutor that a deployment's executor file describes."""
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if type(data) is not dict:
-        raise ValueError("the executor file must hold a JSON object")
-    root = data.get("root")
+    """Build the ProcessExecutor that an executor file describes."""
+    return executor_from_settings(json.loads(path.read_text(encoding="utf-8")))
+
+
+def executor_from_settings(settings: object) -> ProcessExecutor:
+    """Build the ProcessExecutor that a settings mapping describes. Raises ValueError for any
+    other shape."""
+    if type(settings) is not dict:  # a JSON object, or a deploy section copied as a dict
+        raise ValueError("the executor settings must be a mapping")
+    root = settings.get("root")
     if not isinstance(root, str) or not root:
         raise ValueError("'root' must be a directory path")
-    prepare = None if data.get("prepare") is None else _argv(data["prepare"], "prepare")
-    slots = data.get("slots", DEFAULT_SLOTS)
+    prepare = None if settings.get("prepare") is None else _argv(settings["prepare"], "prepare")
+    slots = settings.get("slots", DEFAULT_SLOTS)
     # `type(...) is int` also refuses True and False, which are ints to isinstance.
     if type(slots) is not int or slots < 2:
         raise ValueError("'slots' must be an integer of at least 2: one stays free for a person")
     return ProcessExecutor(
         Path(root),
-        argv=_argv(data.get("argv"), "argv"),
+        argv=_argv(settings.get("argv"), "argv"),
         prepare=prepare,
         slots=Slots(slots),
     )

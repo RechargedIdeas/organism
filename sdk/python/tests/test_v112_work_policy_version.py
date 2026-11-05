@@ -5,17 +5,20 @@ never enters the repo (decision S1)."""
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from organism_sdk.signing import TrustStore, public_key_for, sign
 from organism_sdk.work.domain import Mandate, Strength, Ticket, Via
+from organism_sdk.work.driver import revalidate_notices
 from organism_sdk.work.governance import (
     NOTICE,
     PolicyRejected,
     adopt,
     is_approved,
     policy_payload,
+    still_valid,
 )
 from organism_sdk.work.policy import AcceptMode, AdmissionRow, Cell, Policy, Rule, SourcePolicy
 from organism_sdk.work.store import WorkStore
@@ -144,3 +147,64 @@ def test_an_accept_mode_change_notifies_no_one(store: WorkStore) -> None:
     auto = policy(mode=AcceptMode.AUTO)
     assert adopt(store, auto, signature=signed(auto), trust=TRUST) == []
     assert store.active_policy() == auto
+
+
+def mandated(
+    *,
+    strength: Strength = Strength.EXPLICIT,
+    via: Via = Via.ADDRESSED,
+    source: str = "github",
+    rules: tuple[str, ...] = (),
+) -> Ticket:
+    mandate = Mandate(
+        policy_version="sha256:test",
+        strength=strength,
+        via=via,
+        source=source,
+        row="repo",
+        sender="alice",
+        rules=rules,
+    )
+    return Ticket(id="t-1", mandate=mandate)
+
+
+def test_a_mandate_stands_while_its_source_and_rules_are_enabled() -> None:
+    pol = policy()
+    assert still_valid(mandated(), pol)
+    assert still_valid(mandated(rules=("ci-fix",)), pol)
+    assert not still_valid(mandated(rules=("gone",)), pol)
+    assert not still_valid(mandated(source="jira"), pol)
+    disabled = replace(pol, rules=(replace(pol.rules[0], enabled=False), *pol.rules[1:]))
+    assert not still_valid(mandated(rules=("ci-fix",)), disabled)
+
+
+def test_an_inferred_mandate_stands_only_under_auto_accept() -> None:
+    inferred = mandated(strength=Strength.INFERRED, via=Via.ADMISSION, rules=("ci-fix",))
+    assert not still_valid(inferred, policy(mode=AcceptMode.OBSERVE))
+    assert still_valid(inferred, policy(mode=AcceptMode.AUTO))
+
+
+def test_a_notice_is_settled_when_the_ticket_mandate_still_stands(store: WorkStore) -> None:
+    adopt(store, policy(), signature=signed(policy()), trust=TRUST)
+    ticket(store, "t-ci", rules=("ci-fix",))
+    changed = policy(instruction="fix CI harder")
+    adopt(store, changed, signature=signed(changed), trust=TRUST)
+    assert revalidate_notices(store, changed) == []
+    assert [effect.key for effect in store.pending_effects() if effect.kind == NOTICE] == []
+
+
+def test_a_notice_stays_and_the_ticket_needs_a_person_when_its_mandate_no_longer_stands(
+    store: WorkStore,
+) -> None:
+    adopt(store, policy(), signature=signed(policy()), trust=TRUST)
+    ticket(store, "t-ci", rules=("ci-fix",))
+    changed = policy(instruction="fix CI harder")
+    adopt(store, changed, signature=signed(changed), trust=TRUST)
+    without_rule = replace(
+        changed, rules=(replace(changed.rules[0], enabled=False), changed.rules[1])
+    )
+    assert revalidate_notices(store, without_rule) == ["t-ci"]
+    assert [effect.key for effect in store.pending_effects() if effect.kind == NOTICE] == ["t-ci"]
+    survivor = store.ticket("t-ci")
+    assert survivor is not None
+    assert survivor.attention is True

@@ -1,4 +1,5 @@
 """Deploy profile config load + validate (v1.4)."""
+
 from __future__ import annotations
 
 import os
@@ -49,10 +50,19 @@ class ServeConfig:
 @dataclass
 class SandboxDeployConfig:
     """Native Organism sandbox knobs for a deploy profile (v1.10)."""
+
     self_sandbox: bool = True
     use_namespaces: bool = True
     timeout_s: float = 30.0
     max_rss_mb: int = 512
+
+
+@dataclass
+class WorkDeployConfig:
+    """The work agent's deployment settings (v1.12). ``executor`` is the settings mapping of the
+    Executor (see organism_sdk.work.executors.config), or None when no Executor is configured."""
+
+    executor: dict[str, Any] | None = None
 
 
 @dataclass
@@ -65,6 +75,7 @@ class DeployConfig:
     health: HealthConfig = field(default_factory=HealthConfig)
     serve: ServeConfig = field(default_factory=ServeConfig)
     sandbox: SandboxDeployConfig = field(default_factory=SandboxDeployConfig)
+    work: WorkDeployConfig = field(default_factory=WorkDeployConfig)
     source_path: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -101,6 +112,7 @@ class DeployConfig:
                 "timeout_s": self.sandbox.timeout_s,
                 "max_rss_mb": self.sandbox.max_rss_mb,
             },
+            "work": {"executor": self.work.executor},
             "source_path": self.source_path,
         }
 
@@ -205,21 +217,25 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
     health_raw = data.get("health") or {}
     serve_raw = data.get("serve") or {}
     sandbox_raw = data.get("sandbox") or {}
+    work_raw = data.get("work") or {}
 
     hybrid = runtime_raw.get("hybrid_root")
     if hybrid is not None:
         hybrid = str(hybrid)
 
     profile = str(data.get("profile", "cpu_only"))
-    host_kind = str(data.get("host_kind") or {
-        "bare_metal": "bare_metal",
-        "vm": "vm",
-        "container_generic": "container",
-        "cpu_only": "bare_metal",
-        "default": "bare_metal",
-        "cpu_with_bio": "bare_metal",
-        "research": "bare_metal",
-    }.get(profile, "bare_metal"))
+    host_kind = str(
+        data.get("host_kind")
+        or {
+            "bare_metal": "bare_metal",
+            "vm": "vm",
+            "container_generic": "container",
+            "cpu_only": "bare_metal",
+            "default": "bare_metal",
+            "cpu_with_bio": "bare_metal",
+            "research": "bare_metal",
+        }.get(profile, "bare_metal")
+    )
 
     cfg = DeployConfig(
         version=int(data.get("version", 1)),
@@ -254,9 +270,18 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
             timeout_s=float(sandbox_raw.get("timeout_s", 30.0)),
             max_rss_mb=int(sandbox_raw.get("max_rss_mb", 512)),
         ),
+        work=WorkDeployConfig(executor=_executor_section(work_raw.get("executor"))),
         source_path=source_path,
     )
     return cfg
+
+
+def _executor_section(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise DeployConfigError("work.executor must be a mapping")
+    return dict(value)
 
 
 def default_cpu_only_config() -> DeployConfig:
@@ -306,7 +331,15 @@ def validate_deploy_config(cfg: DeployConfig) -> list[str]:
     issues: list[str] = []
     if cfg.version != 1:
         issues.append(f"unsupported config version: {cfg.version}")
-    if cfg.profile not in {"cpu_only", "default", "cpu_with_bio", "research", "bare_metal", "vm", "container_generic"}:
+    if cfg.profile not in {
+        "cpu_only",
+        "default",
+        "cpu_with_bio",
+        "research",
+        "bare_metal",
+        "vm",
+        "container_generic",
+    }:
         issues.append(f"unknown profile: {cfg.profile}")
     if cfg.host_kind not in {"bare_metal", "vm", "container", "unknown"}:
         issues.append(f"unknown host_kind: {cfg.host_kind}")
@@ -325,4 +358,11 @@ def validate_deploy_config(cfg: DeployConfig) -> list[str]:
         root = Path(cfg.runtime.hybrid_root)
         if not root.is_dir():
             issues.append(f"hybrid_root not a directory: {cfg.runtime.hybrid_root}")
+    if cfg.work.executor is not None:
+        from organism_sdk.work.executors.config import executor_from_settings
+
+        try:
+            executor_from_settings(cfg.work.executor)
+        except ValueError as error:
+            issues.append(f"work.executor: {error}")
     return issues

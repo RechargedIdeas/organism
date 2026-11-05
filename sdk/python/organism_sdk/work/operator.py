@@ -16,6 +16,7 @@ from organism_sdk.work import governance
 from organism_sdk.work.assess import RuleAssessor
 from organism_sdk.work.channels.replies import REPLY
 from organism_sdk.work.domain import Verdict
+from organism_sdk.work.driver import requeue
 from organism_sdk.work.executors.process import RECOVERY
 from organism_sdk.work.gate import ScopeFacts
 from organism_sdk.work.governance import NOTICE
@@ -86,7 +87,7 @@ def attention(store: WorkStore) -> list[dict[str, Any]]:
                 {
                     "kind": "recovery",
                     "id": effect.key,
-                    "detail": "a run was interrupted by a restart; review its directory",
+                    "detail": "a run was interrupted by a restart; rerun it or stop it",
                 }
             )
         elif effect.last_error is not None:
@@ -113,6 +114,32 @@ def stop(store: WorkStore, ticket_id: str) -> None:
         for receipt in store.pending_receipts(ticket_id):
             store.settle_receipt(receipt.id, ReceiptStatus.DROPPED, "stopped")
         store.cancel_effect(REPLY, ticket_id)
+
+
+def runs(store: WorkStore, ticket_id: str) -> list[dict[str, Any]]:
+    """Each run of a Ticket, oldest first: its result, and the tail of its output. The output is
+    text from a program the agent does not trust, so a reader treats it as data. Raises KeyError for
+    an unknown Ticket."""
+    if store.ticket(ticket_id) is None:
+        raise KeyError(ticket_id)
+    return [
+        {
+            "assignment": run.assignment_id,
+            "at": run.at,
+            "ok": run.ok,
+            "reason": run.reason,
+            "stdout": run.stdout,
+            "stderr": run.stderr,
+        }
+        for run in store.runs_of(ticket_id)
+    ]
+
+
+def rerun(store: WorkStore, ticket_id: str) -> str:
+    """Start again a Ticket that a restart interrupted, in the same directory. Returns the id of its
+    new Assignment. Raises KeyError for an unknown or stopped Ticket, and ValueError when the Ticket
+    is not waiting for a rerun."""
+    return requeue(store, ticket_id)
 
 
 def pause(store: WorkStore) -> None:
