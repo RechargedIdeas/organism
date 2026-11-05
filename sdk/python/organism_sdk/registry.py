@@ -1,4 +1,5 @@
 """RegistryClient — A3.1; M1 in-process mock registry."""
+
 from __future__ import annotations
 
 import hashlib
@@ -125,16 +126,26 @@ class RegistryClient:
     With a ``trust_store``, registration needs an author signature and promotion needs an approver
     signature, each from a trusted key. Without one, signatures are not checked. That is the
     default for local development and for the internal callers that pass placeholder bytes.
+
+    ``builtin_ids`` are the module ids that are the deployment's own code, not generative output.
+    With a trust store, a module whose id is listed registers without an author signature, and is
+    audited as built in. Every other registration still needs one (OPEN_DECISIONS item D5, option b).
+    The list is code, not configuration, so a config file cannot widen it.
     """
 
     def __init__(
-        self, trace: TraceEmitter | None = None, *, trust_store: TrustStore | None = None
+        self,
+        trace: TraceEmitter | None = None,
+        *,
+        trust_store: TrustStore | None = None,
+        builtin_ids: frozenset[str] = frozenset(),
     ) -> None:
         self._lock = threading.RLock()
         self._modules: dict[str, _Entry] = {}
         self._trace = trace or TraceEmitter()
         self._audit: list[dict[str, Any]] = []
         self._trust_store = trust_store
+        self._builtin_ids = builtin_ids
 
     def _note_rejected(self, role: str, module_id: str) -> None:
         with self._lock:
@@ -162,19 +173,23 @@ class RegistryClient:
         if errors:
             raise RegistrationRejected(errors)
 
-        if self._trust_store is not None and not verify_any(
-            self._trust_store.authors,
-            author_signature,
-            registration_payload(
-                contract.identity.module_id, contract.identity.version, artifact_digest
-            ),
+        mid = contract.identity.module_id
+        # A built-in module is the deployment's own code, so it needs no author signature.
+        built_in = mid in self._builtin_ids
+        if (
+            self._trust_store is not None
+            and not built_in
+            and not verify_any(
+                self._trust_store.authors,
+                author_signature,
+                registration_payload(mid, contract.identity.version, artifact_digest),
+            )
         ):
-            self._note_rejected("author", contract.identity.module_id)
+            self._note_rejected("author", mid)
             raise RegistrationRejected([_bad_signature("author_signature", "author")])
 
-        digest = hashlib.sha256(contract.identity.module_id.encode() + artifact_digest).digest()
+        digest = hashlib.sha256(mid.encode() + artifact_digest).digest()
         state: LifecycleState = test_bypass_promote or initial_state
-        mid = contract.identity.module_id
         with self._lock:
             self._modules[mid] = _Entry(
                 contract=contract,
@@ -188,7 +203,8 @@ class RegistryClient:
                     "event": "register",
                     "module_id": mid,
                     "at": datetime.now(UTC).isoformat(),
-                    "signature_checked": self._trust_store is not None,
+                    "signature_checked": self._trust_store is not None and not built_in,
+                    "built_in": built_in,
                 }
             )
         self._trace.emit_lifecycle(
@@ -222,16 +238,22 @@ class RegistryClient:
                 ):
                     continue
                 if filter.min_lifecycle_state is not None:
+
                     def _rank(s: str) -> int:
                         if s == "DEVELOPMENT":
                             return _PROMOTE_ORDER.index("EXPLORATION")
                         if s in _EXTENDED_STATES:
                             return -1
                         return _PROMOTE_ORDER.index(s)
+
                     if _rank(e.state) < _rank(filter.min_lifecycle_state):
                         continue
                 hw = getattr(e.contract.metabolic, "requires_special_hardware", None)
-                hw_s = hw.value if hw is not None and hasattr(hw, "value") else (str(hw) if hw else "NONE")
+                hw_s = (
+                    hw.value
+                    if hw is not None and hasattr(hw, "value")
+                    else (str(hw) if hw else "NONE")
+                )
                 out.append(
                     ModuleHandle(
                         module_id=mid,
@@ -312,7 +334,9 @@ class RegistryClient:
                 )
             entry.state = to_state
         self._trace.emit_lifecycle(
-            LifecycleTraceEntry(module_id=module_id, from_state=from_state, to_state=to_state, event="promote")
+            LifecycleTraceEntry(
+                module_id=module_id, from_state=from_state, to_state=to_state, event="promote"
+            )
         )
         return PromoteResponse(accepted=True)
 
@@ -333,7 +357,10 @@ class RegistryClient:
                     accepted=False,
                     validation_issues=[
                         ValidationIssue(
-                            Severity.ERROR, "hot_swap_unsupported", "lifecycle", "module disallows hot-swap"
+                            Severity.ERROR,
+                            "hot_swap_unsupported",
+                            "lifecycle",
+                            "module disallows hot-swap",
                         )
                     ],
                 )

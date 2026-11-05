@@ -31,6 +31,9 @@ class StackConfig:
     workspace_write_tags: list[str] = field(default_factory=lambda: ["*"])
     workspace_read_tags: list[str] = field(default_factory=lambda: ["*"])
     router_level: str = "L0"
+    # A trust store file of public keys (signing.load_trust_store). Set, the registry checks the
+    # signatures on registrations and promotions; the built-in modules are exempt (OPEN_DECISIONS D5).
+    trust_store: str | None = None
 
 
 @dataclass
@@ -105,6 +108,7 @@ class DeployConfig:
                 "workspace_write_tags": list(self.stack.workspace_write_tags),
                 "workspace_read_tags": list(self.stack.workspace_read_tags),
                 "router_level": self.stack.router_level,
+                "trust_store": self.stack.trust_store,
             },
             "health": {
                 "host": self.health.host,
@@ -267,6 +271,7 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
             workspace_write_tags=list(stack_raw.get("workspace_write_tags") or ["*"]),
             workspace_read_tags=list(stack_raw.get("workspace_read_tags") or ["*"]),
             router_level=str(stack_raw.get("router_level", "L0")),
+            trust_store=_optional_text(stack_raw.get("trust_store")),
         ),
         health=HealthConfig(
             host=str(health_raw.get("host", "127.0.0.1")),
@@ -292,6 +297,13 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
         source_path=source_path,
     )
     return cfg
+
+
+def _optional_text(value: Any) -> str | None:
+    """A config value as text, or None when the key is absent or empty."""
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value)
 
 
 def _executor_section(value: Any) -> dict[str, Any] | None:
@@ -415,6 +427,13 @@ def validate_deploy_config(cfg: DeployConfig) -> list[str]:
         issues.append("health.status_path must start with /")
     if cfg.stack.router_level not in {"L0", "L1", "L2", "L3", "L4"}:
         issues.append(f"invalid router_level: {cfg.stack.router_level}")
+    if cfg.stack.trust_store is not None:
+        from organism_sdk.signing import load_trust_store
+
+        try:
+            load_trust_store(Path(cfg.stack.trust_store))
+        except (OSError, ValueError) as error:  # a JSON error is a ValueError
+            issues.append(f"stack.trust_store: {error}")
     if cfg.runtime.prefer_gpu and cfg.profile == "cpu_only":
         # Soft warning — still valid; selection will fall back to CPU
         pass

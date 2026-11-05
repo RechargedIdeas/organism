@@ -1,4 +1,5 @@
 """Signed registration and promotion: the trust store decides which signatures count."""
+
 from __future__ import annotations
 
 import json
@@ -6,8 +7,15 @@ from pathlib import Path
 
 import pytest
 from deterministic_engine.engine import DeterministicEngine
+from learned_module.module import LearnedModule
 from organism_sdk import signing
 from organism_sdk.contract import SubstrateContract
+from organism_sdk.deploy.config import (
+    default_cpu_only_config,
+    load_deploy_config,
+    validate_deploy_config,
+)
+from organism_sdk.deploy.stack import BUILTIN_MODULE_IDS, build_minimal_stack
 from organism_sdk.errors import RegistrationRejected
 from organism_sdk.registry import RegistryClient, ShadowValidationRecord
 from organism_sdk.signing import TrustStore, load_trust_store
@@ -121,9 +129,7 @@ def test_promotion_payload_binds_target_state_and_evidence() -> None:
 def test_registry_without_trust_store_does_not_check_signatures() -> None:
     c = _contract()
     reg = RegistryClient()
-    resp = reg.register(
-        c, artifact_digest=c.identity.artifact_digest, author_signature=b"deploy"
-    )
+    resp = reg.register(c, artifact_digest=c.identity.artifact_digest, author_signature=b"deploy")
     assert resp.initial_state == "PROPOSED"
 
 
@@ -237,3 +243,67 @@ def test_load_trust_store_reads_hex_keys(tmp_path: Path, author: Keypair) -> Non
 def test_trust_store_rejects_keys_of_the_wrong_length() -> None:
     with pytest.raises(ValueError, match="32 bytes"):
         TrustStore(authors=frozenset({b"short"}))
+
+
+def test_a_built_in_module_registers_without_an_author_signature() -> None:
+    contract = _contract()
+    module_id = contract.identity.module_id
+    reg = RegistryClient(trust_store=TrustStore(), builtin_ids=frozenset({module_id}))
+    reg.register(
+        contract,
+        artifact_digest=contract.identity.artifact_digest,
+        author_signature=b"deploy",
+    )
+    assert module_id in reg.list_module_ids()
+
+
+def test_a_module_not_on_the_built_in_list_still_needs_an_author_signature() -> None:
+    contract = _contract()
+    reg = RegistryClient(trust_store=TrustStore(), builtin_ids=frozenset({"someone_else"}))
+    with pytest.raises(RegistrationRejected):
+        reg.register(
+            contract,
+            artifact_digest=contract.identity.artifact_digest,
+            author_signature=b"deploy",
+        )
+    assert contract.identity.module_id not in reg.list_module_ids()
+
+
+def test_the_built_in_ids_are_the_two_modules_the_stack_registers() -> None:
+    declared = {
+        _contract().identity.module_id,
+        LearnedModule(precalibrate=False).declare_contract().identity.module_id,
+    }
+    assert declared == BUILTIN_MODULE_IDS
+
+
+def test_a_stack_with_a_trust_store_registers_its_built_in_modules(
+    tmp_path: Path, author: Keypair
+) -> None:
+    _, public = author
+    trust = tmp_path / "trust.json"
+    trust.write_text(json.dumps({"authors": [public.hex()], "approvers": []}), encoding="utf-8")
+    cfg = default_cpu_only_config()
+    cfg.stack.trust_store = str(trust)
+    stack = build_minimal_stack(cfg)
+    assert set(stack.modules) == BUILTIN_MODULE_IDS
+    assert BUILTIN_MODULE_IDS <= set(stack.registry.list_module_ids())
+
+
+def test_a_trust_store_path_is_read_from_the_deploy_config(tmp_path: Path) -> None:
+    trust = str(tmp_path / "trust.json")
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"stack": {"trust_store": trust}}), encoding="utf-8")
+    cfg = load_deploy_config(path)
+    assert cfg.stack.trust_store == trust
+    assert cfg.as_dict()["stack"]["trust_store"] == trust
+
+
+def test_a_missing_or_malformed_trust_store_is_reported_by_validation(tmp_path: Path) -> None:
+    cfg = default_cpu_only_config()
+    cfg.stack.trust_store = str(tmp_path / "missing.json")
+    assert any(i.startswith("stack.trust_store:") for i in validate_deploy_config(cfg))
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"approvers": ["not-hex"]}), encoding="utf-8")
+    cfg.stack.trust_store = str(bad)
+    assert any(i.startswith("stack.trust_store:") for i in validate_deploy_config(cfg))

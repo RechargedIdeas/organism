@@ -1,7 +1,9 @@
 """Minimal in-process registry + workspace + router stack (v1.4)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, cast, get_args
 
 from organism_sdk.deploy.config import DeployConfig, DeployConfigError, default_cpu_only_config
@@ -9,8 +11,14 @@ from organism_sdk.device import RuntimeId, select_compute_backend
 from organism_sdk.health import HealthReport
 from organism_sdk.registry import CapabilityFilter, RegistryClient
 from organism_sdk.router import Level, Router
+from organism_sdk.signing import load_trust_store
 from organism_sdk.trace import TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
+
+# The deployment's own modules, registered from this file (OPEN_DECISIONS D5, option b). They are
+# code in this repository, so they register without an author signature when a trust store is set.
+# A test checks that these are the ids the two modules declare. Generative output is not listed.
+BUILTIN_MODULE_IDS = frozenset({"deterministic_engine", "learned_module_t2"})
 
 
 @dataclass
@@ -81,7 +89,8 @@ def build_minimal_stack(cfg: DeployConfig | None = None) -> MinimalStack:
         os.environ.setdefault("ORGANISM_NEURO_SIM", "1")
 
     trace = TraceEmitter()
-    reg = RegistryClient(trace=trace)
+    trust = load_trust_store(Path(cfg.stack.trust_store)) if cfg.stack.trust_store else None
+    reg = RegistryClient(trace=trace, trust_store=trust, builtin_ids=BUILTIN_MODULE_IDS)
     ws = WorkspaceClient(
         write_tags=tuple(cfg.stack.workspace_write_tags),
         read_tags=tuple(cfg.stack.workspace_read_tags),
