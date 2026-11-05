@@ -11,6 +11,10 @@ on:
       - "deploy/Dockerfile"
       - "deploy/config/container_generic.yaml"
 
+# Read-only token. The image is built and never pushed, so nothing here needs more.
+permissions:
+  contents: read
+
 jobs:
   oci:
     name: Build Containerfile (Docker daemon as one backend)
@@ -18,6 +22,8 @@ jobs:
     continue-on-error: true
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: Build
         run: docker build -f deploy/container/Containerfile -t organism:cpu .

@@ -45,7 +45,10 @@ def test_hosted_llm_requires_url_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_sandbox_process_isolation_ok() -> None:
-    sb = SafeSandbox(isolate=True, timeout_s=2.0, max_rss_mb=256)
+    # The child is a fresh Python process. Under the parallel fast tier its start-up overran 2.0 s once (a
+    # SandboxTimeout with the same code that passes in 0.7 s alone). This test checks isolation and the returned
+    # value, not the timeout, so it gets headroom. test_sandbox_timeout covers the timeout itself.
+    sb = SafeSandbox(isolate=True, timeout_s=10.0, max_rss_mb=256)
     r = sb.run("def main(**k):\n    return {'ok': True, 'score': 3}\n")
     assert r.ok
     assert r.isolated is True

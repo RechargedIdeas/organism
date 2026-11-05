@@ -1,0 +1,14 @@
+version: 2
+
+# Keeps the commit pins on the workflows current. Each update is a reviewable PR that changes one
+# SHA and its version comment. Python dependencies are pinned in constraints-dev.txt, which this
+# file does not manage, so they are updated by hand.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"

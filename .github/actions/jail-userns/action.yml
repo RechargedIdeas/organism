@@ -1,0 +1,37 @@
+name: Allow user namespaces for the jail tests
+description: >
+  Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor. The jail tests need them, and
+  they bring loopback up inside the new namespace. This grants the user namespace permission to the
+  venv interpreter only, through a profile that names its resolved path. The system-wide restriction
+  stays on.
+inputs:
+  venv:
+    description: The venv whose interpreter runs the tests.
+    default: .venv
+runs:
+  using: composite
+  steps:
+    - name: Grant user namespaces to the test interpreter only
+      shell: bash
+      env:
+        VENV: ${{ inputs.venv }}
+      run: |
+        set -euo pipefail
+        if [ ! -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+          echo "No AppArmor restriction on unprivileged user namespaces here; nothing to grant."
+          exit 0
+        fi
+        py="$(readlink -f "$VENV/bin/python")"
+        profile=/etc/apparmor.d/organism-jail-tests
+        sudo tee "$profile" >/dev/null <<EOF
+        abi <abi/4.0>,
+        include <tunables/global>
+
+        profile organism-jail-tests "$py" flags=(unconfined) {
+          userns,
+        }
+        EOF
+        sudo apparmor_parser -r "$profile"
+        # Probe the grant before the tests run, so a failure names the cause. The probe makes the same unshare
+        # call as the jail (sdk/python/organism_sdk/sandbox/jail.py), so it works on any Python 3.11 or later.
+        "$py" -c 'import ctypes, os; libc = ctypes.CDLL(None, use_errno=True); r = libc.unshare(0x10000000 | 0x40000000); print("user and network namespaces:", "ok" if r == 0 else os.strerror(ctypes.get_errno())); raise SystemExit(0 if r == 0 else 1)'
