@@ -21,12 +21,19 @@ from organism_sdk.work.store import WorkStore
 DEADLINE_S = 3600.0  # a Trigger older than this when Eval reaches it is ignored, not acted on
 
 
+# Whether Eval listens to a Trigger from this source, in this row. The row is None when the Source
+# gave none.
+Listens = Callable[[str, str | None], bool]
+
+
 @dataclass(frozen=True)
 class EvalReport:
-    """What one run did: the Decisions it saved, and the Triggers left for the next run."""
+    """What one run did: the Decisions it saved, the Triggers left for the next run, and the
+    Triggers a deployment's listening list kept out of this run (they stay undecided)."""
 
     decided: int
     unavailable: int
+    skipped: int = 0
 
 
 def evaluate(
@@ -36,14 +43,20 @@ def evaluate(
     scope_of: Callable[[Trigger], ScopeFacts],
     *,
     deadline_s: float = DEADLINE_S,
+    listens: Listens | None = None,
 ) -> EvalReport:
-    """Decide every undecided Trigger. An unavailable one is left for the next run."""
+    """Decide every undecided Trigger. An unavailable one is left for the next run. With `listens`,
+    a Trigger it refuses is skipped before admission, so it is not decided and not refused."""
     now = store.now()
     decided = 0
     unavailable = 0
+    skipped = 0
     for trigger, received in store.undecided(policy.version):
-        ticket = store.ticket_for_thread(trigger.thread)
         scope = scope_of(trigger)
+        if listens is not None and not listens(trigger.source, scope.row):
+            skipped += 1
+            continue
+        ticket = store.ticket_for_thread(trigger.thread)
         admission = admit(trigger, scope, policy, has_tickets=ticket is not None)
         late = now - received > deadline_s
         assessment = None
@@ -55,7 +68,7 @@ def evaluate(
             continue
         store.save_decision(decision)
         decided += 1
-    return EvalReport(decided=decided, unavailable=unavailable)
+    return EvalReport(decided=decided, unavailable=unavailable, skipped=skipped)
 
 
 def _assess(assessor: RuleAssessor, trigger: Trigger) -> Assessment | None:

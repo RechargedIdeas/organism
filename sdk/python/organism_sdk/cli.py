@@ -447,12 +447,24 @@ def _cmd_work(args: argparse.Namespace) -> int:
                 return 1
             _print({"ok": True, "policy": policy.version, "notified": notified})
         else:
+            from organism_sdk.deploy.config import load_deploy_config
+
+            listen = load_deploy_config(args.config).work.listen
+            allowed = None if listen is None else set(listen)
+            listens = None if allowed is None else (lambda source, row: (source, row) in allowed)
             try:
-                report = operator.evaluate_triggers(store, row=args.row)
+                report = operator.evaluate_triggers(store, row=args.row, listens=listens)
             except operator.NoActivePolicy as error:
                 _print({"ok": False, "error": str(error)})
                 return 1
-            _print({"ok": True, "decided": report.decided, "unavailable": report.unavailable})
+            _print(
+                {
+                    "ok": True,
+                    "decided": report.decided,
+                    "unavailable": report.unavailable,
+                    "skipped": report.skipped,
+                }
+            )
     if stopped is not None:
         # After the store is closed: ending a run's process group can take a few seconds.
         from organism_sdk.work.executors import end_process_group
@@ -641,6 +653,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "evaluate", parents=[store_option], help="Decide undecided Triggers under the Policy"
     )
     p_weval.add_argument("--row", default="repo", help="The admission row the Triggers arrived in")
+    p_weval.add_argument(
+        "--config", "-c", default=None, help="Deploy config with work.listen (default: $ORGANISM_CONFIG)"
+    )
     p_weval.set_defaults(func=_cmd_work)
     p_wlabel = work_sub.add_parser(
         "label", parents=[store_option], help="Record a verdict on a Decision: agree or disagree"

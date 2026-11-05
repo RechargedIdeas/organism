@@ -130,6 +130,23 @@ def test_an_unavailable_assessment_is_left_for_the_next_run(store: WorkStore) ->
     assert EvalReason.WOULD_ACCEPT.value in decision.reasons
 
 
+def test_a_trigger_outside_the_listening_list_is_skipped_and_left_undecided(store: WorkStore) -> None:
+    pol = policy(AcceptMode.OBSERVE, CI)
+    store.receive(trigger(1, "CI is red"))
+    seen: list[tuple[str, str | None]] = []
+
+    def docs_only(source: str, row: str | None) -> bool:
+        seen.append((source, row))
+        return (source, row) == ("github", "docs")
+
+    report = evaluate(store, pol, RuleAssessor(pol.rules), lambda _: OBSERVED, listens=docs_only)
+    assert report == EvalReport(decided=0, unavailable=0, skipped=1)
+    assert seen == [("github", "repo")]
+    assert store.all_decisions() == []
+    # Still undecided, so a run that listens to the row decides it.
+    assert run(store, pol) == EvalReport(decided=1, unavailable=0, skipped=0)
+
+
 def test_a_late_trigger_is_ignored_not_acted_on(store: WorkStore, clock: Clock) -> None:
     pol = policy(AcceptMode.AUTO, Rule(id="ci-fix", instruction="fix CI", pattern="CI", auto=True))
     store.receive(trigger(1, "CI is red"))

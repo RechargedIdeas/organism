@@ -63,6 +63,9 @@ class WorkDeployConfig:
     Executor (see organism_sdk.work.executors.config), or None when no Executor is configured."""
 
     executor: dict[str, Any] | None = None
+    # (source, row) pairs Eval listens to. None listens to every Trigger, which is what a config
+    # without `work.listen` does. A present `work.listen` lists the pairs and nothing else.
+    listen: tuple[tuple[str, str], ...] | None = None
 
 
 @dataclass
@@ -112,7 +115,7 @@ class DeployConfig:
                 "timeout_s": self.sandbox.timeout_s,
                 "max_rss_mb": self.sandbox.max_rss_mb,
             },
-            "work": {"executor": self.work.executor},
+            "work": {"executor": self.work.executor, "listen": _listen_map(self.work.listen)},
             "source_path": self.source_path,
         }
 
@@ -270,7 +273,10 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
             timeout_s=float(sandbox_raw.get("timeout_s", 30.0)),
             max_rss_mb=int(sandbox_raw.get("max_rss_mb", 512)),
         ),
-        work=WorkDeployConfig(executor=_executor_section(work_raw.get("executor"))),
+        work=WorkDeployConfig(
+            executor=_executor_section(work_raw.get("executor")),
+            listen=_listen_section(work_raw["listen"]) if "listen" in work_raw else None,
+        ),
         source_path=source_path,
     )
     return cfg
@@ -282,6 +288,33 @@ def _executor_section(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise DeployConfigError("work.executor must be a mapping")
     return dict(value)
+
+
+def _listen_map(pairs: tuple[tuple[str, str], ...] | None) -> dict[str, list[str]] | None:
+    """The `work.listen` mapping for `pairs`, the form the config file uses. None stays None."""
+    if pairs is None:
+        return None
+    rows: dict[str, list[str]] = {}
+    for source, row in pairs:
+        rows.setdefault(source, []).append(row)
+    return rows
+
+
+def _listen_section(value: Any) -> tuple[tuple[str, str], ...]:
+    """`work.listen`: a mapping from each Source to the rows Eval listens to in it. A key that is
+    present with no rows (a bare `listen:`) listens to none. The caller decides what absence means."""
+    if value is None:
+        return ()
+    if not isinstance(value, dict):
+        raise DeployConfigError("work.listen must map each source to a list of rows")
+    pairs: set[tuple[str, str]] = set()
+    for source, rows in value.items():
+        if not str(source).strip():
+            raise DeployConfigError("work.listen has an empty source name")
+        if not isinstance(rows, list) or not all(isinstance(r, str) and r.strip() for r in rows):
+            raise DeployConfigError(f"work.listen.{source} must be a list of row names")
+        pairs.update((str(source), row) for row in rows)
+    return tuple(sorted(pairs))
 
 
 def default_cpu_only_config() -> DeployConfig:

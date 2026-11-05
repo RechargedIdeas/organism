@@ -21,7 +21,7 @@ from organism_sdk.work.executors.process import RECOVERY
 from organism_sdk.work.gate import ScopeFacts
 from organism_sdk.work.governance import NOTICE
 from organism_sdk.work.policy import Policy
-from organism_sdk.work.runner import EvalReport, evaluate
+from organism_sdk.work.runner import EvalReport, Listens, evaluate
 from organism_sdk.work.stage import Stage, stage_of
 from organism_sdk.work.store import ReceiptStatus, WorkStore
 
@@ -175,8 +175,9 @@ def adopt(store: WorkStore, policy: Policy, *, signature: bytes, trust: TrustSto
     return governance.adopt(store, policy, signature=signature, trust=trust)
 
 
-def evaluate_triggers(store: WorkStore, *, row: str) -> EvalReport:
-    """Decide the undecided Triggers under the Policy in force. Each Trigger arrived in `row`."""
+def evaluate_triggers(store: WorkStore, *, row: str, listens: Listens | None = None) -> EvalReport:
+    """Decide the undecided Triggers under the Policy in force. Each Trigger arrived in `row`. With
+    `listens`, only the Triggers it accepts are decided (per-scope listening, OPEN_DECISIONS item 4)."""
     policy = store.active_policy()
     if policy is None:
         raise NoActivePolicy("no approved Policy is in force; adopt one before evaluating")
@@ -185,4 +186,5 @@ def evaluate_triggers(store: WorkStore, *, row: str) -> EvalReport:
         policy,
         RuleAssessor(policy.rules),
         lambda _: ScopeFacts(listened=True, observed=True, row=row),
+        listens=listens,
     )

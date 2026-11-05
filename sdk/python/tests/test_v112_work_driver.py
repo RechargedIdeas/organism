@@ -866,6 +866,37 @@ def test_a_deploy_config_whose_executor_is_not_a_mapping_is_refused(tmp_path: Pa
         load_deploy_config(path)
 
 
+def test_a_deploy_config_without_work_listen_listens_to_every_trigger(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {}}), encoding="utf-8")
+    assert load_deploy_config(path).work.listen is None
+
+
+def test_a_deploy_config_lists_the_source_and_row_pairs_it_listens_to(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    listen = {"github": ["repo", "docs"], "email": ["inbox"]}
+    path.write_text(json.dumps({"work": {"listen": listen}}), encoding="utf-8")
+    cfg = load_deploy_config(path)
+    assert cfg.work.listen == (("email", "inbox"), ("github", "docs"), ("github", "repo"))
+    assert cfg.as_dict()["work"]["listen"] == {"email": ["inbox"], "github": ["docs", "repo"]}
+
+
+def test_a_bare_work_listen_listens_to_nothing(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.yaml"
+    path.write_text("work:\n  listen:\n", encoding="utf-8")
+    assert load_deploy_config(path).work.listen == ()
+
+
+def test_a_work_listen_that_is_not_a_map_of_row_lists_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {"listen": ["github:repo"]}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="work.listen"):
+        load_deploy_config(path)
+    path.write_text(json.dumps({"work": {"listen": {"github": "repo"}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="work.listen.github"):
+        load_deploy_config(path)
+
+
 class ChildExecutor:
     """Runs a real child in its own session, as the jail does, and makes a stop while it is alive.
     With `stop_first`, the stop comes before the driver has the child's process group."""
