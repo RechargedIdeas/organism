@@ -146,8 +146,7 @@ one line.
 **Today:** enforced on Linux. The child runs in its own network namespace and reaches the allowlist
 only through the bridge (`sandbox/egress_bridge.py`) and the proxy (`sandbox/egress.py`), as section
 10 of WORK_AGENT.md describes. The executor refuses to run on any host that lacks Linux containment,
-so it cannot run on Windows at all. Whether the CLI honours `HTTPS_PROXY` is not yet checked on a
-live run.
+so it cannot run on Windows at all. A curl run through the proxy passed on a live WSL host on 2026-11-05: an allowlisted host was reached, an unlisted host was refused, and a direct connection had no route out. The Claude CLI itself has not been run.
 
 **Options**
 

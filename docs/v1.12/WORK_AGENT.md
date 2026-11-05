@@ -257,7 +257,7 @@ The same object can sit in the deploy config, under `work.executor`. `--config F
 
 - Delivery of a follow-up into a running process. A follow-up waits for the next run.
 - A retention limit for run output. The `runs` table grows with each run.
-- A live run of the CLI through the proxy. The tests use a probe that makes the same connections, so whether the CLI honours `HTTPS_PROXY` is not yet checked.
+- A live run of the Claude CLI through the proxy. On 2026-11-05 a curl run passed under WSL: an allowlisted host was reached, an unlisted host was refused, and a direct connection had no route out. So a client that honours `HTTPS_PROXY` works through the jail. The CLI itself has not been run.
 
 ## 11. W6 behaviour
 
