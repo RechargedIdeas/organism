@@ -1,0 +1,9 @@
+# Pinned versions of the dev tools the gates depend on (GAP_ANALYSIS.md, O8).
+#
+# The mypy and ruff ratchets change when their tools change, so a fresh install must not float
+# them. Only these three are pinned. Runtime dependencies stay unpinned, on purpose.
+#
+#   pip install -e ".[dev,desktop]" -c constraints-dev.txt
+mypy==2.4.1
+ruff==0.17.3
+pytest==9.2.0

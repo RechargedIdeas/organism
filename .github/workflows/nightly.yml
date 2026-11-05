@@ -1,13 +1,16 @@
 name: Organism nightly
 
-# Scheduled counterpart of the local nightly task (ci/schedule/windows_nightly.ps1). Runs the nightly
+# Manual counterpart of the local nightly task (ci/schedule/windows_nightly.ps1). Runs the nightly
 # tier, which adds the slow wall-clock and soak suites on top of the full tier, and an advisory
 # dependency audit. The audit never fails the run, so a newly published advisory cannot block the
 # nightly signal; it shows up in the job log and the run is marked with a warning.
+#
+# No schedule. The nightly runs on the Windows host (OrganismNightlyCI, 02:00), and a scheduled
+# run here would spend Actions minutes on the same signal (GAP_ANALYSIS.md, N1). Start this one by
+# hand from the Actions tab when a second host's view is wanted. The dependency audit therefore
+# runs only when this workflow is started by hand.
 
 on:
-  schedule:
-    - cron: "0 2 * * *"
   workflow_dispatch:
 
 concurrency:

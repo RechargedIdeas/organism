@@ -41,7 +41,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ".[dev,desktop]"
+          .venv/bin/pip install -e ".[dev,desktop]" -c constraints-dev.txt
       - name: Full tier
         run: .venv/bin/python ci/run.py run --tier full
       - name: Upload run report

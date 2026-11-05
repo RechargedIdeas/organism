@@ -76,7 +76,7 @@ PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk status
 ```
 
 ```bash
-python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev,desktop]"
+python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev,desktop]" -c constraints-dev.txt
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
   validate-config -c deploy/config/cpu_only.yaml
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \

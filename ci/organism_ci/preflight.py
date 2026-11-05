@@ -53,7 +53,7 @@ def _venv(tools: Tools, pipeline: Pipeline) -> Check:
             "venv.python",
             FAIL,
             "no .venv interpreter found",
-            'python -m venv .venv && .venv\\Scripts\\python -m pip install -e ".[dev,desktop]" pyyaml',
+            'python -m venv .venv && .venv\\Scripts\\python -m pip install -e ".[dev,desktop]" -c constraints-dev.txt pyyaml',
         )
     want = pipeline.preflight.min_python
     try:
@@ -78,7 +78,7 @@ def _modules(tools: Tools, pipeline: Pipeline) -> Check:
             "venv.modules",
             FAIL,
             f"missing: {', '.join(missing)}",
-            'python -m pip install -e ".[dev,desktop]" pyyaml',
+            'python -m pip install -e ".[dev,desktop]" -c constraints-dev.txt pyyaml',
         )
     return Check("venv.modules", PASS, f"{len(names)} required modules importable")
 

@@ -42,7 +42,7 @@ sudo ./deploy/bare/install.sh /opt/organism
 sudo systemctl enable --now organism
 
 # venv only (no root, no Docker)
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" -c constraints-dev.txt
 PYTHONPATH=sdk/python:modules:. .venv/bin/python -m organism_sdk \
   serve -c deploy/config/bare_metal.yaml
 ```
