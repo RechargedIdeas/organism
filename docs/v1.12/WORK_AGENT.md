@@ -326,7 +326,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 
 ## 15. Not yet built
 
-- Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
+- Several Threads per Trigger (Correlation): context only. `Trigger.related_threads` holds the related Threads, and routing reads `Trigger.thread` alone (section 3). The GitHub source does not fill the field yet. What a Ticket does with it is open (OPEN_DECISIONS.md, item 6).
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
 - The network allowlist of the `work_executor` profile is recorded, not enforced (section 10).
 - `Outcome.STOP` is in the domain, but Eval does not produce it.
@@ -353,7 +353,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `test_v112_work_operator.py` (`work:operator`, fast tier): status, tickets, attention, pause and resume, stop, retry and evaluate, a read-only store beside the writer, and the CLI's output and exit codes, including a store another writer holds.
 - `test_v112_work_serve.py` (`work:serve_status`, fast tier): `/work/status` beside the writer, its 404 when the store is missing, and no route at all without a work store.
 - `desktop/tests/test_needs_you_panel.py` and `desktop/tests/test_nav.py` (`work:needs_you_panel`, offscreen): the panel's summary and rows, reading beside a writer, refresh, the missing-store message, and the fourteen panels in navigation order.
-- `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests.
+- `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests, and the rule that related Threads never change a routing.
 - `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, the notices, and the revalidation of a notice: a Mandate that still stands drops it, and one that no longer stands waits for a person.
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.

@@ -22,7 +22,9 @@ def route(trigger: Trigger, tickets: Iterable[Ticket]) -> str | None:
     """The id of the open Ticket that takes this Trigger, or None when no Ticket does.
 
     Only a human message on a Thread with an open owner is routed. The ownership check runs for
-    every Trigger, so a broken state is reported whatever arrives on that Thread.
+    every Trigger, so a broken state is reported whatever arrives on that Thread. Only
+    ``trigger.thread`` is read here: ``related_threads`` are context and never route (section 3 of
+    WORK_AGENT.md).
     """
     owners = [
         ticket.id for ticket in tickets if not ticket.ended and ticket.thread == trigger.thread

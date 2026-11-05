@@ -1,14 +1,18 @@
 """v1.12 W8, follow-ups: a Ticket owns its Thread, and a human message there goes to its executor.
 
 The property tests build random states from a fixed seed, so a failure can be replayed. They
-check the routing against a plain reference model, and against the store's own lookup."""
+check the routing against a plain reference model, and against the store's own lookup. Related
+Threads of a Trigger are context only, so the last tests check that they never change a routing."""
 
 from __future__ import annotations
 
+import json
 import random
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from organism_sdk.work import codec
 from organism_sdk.work.domain import Addressed, Mandate, Strength, Ticket, Trigger, Via
 from organism_sdk.work.routing import ThreadOwnershipError, route
 from organism_sdk.work.store import WorkStore
@@ -28,7 +32,14 @@ def mandate() -> Mandate:
     )
 
 
-def trigger(thread: str, *, human: bool = True, actor: str = "alice", n: int = 1) -> Trigger:
+def trigger(
+    thread: str,
+    *,
+    human: bool = True,
+    actor: str = "alice",
+    n: int = 1,
+    related: tuple[str, ...] = (),
+) -> Trigger:
     return Trigger(
         id=f"m{n}",
         source="github",
@@ -38,6 +49,7 @@ def trigger(thread: str, *, human: bool = True, actor: str = "alice", n: int = 1
         addressed=Addressed.NONE,
         at="2026-11-04T00:00:00Z",
         text="hello",
+        related_threads=related,
     )
 
 
@@ -134,3 +146,44 @@ def test_routing_agrees_with_the_store_about_who_owns_a_thread(tmp_path: Path, s
             owner = store.ticket_for_thread(thread)
             routed = route(trigger(thread), tickets)
             assert routed == (owner.id if owner is not None else None)
+
+
+def test_a_related_thread_never_routes_a_trigger() -> None:
+    tickets = [ticket("t1", THREADS[1])]
+    assert route(trigger(THREADS[0], related=(THREADS[1],)), tickets) is None
+
+
+def test_a_related_thread_owner_does_not_make_the_primary_thread_ambiguous() -> None:
+    tickets = [ticket("t1", THREADS[0]), ticket("t2", THREADS[1])]
+    message = trigger(THREADS[0], related=(THREADS[1], THREADS[2]))
+    assert route(message, tickets) == "t1"
+
+
+@pytest.mark.parametrize("seed", range(200))
+def test_related_threads_do_not_change_the_routing(seed: int) -> None:
+    rng = random.Random(seed)
+    tickets = random_state(rng)
+    for number in range(10):
+        plain = trigger(
+            rng.choice(THREADS),
+            human=rng.random() < 0.7,
+            actor=rng.choice(ACTORS),
+            n=number,
+        )
+        related = tuple(rng.sample(THREADS, rng.randrange(len(THREADS) + 1)))
+        assert route(replace(plain, related_threads=related), tickets) == route(plain, tickets)
+
+
+def test_related_threads_survive_the_store(tmp_path: Path) -> None:
+    message = trigger(THREADS[0], related=(THREADS[1], THREADS[2]))
+    with WorkStore(tmp_path / "store.sqlite") as store:
+        store.receive(message)
+        stored = store.trigger(message.id)
+    assert stored is not None
+    assert stored.related_threads == (THREADS[1], THREADS[2])
+
+
+def test_a_trigger_stored_before_related_threads_existed_reads_with_none() -> None:
+    stored = json.loads(codec.to_text(trigger(THREADS[0])))
+    del stored["related_threads"]
+    assert codec.from_text(Trigger, json.dumps(stored)).related_threads == ()

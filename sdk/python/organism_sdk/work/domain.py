@@ -85,7 +85,8 @@ class Trigger:
     """One immutable event from a Source (001).
 
     ``actor`` is None for an event with no sender, such as a CI result. ``thread`` is the
-    key of the one Thread the Trigger belongs to; several Threads per Trigger wait for W2.
+    key of the one Thread the Trigger belongs to. ``related_threads`` are other Threads the
+    Trigger refers to. They are context only: routing reads ``thread`` and never them.
     """
 
     id: str
@@ -96,6 +97,7 @@ class Trigger:
     addressed: Addressed
     at: str
     text: str
+    related_threads: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
