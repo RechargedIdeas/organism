@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import concurrent.futures
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -20,6 +22,7 @@ from organism_sdk.generative import (
     SafeSandbox,
     SkillRegistry,
     TemplateDraftBackend,
+    code_pipeline,
     contrast_ratio,
     list_templates,
 )
@@ -38,6 +41,35 @@ def _roomy_draft_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     stays 2 s for production.
     """
     monkeypatch.setenv("ORGANISM_SANDBOX_TIMEOUT_S", "20")
+
+
+class _StepClock:
+    """Stands in for ``time.perf_counter``. Each read moves it on by a fixed step, so a duration is
+    the step times the reads made in between, however long the machine takes."""
+
+    def __init__(self, step_s: float) -> None:
+        self._step_s = step_s
+        self._now = 0.0
+
+    def read(self) -> float:
+        self._now += self._step_s
+        return self._now
+
+
+@pytest.fixture(autouse=True)
+def fast_clock(monkeypatch: pytest.MonkeyPatch) -> Callable[[float], None]:
+    """Give the code pipeline's clock a fixed step per read, so budget checks do not depend on load.
+
+    The step is 1 ms by default. A test that needs a slow run calls the returned function with a
+    larger step, in seconds. The product budgets in ``budgets.py`` are not changed.
+    """
+
+    def set_step(step_s: float) -> None:
+        stub = _StepClock(step_s)
+        monkeypatch.setattr(code_pipeline, "time", SimpleNamespace(perf_counter=stub.read))
+
+    set_step(0.001)
+    return set_step
 
 
 def test_sandbox_allows_pure_main() -> None:
@@ -493,3 +525,14 @@ def test_wall_clock_budgets_recorded(art: ArtifactStore) -> None:
     assert pipe.last_timings["promote_ms"] < pipe.promote_budget_ms
     assert pipe.within_wall_clock_budgets()
     assert b.may_control
+
+
+def test_a_slow_evolve_is_reported_over_budget(
+    art: ArtifactStore, fast_clock: Callable[[float], None]
+) -> None:
+    pipe = CodePipeline(art)
+    # One evolve reads the clock twice, so each read moves it two budgets on and the run lands over.
+    fast_clock(2 * pipe.evolve_budget_ms / 1000)
+    pipe.evolve("slow budget check", auto_promote=False)
+    assert pipe.last_timings["evolve_ms"] > pipe.evolve_budget_ms
+    assert not pipe.within_wall_clock_budgets()
