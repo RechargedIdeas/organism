@@ -24,7 +24,7 @@ Counts were taken with the project venv (`.venv`), the same interpreter the gate
 | Measure | Start | Now |
 |---|---|---|
 | Ruff findings (ratchet) | 170 | 1 (intentional `exec` in the generative sandbox) |
-| Mypy hand-written findings (ratchet) | 527 | 0 on Windows, 5 on Linux (O12) |
+| Mypy hand-written findings (ratchet) | 527 | 0 on Windows and Linux |
 | Package versions | 1.4.0 (SDK), 1.3.0 (Rust), 1.10.0 (root) | 1.10.0 everywhere, guarded by a test |
 | Declared dependencies unused in code | pydantic, blake3, structlog, SDK numpy | removed |
 | Registry signatures checked | never | when a trust store is configured |
@@ -68,7 +68,7 @@ done without one, but were not done in this review, with the reason given.
 | O9 | Typing | The last 20 hand-written mypy findings, down from 59 at F14. | **fixed**. The ratchet is at 0 on Windows, where the baseline is measured. See the backlog section below. |
 | O10 | Docs | `STATUS.md` was dated 2026-10-25 and listed MoA Phases 4 and 5 as not started. | fixed in this review. The CHANGELOG's chrono note was also wrong: `runtime/registry` no longer depends on chrono, but `runtime/workspace` and `organism-client` still do. |
 | O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **resolved** in `edd2924`. The evolve tests use `DesktopService.create(data_root=...)` on a temp directory. The replay log still grows in normal use, so bounding it (rotation or compaction) is an open runtime change. |
-| O12 | Typing | `envstore_windows.py` (added in `4eecd3f`) is Windows-only, so mypy's Linux view has no `ctypes.WinDLL` or `ctypes.get_last_error`. `python -m mypy --platform linux sdk/python` reports 5 `attr-defined` errors in that file. The ratchet is measured on Windows, so it does not see them. | **open**. Options: (a) a module-level platform guard, which changes what importing the module does on Linux, and `test_envstore.py` imports it; (b) per-line `type: ignore`, which `strict` reports as unused on Windows; (c) a `sys.platform` branch around each call. Needs a choice before the Linux type check can be trusted. |
+| O12 | Typing | `envstore_windows.py` (added in `4eecd3f`) is Windows-only, so mypy's Linux view has no `ctypes.WinDLL` or `ctypes.get_last_error`. `python -m mypy --platform linux sdk/python` reported 5 `attr-defined` errors in that file. The ratchet is measured on Windows, so it did not see them. | **fixed**. One guard at the top of the module raises `ImportError` off Windows, and mypy skips the rest of the module there. The import already failed off Windows (`ctypes.WinDLL` is missing) with `AttributeError`, so only the exception type changes. Nothing imports the module off Windows, and Windows behaviour is unchanged. A per-call branch (option c) could not keep the module-level `WinDLL` line checked on Linux, so the guard sits in one place. |
 
 ## Decisions needed
 
@@ -83,7 +83,7 @@ These are the user's to make. Nothing above was decided on your behalf.
 - **D5 (new, 2026-11-05).** How do the stack's own registrations get author signatures once a trust store is configured? They are the deploy stack's two modules (the deterministic engine and the learned module), the MoA reference experts, and generative promotions. The agent holds no keys, so the options are: (a) an approver-signed manifest of those registrations, made on the approver's machine and loaded with the trust store; (b) register the built-in modules outside the agent's startup path, so only signed generative promotions are checked; (c) keep the stack unchecked and enforce only the promotions that carry an approver signature. This blocks O6. Until you decide, nothing is enforced.
 - **N1 (new).** The GitHub nightly workflow uses Actions minutes. The nightly tier took 589 s locally when it was last measured, and the job is capped at 120 minutes. Keep it, or leave only the Windows task (`OrganismNightlyCI`, which is registered and runs at 02:00)?
 
-## Mypy backlog (0 findings on Windows)
+## Mypy backlog (0 findings on Windows and Linux)
 
 The ratchet was at 59 after F14. Four slices cleared it (to 35, 24, 20, then 0). The breakdown at 59
 was:
@@ -113,5 +113,6 @@ through `_rejected()`, which makes the same comparison. Runtime behaviour is unc
 - Full tier on WSL Ubuntu at `4083925`: 61 of 61 gates pass in 111.5 s.
 - Full tier on Windows at `edd2924`: 61 of 61 gates pass in 244.5 s. The evolve tests run on a clean data root (O11).
 - Full tier on WSL Ubuntu at `edd2924`: 61 of 61 gates pass in 110.3 s.
-- Mypy slice 3 (the last 20 findings): the ratchet is at 0 on Windows. `python -m mypy --platform linux sdk/python` reports only the 5 findings in O12. mypy is not installed in the WSL venv (`kc-venv`), and nothing was installed, so the WSL lint gate was not run.
+- Mypy slice 3 (the last 20 findings): the ratchet is at 0 on Windows. `python -m mypy --platform linux sdk/python` reported 5 findings in O12 before the O12 fix and reports 0 after it. mypy is not installed in the WSL venv (`kc-venv`), and nothing was installed, so the WSL lint gate was not run.
+- O12 fix: the envstore tests pass on Windows (26 passed, 1 skipped for POSIX permission bits) and WSL (26 passed, 1 skipped for the Windows-only credential test).
 - Tests for the modules this slice touches: 233 passed, 31 skipped on Windows; 261 passed, 3 skipped on WSL.

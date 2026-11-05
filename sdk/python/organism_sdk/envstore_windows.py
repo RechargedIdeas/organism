@@ -8,9 +8,15 @@ imports this module, and only on Windows.
 from __future__ import annotations
 
 import ctypes
+import sys
 from ctypes import wintypes
 
 from organism_sdk.envstore import NAME_PATTERN, EnvStoreError
+
+# Windows-only. Off Windows the import stops here, and mypy skips the rest of the module, so the
+# advapi32 calls are checked on the platform they run on. envstore imports this module only on win32.
+if sys.platform != "win32":
+    raise ImportError("envstore_windows needs Windows; envstore imports it only on win32")
 
 ERROR_NOT_FOUND = 1168
 CRED_TYPE_GENERIC = 1
