@@ -97,7 +97,7 @@ def _exit_as_a_test(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_exit(code: int) -> NoReturn:
         raise _Exited(code)
 
-    monkeypatch.setattr(jail.os, "_exit", fake_exit)
+    monkeypatch.setattr(os, "_exit", fake_exit)
 
 
 # --- the runtime: tracer, outcomes, wrappers, self-check, generative compose -----------------------
@@ -355,7 +355,7 @@ def test_a_timed_out_child_is_still_stopped_when_its_group_cannot_be_signalled(
     def no_group(*_args: Any) -> None:
         raise PermissionError("no group")
 
-    monkeypatch.setattr(jail.os, "killpg", no_group, raising=False)
+    monkeypatch.setattr(os, "killpg", no_group, raising=False)
     result = ProcessJail(_quick(timeout_s=0.5)).run(
         [sys.executable, "-c", "import time; time.sleep(60)"]
     )
@@ -554,7 +554,7 @@ def test_the_child_side_does_nothing_more_when_there_is_no_resource_module(
 def test_the_child_side_sets_each_limit_it_is_given_and_skips_one_the_host_refuses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import resource  # POSIX only, so not at module level
+    resource = pytest.importorskip("resource")
 
     calls: list[tuple[int, tuple[int, int]]] = []
 
@@ -578,7 +578,7 @@ def test_the_child_side_sets_each_limit_it_is_given_and_skips_one_the_host_refus
 def test_a_child_whose_host_refuses_every_limit_still_gets_to_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import resource  # POSIX only, so not at module level
+    resource = pytest.importorskip("resource")
 
     def refuse(_which: int, _limits: tuple[int, int]) -> None:
         raise ValueError("refused by the host")
@@ -622,7 +622,7 @@ def test_a_timed_out_child_that_cannot_be_killed_gives_no_output_and_no_error(
         raise PermissionError("no kill")
 
     pids: list[int] = []
-    monkeypatch.setattr(jail.os, "killpg", refuse_group, raising=False)
+    monkeypatch.setattr(os, "killpg", refuse_group, raising=False)
     monkeypatch.setattr(subprocess.Popen, "kill", refuse_kill)
     try:
         result = ProcessJail(_quick(timeout_s=0.5)).run(
