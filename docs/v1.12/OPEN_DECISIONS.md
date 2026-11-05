@@ -136,7 +136,7 @@ it. The shadow gate exists, and no real run has produced the data yet.
 
 ## 8. Network enforcement for the executor
 
-**Status:** chosen overnight by the manager, pending the user's confirmation. Built on Linux as
+**Status:** chosen overnight by the manager and confirmed by the user on 2026-11-05. Built on Linux as
 option A below. Revertible: set `enforce_network=False` in `SandboxPolicy.work_executor()`
 (`sdk/python/organism_sdk/sandbox/policy.py`). The proxy and namespace code stay, so the revert is
 one line.
@@ -165,7 +165,7 @@ separate tool for it. Until then, the one-line revert above stands.
 
 ## 9. Subscriptions and context-only follows (W8)
 
-**Status:** deferred overnight by the manager (option A), pending the user's confirmation. Nothing
+**Status:** deferred overnight by the manager (option A) and confirmed by the user on 2026-11-05. Nothing
 here is built: no Subscription, and no context-only follow.
 
 **Question:** should a Subscription exist in v1, and should a message on a subscribed Thread add
