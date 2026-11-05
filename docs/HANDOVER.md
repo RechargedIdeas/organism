@@ -21,8 +21,8 @@ model line is designed on this substrate. See the KotMoE pointers in section 7.
   - K0 done: Kotlin hypervector and degradation, conformant to the vectors.
   - K1 partly done (`34c25a2`): contract validation, lifecycle ladder, synchronized registry, and vectors
     `contract.json` and `lifecycle.json`.
-  - K1b partly done (`38d5fdd`): output forms, tool contract, human confirmation, model artifact, Ed25519 verify and
-    canonical JSON. Task 7 is open and deferred (section 5).
+  - K1b done in the working tree. Items 1 to 6 are in `38d5fdd`. Task 7 (health and drain, calibration and measured-metabolics
+    evidence, GPU and NPU classes) is uncommitted. See "Owner review after K1b task 7".
   - K2 done (`c706613`, merged as `5a00291`): eligibility mask with typed exclusions, canonical `DispatchPlan` bytes,
     policy digest and routing trace entries. Python and Kotlin, with `router.json`.
   - K6 done (`0d38866`, merged as `931e72c`): shadow gate in `promote()` and `ShadowRunner`. Python and Kotlin, with
@@ -31,11 +31,11 @@ model line is designed on this substrate. See the KotMoE pointers in section 7.
 - **Branch `main`**: `feat/kotlin-parity` contains all of `main` (checked 2026-11-05). The earlier note "12 commits behind"
   is out of date. Check again with `git rev-list --count main..feat/kotlin-parity` before any PR.
 - **Test baseline (2026-11-05, Windows):**
-  - Fast tier, `ci/run.py run --tier fast`: **76 passed, 0 blocking failures**. Of the 76 gates, 65 were cache hits and
-    11 ran fresh.
-  - Kotlin, `cd sdk/kotlin && ./gradlew cleanTest test`: **21 passed** in six classes (canonical and signature 4,
-    conformance 2, contract 5, router 5, shadow 2, tool and artifact 3).
-  - The full tier was not run in this pass. Run it before a PR.
+  - Fast tier, `ci/run.py run --tier fast`, with task 7 uncommitted: **76 passed, 0 blocking failures**, none cached.
+  - Kotlin, `cd sdk/kotlin && ./gradlew cleanTest test`: **24 passed** in six classes (canonical and signature 4,
+    conformance 2, contract 8, router 5, shadow 2, tool and artifact 3).
+  - Python, `pytest -m "not slow" sdk/python/tests`: **1109 passed, 3 skipped, 2 deselected, 4 xfailed**. `test_k1b_task7.py`: 12 passed.
+  - The full tier was not run. Run it before a PR.
 - **Private publish:** `./gradlew publish` in `sdk/kotlin` writes `sdk/kotlin/build/private-repo` by default. A shared
   private repository is set in the user's Gradle properties (`organismPrivateRepo`, `organismRepoUser`,
   `organismRepoToken`). Never put tokens in the repository.
@@ -73,6 +73,23 @@ These came out of the K2 and K6 work. Each is a choice for the owner to confirm 
    Confirm that is the identity you want.
 6. **K1b rules flagged for review.** The tool contract (A2) and the model-artifact manifest (A8) were written by the K1b
    worker. The owner has not agreed their rules.
+
+## Owner review after K1b task 7 (open, uncommitted)
+
+1. **Thresholds are placeholders.** Calibration: `max_ece` 0.05, `max_coverage_gap` 0.05, `min_samples` 200. Measured
+   metabolics: `factor` 1.25, `min_samples` 100. None of these is measured. Set them from data before a tier relies on them.
+2. **Evidence is required only on request.** `require_calibration` and `require_measurement` default to off. Evidence that
+   is supplied is always checked. Decide the default for gated promotions.
+3. **T1 and T2 claim calibration; T3 does not.** A calibrated tier must show a record when the registry requires it. Confirm
+   that T1 belongs with T2.
+4. **The drain deadline changed.** `deregister` now gives `on_drain` the time now + `timeout_s`. The reference used now and
+   ignored the timeout. No module in the repository reads the deadline. The Kotlin API changed: `deregister` takes
+   `(moduleId, nowMs, timeoutS)`, and `register` takes optional hooks.
+5. **GPU and NPU are declared, not verified.** `HardwareRequirement` gained GPU and NPU. A `gpu_flag_mismatch` warning fires
+   when `requires_gpu` and the GPU class disagree. The proto enum has no GPU or NPU value, and `to_proto` does not send
+   hardware, so the gRPC surface does not carry them yet. No GPU or NPU device was available. Nothing was measured on one,
+   and the measured values in `evidence.json` are synthetic, with device class `CPU`.
+6. **Health reports are narrowed.** The Kotlin port compares status and score. Active failures and probe results are not ported.
 
 ## Rules that still hold
 
@@ -124,12 +141,12 @@ cd sdk/kotlin && ./gradlew publish     # to build/private-repo, unless organismP
 
 | Path | What it holds |
 |---|---|
-| `sdk/python/organism_sdk/contract.py`, `registry.py`, `router.py`, `shadow_runner.py`, `signing.py`, `degradation.py`, `workspace.py` | The reference: contracts, registry and ladder, router, shadow runner and promotion payload, degradation, workspace |
+| `sdk/python/organism_sdk/contract.py`, `registry.py`, `router.py`, `shadow_runner.py`, `signing.py`, `evidence.py`, `health.py`, `degradation.py`, `workspace.py` | The reference: contracts, registry and ladder, router, shadow runner and promotion payload, calibration and measurement evidence, health, degradation, workspace |
 | `sdk/python/organism_sdk/moa/` | MoA layer (on `main` only): keyword experts, scorer, shadow gate, tiers, VSA aggregation |
 | `sdk/python/organism_sdk/sandbox/`, `generative/` | Native jail (rlimits, Linux namespaces) and the code, asset and skill pipelines |
-| `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | `Hypervector.kt`, `Degradation.kt`, `Json.kt` (`parse` and `parseExact`), `Canonical.kt` (C3), `Ed25519.kt` (A9), `Contract.kt` (K1), `Registry.kt` (K1, K6), `Routing.kt` (K2), `Shadow.kt` and `Signing.kt` (K6) |
+| `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | `Hypervector.kt`, `Degradation.kt`, `Json.kt` (`parse` and `parseExact`), `Canonical.kt` (C3), `Ed25519.kt` (A9), `Contract.kt` (K1), `Registry.kt` (K1, K6), `Routing.kt` (K2), `Shadow.kt` and `Signing.kt` (K6), `Health.kt` and `Evidence.kt` (K1b task 7) |
 | `sdk/kotlin/src/test/kotlin/org/organism/sdk/` | `ConformanceTest.kt` (hypervector, degradation), `ContractConformanceTest.kt` (contract, lifecycle, queries, evidence gate), `RouterConformanceTest.kt`, `ShadowConformanceTest.kt`, `CanonicalSignatureConformanceTest.kt`, `ToolArtifactConformanceTest.kt` |
-| `conformance/generate.py`, `conformance/vectors/*.json` | The generator and the vectors (hypervector, degradation, contract, lifecycle, canonical, signature, tool, model artifact, router, shadow) |
+| `conformance/generate.py`, `conformance/vectors/*.json` | The generator and the vectors (hypervector, degradation, contract, lifecycle, canonical, signature, tool, model artifact, router, shadow, health, evidence) |
 | `ci/gates.yaml` | The gate list. The only conformance gate is `conformance:kotlin` |
 | `docs/INTEROP.md` | Rules for vectors and ports, the areas table, and the running commands |
 | `docs/KOTLIN_PARITY_PLAN.md` | The K-phases (K0 to K8), the gaps G1 to G14, and the KotMoE integration table |
@@ -153,8 +170,7 @@ rank for DEVELOPMENT equals EXPLORATION.
 
 ## Next steps, in order
 
-1. **K1b task 7**, deferred on 2026-11-05: health and drain in Kotlin (B6), calibration evidence (A5), a measured-metabolics
-   record (A6), and GPU and NPU hardware classes (A7). Start it when the owner says to.
+1. **Review "Owner review after K1b task 7"**, then decide when to commit task 7. Nothing is committed or pushed.
 2. **K3:** hormone bus, autonomic, circadian, immune and interoception parity; plain-name modulators (E3); the level table
    as data (E1). This is the next K-phase in `docs/KOTLIN_PARITY_PLAN.md`.
 3. **K4, persistence and traces:** a lifecycle stream on the op log with a digest chain (B2, C1), and a redaction hook in

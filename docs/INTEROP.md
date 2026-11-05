@@ -37,7 +37,7 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 |---|---|---|---|---|
 | Hypervector (bind, permute, similarity, bundle) | `hypervector.json` | reference | **conformant** | partial (no bundle/permute vectors yet) |
 | Degradation machine L0..L4 | `degradation.json` | reference | **conformant** (26 scenarios, all levels) | port exists, vectors pending |
-| Contract + validation | `contract.json` (29 cases; K1b added the output forms TEXT, TOKEN_STREAM, TOOL_CALL and the justification kind HUMAN_CONFIRMATION) | reference | **conformant** (K1; field subset, see `Contract.kt`) | planned |
+| Contract + validation | `contract.json` (33 cases; K1b added the output forms TEXT, TOKEN_STREAM, TOOL_CALL and the justification kind HUMAN_CONFIRMATION; task 7 added the GPU and NPU classes and `gpu_flag_mismatch`) | reference | **conformant** (K1; field subset, see `Contract.kt`) | planned |
 | Registry + lifecycle ladder | `lifecycle.json` (121 transitions, 11 mismatches, 8 queries) | reference | **conformant** (K1; registry is synchronized) | partial |
 | Canonical JSON writer (C3) | `canonical.json` (35 cases) | reference (`canonical.py`) | **conformant** (`Canonical.kt`) | none |
 | Ed25519 verification (A9) | `signature.json` (17 cases, RFC 8032 section 7.1 plus rejects) | reference (`signing.verify`, over OpenSSL) | **conformant** (`Ed25519.kt`, pure BigInteger, verify only) | none |
@@ -48,7 +48,12 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 | Workspace + ops log + snapshots | planned `workspace.json` | reference | planned (K4) | partial |
 | Hormone bus / autonomic / immune / circadian | planned | reference | planned (K3) | none |
 | Routing trace entries | in `router.json` (2 cases) | reference | **conformant** (K2, `Routing.kt`) | none |
+| Health and drain (B6, K1b task 7) | `health.json` (8 cases) | reference (`health.py`, `registry.py`) | **conformant** (`Health.kt`, `Registry.kt`) | none |
+| Calibration and measured-metabolics gates (A5, A6, K1b task 7) | `evidence.json` (8 calibration, 7 metabolic, 9 promote cases) | reference (`evidence.py`, `registry.py`) | **conformant** (`Evidence.kt`, `Registry.kt`); GPU and NPU device runs not done | none |
 | Sandbox policy | planned `sandbox.json` | reference | planned (K5) | none |
+
+**Not verified on hardware.** The GPU and NPU classes (A7) are declared and checked as data. No GPU or NPU device was
+available, so no vector came from one. The measured values in `evidence.json` are synthetic, with device class `CPU`.
 
 ## Canonical JSON
 

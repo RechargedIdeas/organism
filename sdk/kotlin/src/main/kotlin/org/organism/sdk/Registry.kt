@@ -83,6 +83,11 @@ data class PromoteResult(val accepted: Boolean, val issues: List<ValidationIssue
  * - Registering an id that already exists replaces the entry, as the reference does. No warning is raised.
  * - [register] does not check an author signature. The reference does with a trust store; the Kotlin port has no
  *   registration signing yet.
+ * - [health] and [deregister] call the module's [ModuleHooks], as the reference calls the module object. An unknown id is
+ *   null from [health] and a no-op from [deregister]. The drain deadline is now + timeout, as the reference does since
+ *   K1b task 7 (before that it was now, and the timeout was ignored).
+ * - [promote] checks calibration and measured-metabolics evidence for the gated states, as the reference does (K1b task 7).
+ *   The evidence requirements are off by default, as in the reference.
  *
  * Every public method is synchronized, as the reference is (it holds a lock), so the registry can be shared between
  * threads on Android and on the desktop.
@@ -90,8 +95,12 @@ data class PromoteResult(val accepted: Boolean, val issues: List<ValidationIssue
 class ModuleRegistry(
     private val approvers: List<ByteArray>? = null,
     private val threshold: ShadowThreshold = ShadowThreshold(),
+    private val requireCalibration: Boolean = false,
+    private val requireMeasurement: Boolean = false,
+    private val calibrationThreshold: CalibrationThreshold = CalibrationThreshold(),
+    private val metabolicTolerance: MetabolicTolerance = MetabolicTolerance(),
 ) {
-    private class Entry(val contract: SubstrateContract, var state: LifecycleState)
+    private class Entry(val contract: SubstrateContract, var state: LifecycleState, val hooks: ModuleHooks?)
 
     private val entries = LinkedHashMap<String, Entry>()
 
@@ -100,11 +109,15 @@ class ModuleRegistry(
      * state, as in the reference, so a hot registration can start in DELIBERATION.
      */
     @Synchronized
-    fun register(contract: SubstrateContract, initial: LifecycleState = LifecycleState.PROPOSED): RegisterResult {
+    fun register(
+        contract: SubstrateContract,
+        initial: LifecycleState = LifecycleState.PROPOSED,
+        hooks: ModuleHooks? = null,
+    ): RegisterResult {
         val id = contract.identity.moduleId
         val issues = contract.validate()
         if (issues.any { it.severity == Severity.ERROR }) return RegisterResult(id, false, null, issues)
-        entries[id] = Entry(contract, initial)
+        entries[id] = Entry(contract, initial, hooks)
         return RegisterResult(id, true, initial, issues)
     }
 
@@ -126,6 +139,8 @@ class ModuleRegistry(
         to: LifecycleState,
         shadow: List<ShadowValidationRecord> = emptyList(),
         approverSignature: ByteArray = ByteArray(0),
+        calibration: CalibrationRecord? = null,
+        measured: MeasuredMetabolics? = null,
     ): PromoteResult {
         val entry = entries[moduleId] ?: return reject("not_found", "module_id", "unknown module")
         val trusted = approvers
@@ -144,14 +159,48 @@ class ModuleRegistry(
         if (to in GATED_STATES) {
             val issues = shadowGate(shadow, threshold)
             if (issues.isNotEmpty()) return PromoteResult(false, issues)
+            val tier = entry.contract.safety.reliabilityTier
+            if (calibration != null || (requireCalibration && tier in CALIBRATED_TIERS)) {
+                if (calibration == null) {
+                    return reject("calibration_evidence_missing", "calibration",
+                        "tier $tier claims calibration and no record was given")
+                }
+                val calibrationIssues = calibrationGate(calibration, calibrationThreshold)
+                if (calibrationIssues.isNotEmpty()) return PromoteResult(false, calibrationIssues)
+            }
+            if (measured != null || requireMeasurement) {
+                if (measured == null) {
+                    return reject("measurement_missing", "measured", "a measured metabolic record is required")
+                }
+                val metabolicIssues = metabolicGate(entry.contract.metabolic, measured, metabolicTolerance)
+                if (metabolicIssues.isNotEmpty()) return PromoteResult(false, metabolicIssues)
+            }
         }
         entry.state = to
         return PromoteResult(true, emptyList())
     }
 
-    /** Removes [moduleId] and returns the state it had, or null when it was not registered. */
-    @Synchronized
-    fun deregister(moduleId: String): LifecycleState? = entries.remove(moduleId)?.state
+    /**
+     * The module's health: its hooks' report, or a HEALTHY report with score 1.0 when it has no hooks. Null when the
+     * module is not registered. The hooks run outside the lock, as in the reference.
+     */
+    fun health(moduleId: String): HealthReport? {
+        val hooks = synchronized(this) {
+            val entry = entries[moduleId] ?: return null
+            entry.hooks
+        }
+        return hooks?.health() ?: HealthReport(moduleId, HealthStatus.HEALTHY, 1.0)
+    }
+
+    /**
+     * Removes [moduleId], then calls its hooks' onDrain with the deadline [nowMs] + [timeoutS] seconds. Returns the state it
+     * had, or null when it was not registered (then nothing is called).
+     */
+    fun deregister(moduleId: String, nowMs: Long, timeoutS: Long): LifecycleState? {
+        val removed = synchronized(this) { entries.remove(moduleId) } ?: return null
+        removed.hooks?.onDrain(nowMs + timeoutS * 1000L)
+        return removed.state
+    }
 
     /** Registered module ids in registration order. */
     @Synchronized

@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import get_args
 
@@ -19,6 +21,7 @@ from organism_sdk.contract import (
     Determinism,
     EmissionSignature,
     FailureSignature,
+    HardwareRequirement,
     HealthEscalationPolicy,
     HealthHttp,
     HealthProbe,
@@ -48,6 +51,15 @@ from organism_sdk.contract import (
     UncertaintyKind,
 )
 from organism_sdk.degradation import DegradationMachine, HealthSignals
+from organism_sdk.evidence import (
+    CalibrationRecord,
+    CalibrationThreshold,
+    MeasuredMetabolics,
+    MetabolicTolerance,
+    calibration_gate,
+    metabolic_gate,
+)
+from organism_sdk.health import HealthReport
 from organism_sdk.hypervector import DIM, WORD_COUNT, Hypervector
 from organism_sdk.model_artifact import ModelArtifact
 from organism_sdk.registry import (
@@ -192,6 +204,8 @@ def make_contract(
     override_exploration: bool = False,
     exploration_sink: str = "",
     output_form: OutputForm = OutputForm.SCALAR,
+    hardware: HardwareRequirement = HardwareRequirement.NONE,
+    requires_gpu: bool = False,
 ) -> SubstrateContract:
     """A valid base contract (no errors) with the knobs the vectors vary."""
     return SubstrateContract(
@@ -202,7 +216,8 @@ def make_contract(
                                    uncertainty=UncertaintyKind.NONE, determinism=Determinism.DETERMINISTIC,
                                    requires_justification_for=tuple(requires_justification_for)),
         metabolic=MetabolicProfile(latency_p50_ms=5.0, latency_p95_ms=10.0, latency_p99_ms=20.0,
-                                   energy_per_inference_j=0.01, memory_footprint_mb=64.0, memory_peak_mb=96.0),
+                                   energy_per_inference_j=0.01, memory_footprint_mb=64.0, memory_peak_mb=96.0,
+                                   requires_gpu=requires_gpu, requires_special_hardware=hardware),
         failure=FailureSignature(
             modes=(),
             probe=probe or HealthProbe(kind=HealthHttp(url="http://127.0.0.1:9/health")),
@@ -244,6 +259,7 @@ def contract_dict(c: SubstrateContract) -> dict:
                       "latency_p99_ms": m.latency_p99_ms, "energy_per_inference_j": m.energy_per_inference_j,
                       "memory_footprint_mb": m.memory_footprint_mb, "memory_peak_mb": m.memory_peak_mb,
                       "requires_gpu": m.requires_gpu, "requires_gradient_training": m.requires_gradient_training,
+                      "requires_special_hardware": m.requires_special_hardware.value,
                       "max_concurrent_invocations": m.max_concurrent_invocations},
         "failure": {"probe": _probe_dict(c.failure.probe.kind),
                     "escalation": {"kind": e.kind.value,
@@ -332,6 +348,11 @@ def contract_vectors() -> dict:
                                                       justification=JustificationKind.HUMAN_CONFIRMATION,
                                                       requires_justification_for=("irreversible",)))
     add("human_confirmation_unused_warning", make_contract(justification=JustificationKind.HUMAN_CONFIRMATION))
+    # A7 accelerator classes (added in K1b task 7; appended so earlier cases keep their place).
+    add("accelerator_gpu_flagged_ok", make_contract(hardware=HardwareRequirement.GPU, requires_gpu=True))
+    add("accelerator_npu_ok", make_contract(hardware=HardwareRequirement.NPU))
+    add("gpu_flag_without_class_warning", make_contract(requires_gpu=True))
+    add("gpu_class_without_flag_warning", make_contract(hardware=HardwareRequirement.GPU))
     return {"schema": SCHEMA, "cases": cases}
 
 
@@ -868,13 +889,216 @@ def router_vectors() -> dict:
     }
 
 
+class ScriptedModule:
+    """A module that answers one health status and records the drain deadline it was given. The registry calls only
+    ``health()`` and ``on_drain()``, so a plain class stands in for an OrganismModule."""
+
+    def __init__(self, status: str, score: float) -> None:
+        self._status = status
+        self._score = score
+        self.deadline: datetime | None = None
+
+    def health(self) -> HealthReport:
+        return HealthReport(module_id="m.h", status=self._status, score=self._score)
+
+    def on_drain(self, deadline: datetime) -> None:
+        self.deadline = deadline
+
+
+NOW_MS = 1_800_000_000_000  # the injected clock for drain deadlines, in epoch milliseconds
+
+
+def _epoch_ms(dt: datetime) -> int:
+    return round(dt.timestamp() * 1000)
+
+
+def health_vectors() -> dict:
+    """Health and drain through the registry (B6). Each case registers one module, then asks for its health or drains it.
+
+    ``query_id`` is the id asked about. For ``health`` the expectation is found, status and score. For ``drain`` it is
+    state_before (null when unknown), drain_called, deadline_ms (null when no hook ran) and found_after.
+    """
+    now = datetime.fromtimestamp(NOW_MS / 1000, UTC)
+    cases: list[dict] = []
+
+    def case(name: str, *, module: tuple[str, float] | None, initial: str = "PROPOSED", action: str = "health",
+             query_id: str = "m.h", timeout_s: int = 30) -> None:
+        rc = RegistryClient()
+        scripted = ScriptedModule(*module) if module is not None else None
+        rc.register(make_contract(module_id="m.h"), b"\x00" * 32, b"", module=scripted, initial_state=initial)
+        if action == "health":
+            try:
+                report = rc.health(query_id)
+                expected = {"found": True, "status": report.status, "score": report.score}
+            except KeyError:
+                expected = {"found": False, "status": None, "score": None}
+        else:
+            state_before = next((h.state for h in rc.query(CapabilityFilter()) if h.module_id == query_id), None)
+            rc.deregister(query_id, drain="immediate", timeout_s=timeout_s, now=now)
+            drain_called = scripted is not None and scripted.deadline is not None
+            try:
+                rc.health(query_id)
+                found_after = True
+            except KeyError:
+                found_after = False
+            expected = {
+                "state_before": state_before,
+                "drain_called": drain_called,
+                "deadline_ms": _epoch_ms(scripted.deadline) if drain_called else None,
+                "found_after": found_after,
+            }
+        cases.append({
+            "name": name,
+            "module": None if module is None else {"status": module[0], "score": module[1]},
+            "initial": initial,
+            "action": action,
+            "query_id": query_id,
+            "timeout_s": timeout_s,
+            "expected": expected,
+        })
+
+    case("health_without_module_is_healthy", module=None)
+    case("health_reports_degraded", module=("DEGRADED", 0.6))
+    case("health_reports_failed", module=("FAILED", 0.0))
+    case("health_unknown_module", module=("HEALTHY", 1.0), query_id="m.other")
+    case("drain_calls_hook_with_deadline", module=("HEALTHY", 1.0), initial="DELIBERATION", action="drain",
+         timeout_s=30)
+    case("drain_deadline_follows_timeout", module=("HEALTHY", 1.0), initial="EXPLORATION", action="drain",
+         timeout_s=5)
+    case("drain_without_hook_only_removes", module=None, initial="EXPLORATION", action="drain", timeout_s=5)
+    case("drain_unknown_module_is_a_no_op", module=("HEALTHY", 1.0), action="drain", query_id="m.other")
+    return {"schema": SCHEMA, "now_ms": NOW_MS, "contract": contract_dict(make_contract(module_id="m.h")),
+            "cases": cases}
+
+
+DEFAULT_CAL = CalibrationThreshold()
+DEFAULT_TOL = MetabolicTolerance()
+GOOD_CAL = CalibrationRecord(ece=0.02, target_coverage=0.9, empirical_coverage=0.91, samples=500,
+                             evidence_digest=EVIDENCE_DIGEST)
+GOOD_MET = MeasuredMetabolics(device_class="CPU", latency_p95_ms=11.0, energy_per_inference_j=0.012,
+                              memory_peak_mb=110.0, samples=300, evidence_digest=EVIDENCE_DIGEST)
+
+
+def _cal_json(r: CalibrationRecord) -> dict:
+    return {"ece": r.ece, "target_coverage": r.target_coverage, "empirical_coverage": r.empirical_coverage,
+            "samples": r.samples, "evidence_digest": r.evidence_digest.hex()}
+
+
+def _met_json(m: MeasuredMetabolics) -> dict:
+    return {"device_class": m.device_class, "latency_p95_ms": m.latency_p95_ms,
+            "energy_per_inference_j": m.energy_per_inference_j, "memory_peak_mb": m.memory_peak_mb,
+            "samples": m.samples, "evidence_digest": m.evidence_digest.hex()}
+
+
+def _issue_list(issues: list) -> list[dict]:
+    return [{"severity": i.severity.value, "code": i.code, "field_path": i.field_path} for i in issues]
+
+
+def gate_vectors() -> dict:
+    """Calibration and measured-metabolics gates (A5, A6), then promote() with that evidence. Pure gates first."""
+    cal_cases = []
+    for name, record in (
+        ("ok", GOOD_CAL),
+        ("ece_at_limit_ok", replace(GOOD_CAL, ece=0.05)),
+        ("ece_above_one_invalid", replace(GOOD_CAL, ece=1.5)),
+        ("coverage_negative_invalid", replace(GOOD_CAL, empirical_coverage=-0.1)),
+        ("too_few_samples", replace(GOOD_CAL, samples=150)),
+        ("unattributed", replace(GOOD_CAL, evidence_digest=b"")),
+        ("ece_exceeded", replace(GOOD_CAL, ece=0.08)),
+        ("coverage_short", replace(GOOD_CAL, empirical_coverage=0.8)),
+    ):
+        cal_cases.append({"name": name, "record": _cal_json(record),
+                          "threshold": {"max_ece": DEFAULT_CAL.max_ece,
+                                        "max_coverage_gap": DEFAULT_CAL.max_coverage_gap,
+                                        "min_samples": DEFAULT_CAL.min_samples},
+                          "issues": _issue_list(calibration_gate(record, DEFAULT_CAL))})
+
+    declared = make_contract().metabolic
+    met_cases = []
+    for name, measured in (
+        ("within_declared_ok", GOOD_MET),
+        ("latency_at_limit_ok", replace(GOOD_MET, latency_p95_ms=12.5)),
+        ("latency_over_declared", replace(GOOD_MET, latency_p95_ms=14.0)),
+        ("energy_and_memory_over_declared", replace(GOOD_MET, energy_per_inference_j=0.02, memory_peak_mb=200.0)),
+        ("negative_energy_invalid", replace(GOOD_MET, energy_per_inference_j=-0.01)),
+        ("too_few_samples", replace(GOOD_MET, samples=40)),
+        ("unattributed", replace(GOOD_MET, evidence_digest=b"")),
+    ):
+        met_cases.append({
+            "name": name,
+            "declared": {"latency_p95_ms": declared.latency_p95_ms,
+                         "energy_per_inference_j": declared.energy_per_inference_j,
+                         "memory_peak_mb": declared.memory_peak_mb},
+            "measured": _met_json(measured),
+            "tolerance": {"factor": DEFAULT_TOL.factor, "min_samples": DEFAULT_TOL.min_samples},
+            "issues": _issue_list(metabolic_gate(declared, measured, DEFAULT_TOL)),
+        })
+
+    promote_cases = []
+
+    def promote_case(name: str, *, tier: ReliabilityTier, initial: str, to: str, require_calibration: bool = False,
+                     require_measurement: bool = False, calibration: CalibrationRecord | None = None,
+                     measured: MeasuredMetabolics | None = None) -> None:
+        rc = RegistryClient(require_calibration=require_calibration, require_measurement=require_measurement)
+        rc.register(make_contract(module_id="m.ev", tier=tier), b"\x00" * 32, b"", initial_state=initial)
+        resp = rc.promote("m.ev", initial, to, [_record()], b"", calibration=calibration, measured=measured)
+        state_after = rc.query(CapabilityFilter())[0].state
+        promote_cases.append({
+            "name": name,
+            "tier": tier.value,
+            "initial": initial,
+            "to": to,
+            "require_calibration": require_calibration,
+            "require_measurement": require_measurement,
+            "shadow": [_record_json(_record())],
+            "calibration": None if calibration is None else _cal_json(calibration),
+            "measured": None if measured is None else _met_json(measured),
+            "accepted": resp.accepted,
+            "code": resp.validation_issues[0].code if resp.validation_issues else None,
+            "state_after": state_after,
+        })
+
+    promote_case("gated_calibrated_tier_missing_record_rejected", tier=ReliabilityTier.T2_LEARNED_CALIBRATED,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", require_calibration=True)
+    promote_case("gated_uncalibrated_tier_makes_no_claim", tier=ReliabilityTier.T3_LEARNED_UNCALIBRATED,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", require_calibration=True)
+    promote_case("gated_nonlearned_calibrated_tier_passes", tier=ReliabilityTier.T1_CALIBRATED_NONLEARNED,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", require_calibration=True, calibration=GOOD_CAL)
+    promote_case("gated_supplied_calibration_checked_without_requirement", tier=ReliabilityTier.T0_DETERMINISTIC,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", calibration=replace(GOOD_CAL, ece=0.2))
+    promote_case("gated_measurement_required_missing_rejected", tier=ReliabilityTier.T0_DETERMINISTIC,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", require_measurement=True)
+    promote_case("gated_measurement_passes", tier=ReliabilityTier.T0_DETERMINISTIC,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED", require_measurement=True, measured=GOOD_MET)
+    promote_case("gated_measurement_underdeclared_rejected", tier=ReliabilityTier.T0_DETERMINISTIC,
+                 initial="SANDBOXED", to="SHADOW_VALIDATED",
+                 measured=replace(GOOD_MET, latency_p95_ms=20.0))
+    promote_case("ungated_needs_no_evidence", tier=ReliabilityTier.T2_LEARNED_CALIBRATED,
+                 initial="PROPOSED", to="SANDBOXED", require_calibration=True, require_measurement=True)
+    promote_case("gated_calibrated_module_with_full_evidence_passes", tier=ReliabilityTier.T2_LEARNED_CALIBRATED,
+                 initial="EXPLORATION", to="DELIBERATION", require_calibration=True, require_measurement=True,
+                 calibration=GOOD_CAL, measured=GOOD_MET)
+
+    return {
+        "schema": SCHEMA,
+        "contract": contract_dict(make_contract(module_id="m.ev")),
+        "calibration_default": {"max_ece": DEFAULT_CAL.max_ece, "max_coverage_gap": DEFAULT_CAL.max_coverage_gap,
+                                "min_samples": DEFAULT_CAL.min_samples},
+        "metabolic_default": {"factor": DEFAULT_TOL.factor, "min_samples": DEFAULT_TOL.min_samples},
+        "calibration_cases": cal_cases,
+        "metabolic_cases": met_cases,
+        "promote_cases": promote_cases,
+    }
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, data in (("hypervector", hypervector_vectors()), ("degradation", degradation_vectors()),
                        ("contract", contract_vectors()), ("lifecycle", lifecycle_vectors()),
                        ("canonical", canonical_vectors()), ("signature", signature_vectors()),
                        ("tool", tool_vectors()), ("model_artifact", model_artifact_vectors()),
-                       ("router", router_vectors()), ("shadow", shadow_vectors())):
+                       ("router", router_vectors()), ("shadow", shadow_vectors()),
+                       ("health", health_vectors()), ("evidence", gate_vectors())):
         (OUT / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n",
                                           encoding="utf-8", newline="\n")
         print("wrote", name)

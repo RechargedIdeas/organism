@@ -156,6 +156,10 @@ class HardwareRequirement(str, Enum):
     EVENT_CAMERA = "EVENT_CAMERA"
     PHYSICAL_SUBSTRATE = "PHYSICAL_SUBSTRATE"
     TPU_NPU = "TPU_NPU"
+    # A7 (K1b task 7): vendor-neutral accelerator classes. GPU is any graphics or compute GPU; NPU is a neural
+    # processing unit on a phone or laptop. TPU_NPU stays for contracts that already use it.
+    GPU = "GPU"
+    NPU = "NPU"
 
 
 # ---- Nested contract types ----
@@ -628,6 +632,17 @@ class SubstrateContract:
                     "tool_call_without_justification",
                     "emission.requires_justification_for",
                     "output_form TOOL_CALL but no action classes require justification",
+                )
+            )
+
+        # A7: the boolean and the GPU class must agree.
+        if (self.metabolic.requires_special_hardware == HardwareRequirement.GPU) != self.metabolic.requires_gpu:
+            issues.append(
+                ValidationIssue(
+                    Severity.WARNING,
+                    "gpu_flag_mismatch",
+                    "metabolic.requires_gpu",
+                    "requires_gpu and requires_special_hardware GPU should agree",
                 )
             )
 

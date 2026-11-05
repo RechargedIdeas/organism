@@ -5,8 +5,11 @@ package org.organism.sdk
  * `FailureSignature.validate`). Names match the reference so that `conformance/vectors/contract.json` can be replayed.
  *
  * Not ported yet (K1 follow-up, tracked in docs/KOTLIN_PARITY_PLAN.md): perception shapes and sampling, emission shape and
- * dtype, the hardware requirement, failure modes and recovery backoff, read/write roles and tags, channels, justification
- * format and required fields. Validation does not read any of them, so the vectors do not cover them.
+ * dtype, failure modes and recovery backoff, read/write roles and tags, channels, justification format and required
+ * fields. Validation does not read any of them, so the vectors do not cover them.
+ *
+ * K1b task 7 adds [HardwareRequirement] with the GPU and NPU classes (A7) and the `gpu_flag_mismatch` check. The health
+ * hooks are in `Health.kt`, and the calibration and measured-metabolics gates in `Evidence.kt`.
  *
  * K1b adds, from the same reference: the output forms TEXT, TOKEN_STREAM and TOOL_CALL (A1), [ToolContract] (A2) and the
  * justification kind HUMAN_CONFIRMATION (A3). `ModelArtifact.kt` holds the model manifest (A8). Tool schemas are kept as
@@ -78,6 +81,12 @@ data class EmissionSignature(
     val requiresJustificationFor: List<String> = emptyList(),
 )
 
+/**
+ * Hardware a module needs beyond the CPU (reference `HardwareRequirement`). GPU and NPU are vendor-neutral accelerator
+ * classes (A7). TPU_NPU stays for contracts that already use it.
+ */
+enum class HardwareRequirement { NONE, NEUROMORPHIC, EVENT_CAMERA, PHYSICAL_SUBSTRATE, TPU_NPU, GPU, NPU }
+
 /** Declared cost of one inference. Declared values, not measurements: a device measurement replaces them (see docs). */
 data class MetabolicProfile(
     val latencyP50Ms: Double,
@@ -89,6 +98,7 @@ data class MetabolicProfile(
     val requiresGpu: Boolean = false,
     val requiresGradientTraining: Boolean = false,
     val maxConcurrentInvocations: Int = 1,
+    val requiresSpecialHardware: HardwareRequirement = HardwareRequirement.NONE,
 )
 
 /** How a module is health-checked. [timeoutMs] is one probe's budget; [cadenceMs] is how often it runs. */
@@ -233,6 +243,12 @@ data class SubstrateContract(
         if (emission.outputForm == OutputForm.TOOL_CALL && emission.requiresJustificationFor.isEmpty()) {
             issues += issue(Severity.WARNING, "tool_call_without_justification", "emission.requires_justification_for",
                 "output_form TOOL_CALL but no action classes require justification")
+        }
+
+        // A7: the boolean and the GPU class must agree.
+        if ((metabolic.requiresSpecialHardware == HardwareRequirement.GPU) != metabolic.requiresGpu) {
+            issues += issue(Severity.WARNING, "gpu_flag_mismatch", "metabolic.requires_gpu",
+                "requires_gpu and requires_special_hardware GPU should agree")
         }
         return issues
     }

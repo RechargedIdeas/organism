@@ -11,8 +11,10 @@ integrate with KotMoE as it goes, keeping docs and repos current.
 
 - K0 is done. K1 is partly done (commit `34c25a2`): contracts, validation, lifecycle ladder, registry (synchronized),
   and the conformance vectors `contract.json` and `lifecycle.json`.
-- K1b is partly done (commit `38d5fdd`): output forms, tool contract, human confirmation, model artifact, Ed25519 verify,
-  canonical JSON. Task 7 is open and deferred: health and drain, calibration evidence, measured metabolics, GPU and NPU classes.
+- K1b is done. Items 1 to 6 are in commit `38d5fdd`: output forms, tool contract, human confirmation, model artifact,
+  Ed25519 verify, canonical JSON. Task 7 is in the working tree and not committed: health and drain (B6), calibration
+  evidence (A5), measured metabolics (A6), GPU and NPU classes (A7). The GPU and NPU classes are declared and validated
+  as data only. No GPU or NPU device was available, so nothing was measured on one.
 - K2 is done (commit `c706613`, merged as `5a00291`): eligibility mask with typed exclusions, canonical `DispatchPlan`
   bytes, policy digest, routing trace entries, `router.json`.
 - K6 is done (commit `0d38866`, merged as `931e72c`): shadow gate in `promote()`, `ShadowRunner`, an approver signature
@@ -49,7 +51,7 @@ integrate with KotMoE as it goes, keeping docs and repos current.
 |---|---|---|---|
 | K0 | Fork on X:, venv, baseline, conformance harness, Kotlin build, hypervector + degradation parity | S | **done** |
 | K1 | Contract, validation, registry + lifecycle ladder (Kotlin), vectors `contract.json`, `lifecycle.json` | M | **partly done** (`34c25a2`): contract field subset, validation, ladder, registry, vectors |
-| K1b | Output forms (text, token stream, tool call), tool contract, human-confirmation justification, Ed25519 signature verification, health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes, canonical JSON writer | M | **partly done** (`38d5fdd`): output forms, tool contract, human confirmation, Ed25519 verify, canonical JSON, model artifact. Open, deferred: task 7 (health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes) |
+| K1b | Output forms (text, token stream, tool call), tool contract, human-confirmation justification, Ed25519 signature verification, health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes, canonical JSON writer | M | **done**: items 1 to 6 in `38d5fdd` (output forms, tool contract, human confirmation, Ed25519 verify, canonical JSON, model artifact). **Task 7 is in the working tree, not committed**: health and drain interfaces (B6), calibration evidence (A5), measured-metabolics record (A6), GPU and NPU hardware classes (A7). GPU and NPU were not run on hardware |
 | K2 | Router, `DispatchPlan` canonical bytes, trace entries, eligibility mask + exclusions (Python+Kotlin), vectors | M | **done** (`c706613`, merged `5a00291`): eligibility mask with 8 typed exclusion codes, canonical plan bytes, policy digest, trace entries; Python and Kotlin; `router.json` |
 | K3 | Hormone bus, autonomic, circadian, immune, interoception parity; plain-name modulators; level table as data | M | |
 | K4 | Workspace, ops log, snapshots, replay (JSONL + digest chain), vectors | M | |

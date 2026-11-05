@@ -5,7 +5,7 @@ import hashlib
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from organism_sdk.contract import (
@@ -16,6 +16,15 @@ from organism_sdk.contract import (
     ValidationIssue,
 )
 from organism_sdk.errors import RegistrationRejected
+from organism_sdk.evidence import (
+    CALIBRATED_TIERS,
+    CalibrationRecord,
+    CalibrationThreshold,
+    MeasuredMetabolics,
+    MetabolicTolerance,
+    calibration_gate,
+    metabolic_gate,
+)
 from organism_sdk.health import HealthReport
 from organism_sdk.signing import TrustStore, promotion_payload, registration_payload, verify_any
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
@@ -185,6 +194,10 @@ class RegistryClient:
 
     A promotion into a ``GATED_STATES`` state needs shadow evidence that meets ``shadow_threshold``
     whether or not a trust store is set. ``test_bypass_validation`` does not skip that check.
+
+    For a gated promotion, calibration and measurement evidence is checked when it is supplied. Two switches make it
+    required: ``require_calibration`` makes a calibrated tier (T1, T2) show a calibration record, and
+    ``require_measurement`` makes every gated promotion show a measured metabolic record. Both default to off.
     """
 
     def __init__(
@@ -193,6 +206,10 @@ class RegistryClient:
         *,
         trust_store: TrustStore | None = None,
         shadow_threshold: ShadowThreshold | None = None,
+        require_calibration: bool = False,
+        require_measurement: bool = False,
+        calibration_threshold: CalibrationThreshold | None = None,
+        metabolic_tolerance: MetabolicTolerance | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._modules: dict[str, _Entry] = {}
@@ -200,6 +217,12 @@ class RegistryClient:
         self._audit: list[dict[str, Any]] = []
         self._trust_store = trust_store
         self._shadow_threshold = shadow_threshold if shadow_threshold is not None else ShadowThreshold()
+        self._require_calibration = require_calibration
+        self._require_measurement = require_measurement
+        self._calibration_threshold = (
+            calibration_threshold if calibration_threshold is not None else CalibrationThreshold()
+        )
+        self._metabolic_tolerance = metabolic_tolerance if metabolic_tolerance is not None else MetabolicTolerance()
 
     def _note_rejected(self, role: str, module_id: str) -> None:
         with self._lock:
@@ -261,11 +284,17 @@ class RegistryClient:
         )
         return RegisterResponse(module_id=mid, initial_state=state, validation_issues=issues)
 
-    def deregister(self, module_id: str, drain: str, timeout_s: int) -> None:
+    def deregister(self, module_id: str, drain: str, timeout_s: int, *, now: datetime | None = None) -> None:
+        """Remove the module and let it drain. Its ``on_drain`` gets a deadline ``timeout_s`` after ``now``.
+
+        ``now`` is injected for vectors and tests and defaults to the wall clock. Before K1b task 7 the deadline was
+        ``now`` itself and ``timeout_s`` was ignored.
+        """
         with self._lock:
             entry = self._modules.pop(module_id, None)
         if entry and entry.module is not None:
-            entry.module.on_drain(datetime.now(UTC))
+            start = now if now is not None else datetime.now(UTC)
+            entry.module.on_drain(start + timedelta(seconds=timeout_s))
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(
                 module_id=module_id,
@@ -335,6 +364,8 @@ class RegistryClient:
         approver_signature: bytes,
         *,
         test_bypass_validation: bool = False,
+        calibration: CalibrationRecord | None = None,
+        measured: MeasuredMetabolics | None = None,
     ) -> PromoteResponse:
         with self._lock:
             entry = self._modules[module_id]
@@ -378,6 +409,39 @@ class RegistryClient:
                 gate_issues = shadow_gate(shadow_records, self._shadow_threshold)
                 if gate_issues:
                     return PromoteResponse(accepted=False, validation_issues=gate_issues)
+                tier = entry.contract.safety.reliability_tier
+                if calibration is not None or (self._require_calibration and tier in CALIBRATED_TIERS):
+                    if calibration is None:
+                        return PromoteResponse(
+                            accepted=False,
+                            validation_issues=[
+                                ValidationIssue(
+                                    Severity.ERROR,
+                                    "calibration_evidence_missing",
+                                    "calibration",
+                                    f"tier {tier.value} claims calibration and no record was given",
+                                )
+                            ],
+                        )
+                    cal_issues = calibration_gate(calibration, self._calibration_threshold)
+                    if cal_issues:
+                        return PromoteResponse(accepted=False, validation_issues=cal_issues)
+                if measured is not None or self._require_measurement:
+                    if measured is None:
+                        return PromoteResponse(
+                            accepted=False,
+                            validation_issues=[
+                                ValidationIssue(
+                                    Severity.ERROR,
+                                    "measurement_missing",
+                                    "measured",
+                                    "a measured metabolic record is required",
+                                )
+                            ],
+                        )
+                    met_issues = metabolic_gate(entry.contract.metabolic, measured, self._metabolic_tolerance)
+                    if met_issues:
+                        return PromoteResponse(accepted=False, validation_issues=met_issues)
             entry.state = to_state
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=module_id, from_state=from_state, to_state=to_state, event="promote")
