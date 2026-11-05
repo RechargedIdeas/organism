@@ -327,14 +327,13 @@ A notice carries a `default_updated` flag. It is true when the text of a rule th
 
 ### Not built
 
-- The approver's key. This record generates no key and stores none. The approver keeps the private key outside the repo (W-D5).
+- The approver's key is made and kept by the approver, outside the repository, by the procedure in APPROVER_SIGNING.md. The agent generates, stores and reads no private key (W-D5).
 
 ## 15. Not yet built
 
 - Several Threads per Trigger (Correlation): context only. `Trigger.related_threads` holds the related Threads, and routing reads `Trigger.thread` alone (section 3). The GitHub source does not fill the field yet. What a Ticket does with it is open (OPEN_DECISIONS.md, item 6).
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
 - `Outcome.STOP` is in the domain, but Eval does not produce it.
-- Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
 - Subscriptions, hand-back and release, and pull-request following: W8 (section 13).
 - Scope facts are fixed: `evaluate` treats every Trigger it is given as listened and observed, in the row given by `--row`. Which Triggers it is given is set by `work.listen` (OPEN_DECISIONS item 4), so the listening list narrows Eval, and the facts stay as they are.
 - Context-only follows, which do not admit anything: W8.
@@ -357,6 +356,7 @@ A notice carries a `default_updated` flag. It is true when the text of a rule th
 - `desktop/tests/test_needs_you_panel.py` and `desktop/tests/test_nav.py` (`work:needs_you_panel`, offscreen): the panel's summary and rows, reading beside a writer, refresh, the missing-store message, and the fourteen panels in navigation order.
 - `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests, and the rule that related Threads never change a routing.
 - `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, the notices, and the revalidation of a notice: a Mandate that still stands drops it, and one that no longer stands waits for a person.
+- `test_v112_work_approver_procedure.py` (`work:approver_signing`, fast tier): the offline script makes a seed outside the repository, never overwrites one, refuses one inside it, and signs a Policy's version; the operator's `adopt` accepts that signature and refuses another key's. Test keys only.
 - `test_v112_work_instructions.py` (`work:instructions`, fast tier): instruction text read back by its digest, a stored text that no longer matches refused, the text pinned when a Ticket opens, a running Ticket keeping its text across a Policy change, the `default_updated` flag (a changed text flags its notice, a switched or removed rule does not), and a Ticket opened before pinning reading its Policy version.
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.

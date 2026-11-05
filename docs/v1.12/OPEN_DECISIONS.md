@@ -68,8 +68,10 @@ and the code generates no key.
 never goes in the repo, the agent's environment or the jail. Tests already reject a Policy signed
 by an author key.
 
-**Blocked until chosen:** the signer, and generating the key pair on the user's machine. The agent
-will not generate, store or read a private key.
+**Status:** built as A. The procedure is in `docs/v1.12/APPROVER_SIGNING.md`, and
+`docs/v1.12/approver/approve_policy.py` makes a key pair outside the repository, prints the public
+key, and signs a Policy's version. The key pair is made on the approver's machine, which the agent
+does not touch. The tests use test keys only.
 
 ## 4. Per-scope listening
 

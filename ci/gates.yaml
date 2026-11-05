@@ -400,6 +400,12 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_instructions.py"
 
+  # The approver's offline signing procedure (v1.12 W9): a key made outside the repo signs a Policy,
+  # and the operator's adopt accepts that signature and refuses another. Test keys only.
+  - id: work:approver_signing
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_approver_procedure.py"
+
   # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
   - id: work:admission
     tier: fast
