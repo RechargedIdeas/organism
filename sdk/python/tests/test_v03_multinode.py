@@ -76,7 +76,10 @@ def test_partition_safe_degrade() -> None:
     assert cluster.nodes["b"].degrade in ("PARTITION_SAFE", "QUORUM_LOST")
 
 
-def test_enabled_gate_mirror_and_oxytocin() -> None:
+def test_enabled_gate_mirror_and_oxytocin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The same fake clock as test_mirror_lag_slo: a real sleep overshot the 30 ms SLO on a loaded
+    # machine (62 ms in one run), so the check ran on the clock and not on the code under test.
+    monkeypatch.setattr(multinode, "time", _Clock())
     gate = FederationGate(enable_multi_node=True, default_lag_ms=3.0, lag_slo_ms=30.0)
     assert gate.is_distributed_supported()
     info = gate.simulate_multi_node_mirror_lag(
