@@ -265,6 +265,12 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v110_bare_sandbox.py"
 
+  # The sandbox branches the other tests leave out: the runtime's outcomes, the jail's planning and
+  # refusals, and the child's own setup, checked by effect and in-process.
+  - id: v110:sandbox_branches
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v110_sandbox_branches.py"
+
   - id: v110:desktop_ops_sandbox
     tier: fast
     command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_v110_ops_sandbox.py"
