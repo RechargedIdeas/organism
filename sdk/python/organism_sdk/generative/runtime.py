@@ -71,7 +71,7 @@ class PipelineTiming:
             bucket.append(ms)
 
     def p95(self, kind: str) -> float:
-        samples = list(getattr(self, f"{kind}_ms", []) or [])
+        samples: list[float] = list(getattr(self, f"{kind}_ms", []) or [])
         if not samples:
             return 0.0
         s = sorted(samples)

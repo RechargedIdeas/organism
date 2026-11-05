@@ -60,7 +60,8 @@ def kleiber_declared_share(functional_complexity: float, *, k: float = 1.0, beta
         raise ValueError("beta must be in [0.7, 0.8]")
     if functional_complexity < 0:
         raise ValueError("functional_complexity must be >= 0")
-    return k * (functional_complexity ** beta)
+    share: float = k * (functional_complexity ** beta)
+    return share
 
 
 def metabolic_inefficiency(measured_energy_j: float, predicted_share: float, *, margin: float = 1.5) -> bool:

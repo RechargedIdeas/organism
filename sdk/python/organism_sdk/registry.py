@@ -253,7 +253,8 @@ class RegistryClient:
         with self._lock:
             entry = self._modules[module_id]
         if entry.module is not None:
-            return entry.module.health()
+            report: HealthReport = entry.module.health()
+            return report
         return HealthReport(module_id=module_id, status="HEALTHY", score=1.0)
 
     def get_module(self, module_id: str) -> Any:

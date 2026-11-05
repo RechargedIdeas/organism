@@ -209,7 +209,7 @@ class DurableWorkspace:
 
     def load_snapshot(self, path: Path) -> dict[str, Any]:
         raw = path.read_bytes()
-        obj = json.loads(raw.decode())
+        obj: dict[str, Any] = json.loads(raw.decode())
         if obj["dimension"] != DIM:
             raise DimensionMismatch(DIM, obj["dimension"])
         # Verify content address
