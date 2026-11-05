@@ -29,8 +29,11 @@ from typing import Any, Self
 
 from organism_sdk.work import codec
 from organism_sdk.work.domain import Assignment, Decision, Ticket, Trigger, Verdict
+from organism_sdk.work.policy import Policy
 
 SCHEMA_VERSION = "2"
+STORE_ENV = "ORGANISM_WORK_STORE"
+DEFAULT_STORE = Path(".organism") / "work" / "work.sqlite"
 BACKOFF_BASE_S = 5.0
 BACKOFF_CAP_S = 300.0
 ERROR_CHARS = 500
@@ -93,6 +96,11 @@ CREATE TABLE IF NOT EXISTS source_errors (
   message TEXT NOT NULL,
   PRIMARY KEY (source, item)
 );
+CREATE TABLE IF NOT EXISTS policies (
+  version TEXT PRIMARY KEY,
+  body TEXT NOT NULL,
+  signature TEXT NOT NULL
+);
 """
 
 
@@ -141,6 +149,11 @@ class StoreInUse(RuntimeError):
     """Another WorkStore holds this store's writer lock, in this process or another."""
 
 
+def default_store_path() -> Path:
+    """The store the operator reads: $ORGANISM_WORK_STORE, else .organism/work/work.sqlite here."""
+    return Path(os.environ.get(STORE_ENV) or DEFAULT_STORE)
+
+
 def _take_writer_lock(path: Path) -> int:
     """Take the writer lock on the store's `.lock` file. Refuses at once if it is held."""
     fd = os.open(path.with_name(f"{path.name}.lock"), os.O_RDWR | os.O_CREAT)
@@ -167,6 +180,12 @@ def _release_writer_lock(fd: int) -> None:
         os.lseek(fd, 0, os.SEEK_SET)
         msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
     os.close(fd)  # on POSIX, closing the descriptor drops the flock
+
+
+def _open_read_only(path: Path) -> sqlite3.Connection:
+    """Open an existing database for reading. It is not created, and no schema is applied."""
+    uri = f"{path.resolve().as_uri()}?mode=ro"
+    return sqlite3.connect(uri, uri=True, check_same_thread=False, isolation_level=None)
 
 
 def _open_database(path: Path) -> sqlite3.Connection:
@@ -197,11 +216,23 @@ def backoff_seconds(attempts: int) -> float:
 class WorkStore:
     """SQLite state of the work agent. Open one per state directory."""
 
-    def __init__(self, path: Path | str, *, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self,
+        path: Path | str,
+        *,
+        clock: Callable[[], float] = time.time,
+        read_only: bool = False,
+    ) -> None:
+        """Open the store. A read-only store takes no writer lock, so it runs beside the writer."""
         self.path = Path(path)
         self._clock = clock
         self._lock = threading.RLock()
         self._depth = 0
+        self._closed = False
+        self._writer_fd: int | None = None
+        if read_only:
+            self._conn = _open_read_only(self.path)
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = _take_writer_lock(self.path)
         try:
@@ -209,7 +240,7 @@ class WorkStore:
         except BaseException:
             _release_writer_lock(fd)
             raise
-        self._writer_fd: int | None = fd
+        self._writer_fd = fd
 
     def __enter__(self) -> Self:
         return self
@@ -218,13 +249,15 @@ class WorkStore:
         self.close()
 
     def close(self) -> None:
-        """Close the store and release its writer lock. Closing twice does nothing."""
+        """Close the store, and release its writer lock if it held one. Closing twice does nothing."""
         with self._lock:
-            if self._writer_fd is None:
+            if self._closed:
                 return
+            self._closed = True
             self._conn.close()
-            _release_writer_lock(self._writer_fd)
-            self._writer_fd = None
+            if self._writer_fd is not None:
+                _release_writer_lock(self._writer_fd)
+                self._writer_fd = None
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -406,16 +439,17 @@ class WorkStore:
                 "WHERE id = ?",
                 (receipt_id,),
             ).fetchone()
-        if row is None:
-            return None
-        return Receipt(
-            id=row[0],
-            ticket_id=row[1],
-            conversation=row[2],
-            text=row[3],
-            status=ReceiptStatus(row[4]),
-            reason=row[5],
-        )
+        return None if row is None else _receipt(row)
+
+    def pending_receipts(self, ticket_id: str) -> list[Receipt]:
+        """The Ticket's receipts still pending, in the order they were added."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ticket_id, conversation, text, status, reason FROM receipts "
+                "WHERE ticket_id = ? AND status = ? ORDER BY rowid",
+                (ticket_id, ReceiptStatus.PENDING.value),
+            ).fetchall()
+        return [_receipt(row) for row in rows]
 
     # Source outcomes
 
@@ -437,6 +471,17 @@ class WorkStore:
                     "ON CONFLICT (source, item) DO UPDATE SET message = excluded.message",
                     (source, item, message[:ERROR_CHARS]),
                 )
+
+    def all_source_errors(self) -> dict[str, dict[str, str]]:
+        """The errors of every Source's items that have not succeeded since they failed."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT source, item, message FROM source_errors ORDER BY source, item"
+            ).fetchall()
+        errors: dict[str, dict[str, str]] = {}
+        for source, item, message in rows:
+            errors.setdefault(str(source), {})[str(item)] = str(message)
+        return errors
 
     def source_errors(self, source: str) -> dict[str, str]:
         """The errors of the items of one Source that have not succeeded since they failed."""
@@ -504,6 +549,52 @@ class WorkStore:
             rows = self._conn.execute("SELECT decision_id, verdict FROM labels").fetchall()
         return {str(decision_id): Verdict(verdict) for decision_id, verdict in rows}
 
+    # Policy
+
+    def save_policy(self, policy: Policy, *, signature: bytes) -> None:
+        """Store a Policy version with the approver's signature over it. A stored version stays."""
+        with self.transaction():
+            self._conn.execute(
+                "INSERT OR IGNORE INTO policies (version, body, signature) VALUES (?, ?, ?)",
+                (policy.version, codec.to_text(policy), signature.hex()),
+            )
+
+    def policy(self, version: str) -> Policy | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT body FROM policies WHERE version = ?", (version,)
+            ).fetchone()
+        return None if row is None else codec.from_text(Policy, row[0])
+
+    def policy_signature(self, version: str) -> bytes | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT signature FROM policies WHERE version = ?", (version,)
+            ).fetchone()
+        return None if row is None else bytes.fromhex(str(row[0]))
+
+    def active_policy(self) -> Policy | None:
+        """The Policy version in force, or None before the first adoption."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM flags WHERE name = 'active_policy'"
+            ).fetchone()
+        return None if row is None else self.policy(str(row[0]))
+
+    def set_active_policy(self, version: str) -> None:
+        """Make a stored Policy version the one in force. An unknown version raises KeyError."""
+        with self.transaction():
+            known = self._conn.execute(
+                "SELECT 1 FROM policies WHERE version = ?", (version,)
+            ).fetchone()
+            if known is None:
+                raise KeyError(version)
+            self._conn.execute(
+                "INSERT INTO flags (name, value) VALUES ('active_policy', ?) "
+                "ON CONFLICT (name) DO UPDATE SET value = excluded.value",
+                (version,),
+            )
+
     # Effects
 
     def enqueue(self, kind: str, key: str, payload: Mapping[str, Any]) -> None:
@@ -519,6 +610,25 @@ class WorkStore:
             "payload = excluded.payload, due_at = excluded.due_at",
             (kind, key, codec.to_text(dict(payload)), self._clock()),
         )
+
+    def retry_effects(self, kind: str | None = None) -> int:
+        """Make the waiting effects due at once, all of them or only one kind. Returns how many."""
+        with self.transaction():
+            if kind is None:
+                cursor = self._conn.execute("UPDATE effects SET due_at = ?", (self._clock(),))
+            else:
+                cursor = self._conn.execute(
+                    "UPDATE effects SET due_at = ? WHERE kind = ?", (self._clock(), kind)
+                )
+        return cursor.rowcount
+
+    def cancel_effect(self, kind: str, key: str) -> bool:
+        """Drop a waiting effect so that it never runs. True when one was waiting."""
+        with self.transaction():
+            cursor = self._conn.execute(
+                "DELETE FROM effects WHERE kind = ? AND key = ?", (kind, key)
+            )
+        return cursor.rowcount == 1
 
     def pending_effects(self) -> list[Effect]:
         """Every queued effect, in queue order, due or not."""
@@ -601,6 +711,17 @@ class WorkStore:
                 "ON CONFLICT (name) DO UPDATE SET value = excluded.value",
                 ("1" if paused else "0",),
             )
+
+
+def _receipt(row: tuple[Any, ...]) -> Receipt:
+    return Receipt(
+        id=row[0],
+        ticket_id=row[1],
+        conversation=row[2],
+        text=row[3],
+        status=ReceiptStatus(row[4]),
+        reason=row[5],
+    )
 
 
 def _effect(row: tuple[Any, ...]) -> Effect:

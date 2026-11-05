@@ -1,6 +1,6 @@
 # Work Agent Layer: Design Record (v1.12)
 
-**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W5 onward not started.
+**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W6 (reply channel, off by default), W7 (operator surface), W8 (Thread ownership routing) and W9 (signed Policy adoption) implemented in part, sections 10 to 13. W5 not started: it waits for Claude Code to be installed in the jail and its flags checked (W-D1a).
 
 **Covers:** [docs/SUPERAGENT_COMPARISON.md](../SUPERAGENT_COMPARISON.md), the comparison with dsh-superagent and the build-out plan this record follows.
 
@@ -71,6 +71,10 @@ These come from the superagent's domain document and are kept as rules:
 | `codec.py` | `encode`, `decode`, `to_text`, `from_text`: the JSON form of the domain, read from each dataclass's annotations. Pure. |
 | `store.py` | `WorkStore`: SQLite state, rounds, Receipts, the effects queue, the pause flag, the writer lock, source errors, Decisions, labels and the Triggers still undecided. The only top-level module that does I/O. |
 | `sources/github.py` | `GitHubSource`, `GhCli`, `RoundReport`: reads one repository through `gh api`, read only. An I/O adapter, so it lives in `sources/`. |
+| `routing.py` | `route`, `ThreadOwnershipError`: the open Ticket that owns a human message's Thread. Pure. |
+| `governance.py` | `adopt`, `affected_tickets`, `is_approved`, `policy_payload`, `PolicyRejected`: signed Policy adoption and the notices it queues. Pure apart from `adopt`, which writes through the store. |
+| `operator.py` | `status`, `tickets`, `attention`, `stop`, `pause`, `resume`, `retry`, `evaluate_triggers`: what the CLI and the `needs_you` panel both show and change. |
+| `channels/` | `GitHubChannel`, `ChannelGone`, `queue_reply`, `queue_next_reply`, `reply_handlers`: the reply channel. An I/O adapter, so it lives in `channels/`. |
 
 ## 6. W1 behaviour
 
@@ -187,22 +191,84 @@ A verdict is a person's `Verdict` on one Decision, stored with `WorkStore.label`
 
 ### Changes from W3
 
-- `Rule` gained `pattern` and `auto`, so every Policy with a rule has a new digest. The digest of the empty Policy is unchanged. No Mandate is stored yet, so no recorded version is affected. Section 12 applies from the first Mandate on.
+- `Rule` gained `pattern` and `auto`, so every Policy with a rule has a new digest. The digest of the empty Policy is unchanged. No Mandate is stored yet, so no recorded version is affected. Section 16 applies from the first Mandate on.
 - `may_accept_inferred` requires a graduated rule. Before W4, auto mode accepted any enabled matched rule.
 - The store is at schema 2. `triggers` records when each Trigger was received, `tickets` records its Thread, and `labels` is new. A schema 1 store is refused, as before.
 
-## 10. Not yet built
+## 10. W6 behaviour
+
+### The reply
+
+`queue_reply` records a reply as a receipt for one Ticket, and queues the Ticket's next reply to send. A Ticket has one reply effect in the queue at a time, keyed by the Ticket, and it carries the oldest pending receipt. So a Ticket's replies leave in the order they were written. A reply that fails holds the ones behind it, and the store retries it with the usual backoff.
+
+### The GitHub channel
+
+A reply is a comment on the Issue or pull request of the Thread, named `github:owner/name#number`, posted through `gh api`. Each body ends with a hidden marker, `<!-- organism-receipt:<id> -->`. Before posting, the channel reads the thread's comments. A reply whose marker is already there is not posted again, so a crash between the post and the store recording it does not post twice. Only HTTP 410 counts as gone: that reply is dropped with the reason `gone`. Any other failure is raised, and the store retries it.
+
+### Off by default
+
+With `enabled=False`, `reply_handlers` returns no handler. The replies wait in the queue and nothing reaches GitHub. No command passes `enabled=True` yet. Turning external writes on is a separate, deliberate change.
+
+## 11. W7 behaviour
+
+### The CLI
+
+`organism work` has `status`, `tickets`, `attention`, `pause`, `resume`, `stop TICKET`, `retry [--kind KIND]` and `evaluate [--row ROW]`. The store is `--store PATH`, else `$ORGANISM_WORK_STORE`, else `.organism/work/work.sqlite`. Output is JSON. A failure exits 1 with the error type and message.
+
+The reads (`status`, `tickets`, `attention`) open the store read-only. They run beside the writer, and report a missing store rather than creating one. Changes take the writer lock, so a store another process holds is refused with `StoreInUse`. A change to a store that does not exist creates it.
+
+### Operator actions
+
+`stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. Nothing cancels a running process, because the Executor does not exist until W5. `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
+
+### The needs-you panel
+
+The `needs_you` panel sits beside Home and reads the store beside the writer. Its first line is the healthy state: `running` or `paused`, the open Tickets, how many need a person, and the policy version or `none`. Below it is one row for each item that needs a person: a Ticket waiting on one, a policy notice, a failing effect, or a failing source. With no store it says that nothing needs the person.
+
+### The status route
+
+`organism serve` answers `GET /work/status` with the same JSON as `organism work status`, read beside the writer. A missing store gives 404 with `no_work_store`. A store that SQLite cannot read gives 503 with `work_store_unreadable`.
+
+## 12. W8 behaviour
+
+### Thread ownership
+
+A Ticket owns its Thread while it is open. `route` sends a human message on an owned Thread to that Ticket, and does not start a new Ticket. A bot message on that Thread is not routed: the gate decides it as before. More than one open Ticket on one Thread raises `ThreadOwnershipError`, whatever Trigger arrives on it, because that state must never be reached. A property test checks the invariant over generated sequences.
+
+### Not called yet
+
+Nothing in the SDK calls `route` yet, so its result has no consumer until the Executor (W5) exists. Hand-back, release and pull-request following (D7 and D9) wait for shadow data, and are not built.
+
+## 13. W9 behaviour
+
+### Signed Policies
+
+`adopt` makes a Policy the one in force only when an approver in the TrustStore signed its version. The signed payload is a domain prefix, `organism.work.policy.v1`, then the version. An author key does not count, and an empty TrustStore approves nothing. A Policy that is not approved raises `PolicyRejected` and stores nothing. The agent verifies only and never signs (W-D5).
+
+### Notices
+
+Adoption runs in one transaction. It stores the Policy, makes it active, and queues a `policy_notice` effect for each open Ticket the change touches. A Ticket is touched when a rule its Mandate uses changed, or when the Source part it came from changed. A change to the accept mode touches no Ticket. A notice never cancels a Ticket. It shows in `attention`, and nothing acts on it yet.
+
+### Not built
+
+- Instruction text stored as versioned artifacts, and the "default updated" flag.
+- Mandate revalidation after a notice.
+- The approver's key. This record generates no key and stores none. The approver keeps the private key outside the repo (W-D5).
+
+## 14. Not yet built
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
 - Mandates from accepted Decisions, and the Executor: W5.
-- Stop requests. `Outcome.STOP` is in the domain, but Eval does not produce it. A stop needs a Ticket to stop: W5.
-- Operator labelling, and adopting a graduated Policy: W7 and W9.
-- Mandate revalidation and Policy-change notices: W9.
-- Subscriptions, follow-up ownership, hand-back and release: W8.
+- Stopping a running process. `stop` ends the Ticket and drops its waiting replies, but cannot cancel a process until the Executor exists (W5). `Outcome.STOP` is in the domain, but Eval does not produce it.
+- Labelling verdicts and adopting a Policy from the CLI. `WorkStore.label` and `governance.adopt` are the Python API only. Adoption needs an approver's signature (section 13), and a graduated Policy is adopted the same way.
+- Mandate revalidation and the instruction artifacts: W9, section 13.
+- Subscriptions, hand-back and release, and pull-request following: W8. `route` exists (section 12), but nothing calls it yet.
+- Scope facts are fixed: `evaluate` treats every Trigger as listened and observed, in the row given by `--row`. Per-scope listening waits for configuration.
+- External writes: no command enables the reply channel (section 10).
 - Context-only follows, which do not admit anything: W8.
 
-## 11. Gates
+## 15. Gates
 
 `work:domain` (fast tier) runs three files:
 
@@ -214,7 +280,13 @@ A verdict is a person's `Verdict` on one Decision, stored with `WorkStore.label`
 - `test_v112_work_admission.py` (`work:admission`, fast tier): the rule assessment, and the decision for one Trigger with no store, through each outcome and each reason.
 - `test_v112_work_shadow_promote.py` (`work:shadow_promote`, fast tier): the shadow gate's thresholds, the current-version rule, and graduation.
 - `test_v112_work_eval.py` (`work:eval`, fast tier): Eval over a real store. It covers once per version, the unavailable retry, the deadline, followups on open and ended Tickets, labels, and a graduated rule accepting new work but not the old backlog.
+- `test_v112_work_channel.py` and `test_v112_work_github.py` (`work:channel_idempotent`, fast tier): the reply queue and its order, the marker check before a post, a 410 against other failures, and the GitHub source against a fake `gh`.
+- `test_v112_work_operator.py` (`work:operator`, fast tier): status, tickets, attention, pause and resume, stop, retry and evaluate, a read-only store beside the writer, and the CLI's output and exit codes, including a store another writer holds.
+- `test_v112_work_serve.py` (`work:serve_status`, fast tier): `/work/status` beside the writer, its 404 when the store is missing, and no route at all without a work store.
+- `desktop/tests/test_needs_you_panel.py` and `desktop/tests/test_nav.py` (`work:needs_you_panel`, offscreen): the panel's summary and rows, reading beside a writer, refresh, the missing-store message, and the fourteen panels in navigation order.
+- `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests.
+- `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, and the notices.
 
-## 12. Changing this record
+## 16. Changing this record
 
 Changing the canonical form of the Policy digest changes the version of every Policy, and so the recorded version of every Mandate. Treat that as a breaking change to stored records. Make it only with a migration.

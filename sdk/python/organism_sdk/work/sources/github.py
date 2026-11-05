@@ -28,10 +28,16 @@ TIMEOUT_S = 60.0
 _REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _LOGIN = re.compile(r"[A-Za-z0-9-]+")
 _ITEM_KINDS = ("Issue", "PullRequest")
+_HTTP_STATUS = re.compile(r"HTTP (\d{3})")
 
 
 class GhError(RuntimeError):
-    """A `gh api` call failed, or its answer was not a list of objects."""
+    """A `gh api` call failed, or its answer was not a list of objects.
+
+    ``status`` is the HTTP status that gh reported, when it reported one.
+    """
+
+    status: int | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,14 @@ class GhCli:
     def items(self, endpoint: str) -> list[dict[str, Any]]:
         """Every item of a GET endpoint, across all of its pages."""
         argv = [*self.command, "api", "--paginate", endpoint]
+        return _items(endpoint, self._run(argv, f"gh api {endpoint}"))
+
+    def post(self, endpoint: str, *, body: str) -> None:
+        """Create a comment with a POST. The body goes in as a raw field, never read as a file."""
+        argv = [*self.command, "api", "-X", "POST", endpoint, "-f", f"body={body}"]
+        self._run(argv, f"gh api POST {endpoint}")
+
+    def _run(self, argv: list[str], label: str) -> str:
         try:
             # argv only, never through a shell: a repository name cannot become a command.
             done = subprocess.run(
@@ -54,10 +68,14 @@ class GhCli:
                 timeout=self.timeout_s,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
-            raise GhError(f"gh api {endpoint}: {error}") from None
+            raise GhError(f"{label}: {error}") from None
         if done.returncode != 0:
-            raise GhError(f"gh api {endpoint}: exit {done.returncode}: {done.stderr.strip()[:300]}")
-        return _items(endpoint, done.stdout)
+            failure = GhError(f"{label}: exit {done.returncode}: {done.stderr.strip()[:300]}")
+            match = _HTTP_STATUS.search(done.stderr)
+            if match is not None:
+                failure.status = int(match.group(1))
+            raise failure
+        return done.stdout
 
 
 @dataclass(frozen=True)

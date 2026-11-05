@@ -48,6 +48,9 @@ def decode(hint: Any, data: Any) -> Any:
     if origin in (frozenset, set):
         (item,) = get_args(hint)
         return frozenset(decode(item, value) for value in data)
+    if origin in (Mapping, dict):
+        key_hint, value_hint = get_args(hint)
+        return {decode(key_hint, key): decode(value_hint, value) for key, value in data.items()}
     if isinstance(hint, type) and issubclass(hint, Enum):
         return hint(data)
     if is_dataclass(hint):

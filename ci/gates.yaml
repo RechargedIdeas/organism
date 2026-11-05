@@ -316,6 +316,37 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_github.py"
 
+  # The GitHub reply channel (v1.12 W6): each reply posted once, in order, and only while writes are on.
+  - id: work:channel_idempotent
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_channel.py sdk/python/tests/test_v112_work_github.py"
+
+  # The operator's surface (v1.12 W7): the view, the changes it may make, and the CLI over both.
+  - id: work:operator
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_operator.py"
+
+  # The needs-you panel (v1.12 W7), offscreen, beside the navigation test it extends.
+  - id: work:needs_you_panel
+    tier: fast
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_needs_you_panel.py desktop/tests/test_nav.py"
+
+  # The status route of serve (v1.12 W7): answers beside the writer, and 404s without a store.
+  - id: work:serve_status
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_serve.py"
+
+  # Follow-ups (v1.12 W8): a Ticket owns its Thread, with property tests against a reference model.
+  - id: work:followups
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_followups.py"
+
+  # Policy governance (v1.12 W9): a Policy takes effect only when an approver signs it, and a change
+  # notifies only the Tickets it touches. Test keys only.
+  - id: work:policy_version
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_policy_version.py"
+
   # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
   - id: work:admission
     tier: fast
