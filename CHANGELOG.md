@@ -1,6 +1,7 @@
 ## [Unreleased] - v1.11 MoA layer (in progress)
 
 ### Added
+- **Work agent decisions adopted** (2026-11-04): W-D1a, the executor is Claude Code in non-interactive print mode, the one CLI in the argv template. W-D2, rules first, with no hosted LLM yet. W-D5 and S1, the approver holds the signing key and the agent verifies only. See `docs/SUPERAGENT_COMPARISON.md`, section 6.
 - **Work agent design record and pure domain** (v1.12, W0 and W1): `docs/v1.12/WORK_AGENT.md` records the decisions and the
   principles. `organism_sdk.work` holds the domain types, the admission gate (`admit`), the Ticket stage table
   (`stage_of`) and the versioned Policy (`policy_version`). The domain modules do no I/O. Gate `work:domain`. The comparison

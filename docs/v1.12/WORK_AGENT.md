@@ -11,11 +11,11 @@
 | ID | Decision | Status |
 |---|---|---|
 | W-D1 | The executor is an external coding-agent CLI, run in non-interactive mode inside the `ProcessJail`. | Decided 2026-11-04 |
-| W-D1a | Which CLI. The executor reads an argv template from the deployment config, so no CLI is hard-coded. | Open. Blocks W5 |
-| W-D2 | Whether a hosted LLM may classify proactive candidates. This extends D3. | Open. Blocks the LLM part of W4. W1 uses no model |
+| W-D1a | Which CLI: Claude Code, run in non-interactive print mode, as the only CLI in the argv template. Before W5 starts, install it in the jail environment, check its print-mode and permission flags against the installed version, and allow only its API host and its one key variable in the `work_executor` profile. | Decided 2026-11-04. W5 still needs the CLI installed and its flags checked |
+| W-D2 | Whether a hosted LLM may classify proactive candidates. Rules first. An LLM, when revisited, is off by default, sees only inferred candidates, redacts before sending, and only proposes. | Decided 2026-11-04: no hosted LLM yet. The LLM part of W4 stays unbuilt |
 | W-D3 | First Source: GitHub. | Working default |
 | W-D4 | No auto-merge in v1. | Working default |
-| W-D5 | Policy signing keys (decision S1). | Open. Blocks W9 |
+| W-D5 | Policy signing keys (decision S1): the approver's private key stays with the approver, never in the repo, the agent's environment or the jail. The agent verifies only, against a `TrustStore` of public keys in a user-owned file that deployment config names. | Decided 2026-11-04. Unblocks W9 |
 | W-D6 | Placement: `organism_sdk/work/`, outside the frozen v1.0 surface. | Working default, applied in W1 |
 | W-D7 | Vocabulary: the superagent's domain terms. | Working default, applied in W1 |
 

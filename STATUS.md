@@ -36,7 +36,7 @@ and tested, and Phase 5 has its rule-based part. See [docs/v1.11/MOA_LAYER.md](d
 
 Signed registration is available. Pass a `TrustStore` to `RegistryClient` to require an author
 signature on registration and an approver signature on promotion. Without one, signatures are not
-checked, which is the default. Choosing where production keys live is open (decision S1).
+checked, which is the default. Production keys live with the approver, never in the repo or the agent's environment (decision S1, adopted 2026-11-04). Wiring the trust store into the deploy stack and the desktop app is still to do.
 
 ## Soak / wall-clock cadence
 
