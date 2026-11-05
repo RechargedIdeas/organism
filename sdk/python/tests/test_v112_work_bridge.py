@@ -9,12 +9,14 @@ enforcement, so the first check is not passing for some other reason. Test keys 
 
 from __future__ import annotations
 
+import ctypes
 import socket
 import sys
 import threading
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from organism_sdk.sandbox import egress_bridge
@@ -176,6 +178,36 @@ def test_enforcement_refuses_where_this_host_cannot_run_it() -> None:
     assert result.ok is False
     assert "Linux" in (result.refused or "")
     assert result.stdout == ""
+
+
+class _NoUnshare:
+    """A libc whose unshare always fails, as on a host where namespaces are switched off."""
+
+    def __init__(self, libc: Any) -> None:
+        self._libc = libc
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._libc, name)
+
+    def unshare(self, flags: int) -> int:
+        return -1
+
+
+@LINUX
+def test_a_child_whose_namespace_cannot_be_made_does_not_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The forked child inherits the fake libc, so its unshare fails before exec. The parent's
+    # capability check still sees unshare, so the jail plans the namespace and then has to fail.
+    real_cdll = ctypes.CDLL
+    monkeypatch.setattr(ctypes, "CDLL", lambda *a, **k: _NoUnshare(real_cdll(*a, **k)))
+    marker = tmp_path / "ran"
+    result = ProcessJail(_enforced()).run(
+        [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    )
+    assert result.ok is False
+    assert "spawn_failed" in result.stderr
+    assert not marker.exists()
 
 
 def test_the_bridge_needs_a_command_after_a_separator() -> None:
