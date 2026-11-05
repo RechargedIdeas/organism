@@ -363,14 +363,26 @@ def test_a_timed_out_child_is_still_stopped_when_its_group_cannot_be_signalled(
     assert result.ok is False
 
 
-def test_a_child_reporting_a_permission_error_marks_its_namespaces_partial() -> None:
+@POSIX
+def test_a_permission_error_on_the_childs_stderr_does_not_change_what_it_applied() -> None:
     code = "import sys; sys.stderr.write('Operation not permitted\\n')"
-    result = ProcessJail(SandboxPolicy(timeout_s=20, label="partial")).run(
-        [sys.executable, "-c", code]
+    policy = SandboxPolicy(timeout_s=20, label="partial", use_namespaces=False)
+    result = ProcessJail(policy).run([sys.executable, "-c", code])
+    assert result.ok, result.stderr
+    assert "RLIMIT_AS" in result.rlimits_applied
+    assert "namespace_or_rlimit_partial" not in result.degraded
+
+
+@POSIX
+def test_a_limit_the_kernel_refuses_is_not_reported_as_applied() -> None:
+    result = ProcessJail(_quick(max_rss_mb=2**50, label="refused")).run(
+        [sys.executable, "-c", "print('ran')"]
     )
     assert result.ok, result.stderr
+    assert result.stdout.strip() == "ran"
+    assert "RLIMIT_AS" not in result.rlimits_applied
+    assert "RLIMIT_CPU" in result.rlimits_applied
     assert "namespace_or_rlimit_partial" in result.degraded
-    assert result.namespaces_used == []
 
 
 def test_killing_the_group_of_a_child_that_already_ended_is_not_an_error() -> None:

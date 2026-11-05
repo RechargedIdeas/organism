@@ -169,12 +169,44 @@ def _setup_refusal(code: int | None, stderr: str) -> str | None:
     return stderr.split("\n", 1)[0][len(SETUP_MARKER) :]
 
 
-def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
+NAMESPACES_NOTE = "namespaces"  # written to the report pipe when the child's unshare succeeded
+
+
+def _note(report_fd: int | None, item: str) -> None:
+    """Write one thing the child applied to the report pipe. A failed write is ignored: the parent
+    then reports the item as not applied, which is the safe reading."""
+    if report_fd is not None:
+        with contextlib.suppress(OSError):
+            os.write(report_fd, f"{item}\n".encode())
+
+
+def _close(*fds: int | None) -> None:
+    for fd in fds:
+        if fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
+def _read_report(fd: int | None) -> set[str]:
+    """What the child applied, read once the child has exited. Closes the pipe. Empty without one."""
+    if fd is None:
+        return set()
+    try:
+        data = b""
+        while chunk := os.read(fd, 4096):
+            data += chunk
+    finally:
+        _close(fd)
+    return set(data.decode("ascii", errors="replace").split())
+
+
+def _make_preexec(policy: SandboxPolicy, ns_flags: int, report_fd: int | None = None) -> Any:
     # Runs in the forked child before exec. Logging there can deadlock on a lock another
-    # thread held at fork time, so a limit that cannot be applied is skipped silently.
+    # thread held at fork time, so a limit that cannot be applied is skipped silently. What did
+    # apply is written to `report_fd`, so the parent reports the applied limits, not the planned.
     # Enforcement is the exception: a child that could not get its own namespace must not run,
     # so it exits before exec with the reason on stderr, and the parent reports that reason.
-    def _preexec() -> None:
+    def _apply() -> None:
         if ns_flags and sys.platform.startswith("linux"):
             unshared = False
             detail = ""
@@ -188,6 +220,8 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
                     detail = os.strerror(err)
             except Exception as error:  # noqa: BLE001
                 detail = str(error)
+            if unshared:
+                _note(report_fd, NAMESPACES_NOTE)
             if policy.enforce_network:
                 if not unshared:
                     _setup_failed("the network namespace could not be made", detail)
@@ -205,26 +239,36 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
             try:
                 limit = int(policy.max_rss_mb) * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+                _note(report_fd, "RLIMIT_AS")
             except Exception:  # noqa: BLE001, S110
                 pass
         if policy.cpu_time_s and policy.cpu_time_s > 0:
             try:
                 soft = int(policy.cpu_time_s)
                 resource.setrlimit(resource.RLIMIT_CPU, (soft, soft + 1))
+                _note(report_fd, "RLIMIT_CPU")
             except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_fds and policy.max_fds > 0:
             try:
                 n = int(policy.max_fds)
                 resource.setrlimit(resource.RLIMIT_NOFILE, (n, n))
+                _note(report_fd, "RLIMIT_NOFILE")
             except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_nproc and policy.max_nproc > 0 and hasattr(resource, "RLIMIT_NPROC"):
             try:
                 n = int(policy.max_nproc)
                 resource.setrlimit(resource.RLIMIT_NPROC, (n, n))
+                _note(report_fd, "RLIMIT_NPROC")
             except Exception:  # noqa: BLE001, S110
                 pass
+
+    def _preexec() -> None:
+        try:
+            _apply()
+        finally:
+            _close(report_fd)  # the child closes its copy, so the parent's read sees the end
 
     return _preexec
 
@@ -419,24 +463,30 @@ class ProcessJail:
 
         ns_flags, ns_attempted, degraded = _plan_namespaces(self.policy)
         caps = capabilities()
-        rlimits_applied: list[str] = []
+        planned_rlimits: list[str] = []
         if caps["rlimits"]:
             if self.policy.max_rss_mb:
-                rlimits_applied.append("RLIMIT_AS")
+                planned_rlimits.append("RLIMIT_AS")
             if self.policy.cpu_time_s:
-                rlimits_applied.append("RLIMIT_CPU")
+                planned_rlimits.append("RLIMIT_CPU")
             if self.policy.max_fds:
-                rlimits_applied.append("RLIMIT_NOFILE")
+                planned_rlimits.append("RLIMIT_NOFILE")
             if self.policy.max_nproc:
-                rlimits_applied.append("RLIMIT_NPROC")
+                planned_rlimits.append("RLIMIT_NPROC")
         else:
             degraded.append("rlimits_unavailable")
 
+        # The child reports on this pipe what it actually applied. Only POSIX children set limits.
+        report_r: int | None = None
+        report_w: int | None = None
         preexec = None
+        pass_fds: tuple[int, ...] = ()
         # preexec_fn only works on POSIX and not with threads on some platforms;
         # still the right tool for rlimits/unshare.
         if os.name == "posix":
-            preexec = _make_preexec(self.policy, ns_flags)
+            report_r, report_w = os.pipe()
+            preexec = _make_preexec(self.policy, ns_flags, report_w)
+            pass_fds = (report_w,)
 
         workdir = cwd or self.policy.workdir
         t0 = time.perf_counter()
@@ -450,22 +500,25 @@ class ProcessJail:
                 env=child_env,
                 preexec_fn=preexec,  # noqa: PLW1509 -- rlimits apply before exec
                 start_new_session=True,
+                pass_fds=pass_fds,
             )
         except Exception as e:
+            _close(report_r, report_w)
             logger.warning("run failed", exc_info=True)
             return JailResult(
                 ok=False,
                 stderr=f"spawn_failed:{type(e).__name__}:{e}",
                 degraded=degraded + [f"spawn_failed:{type(e).__name__}"],
                 namespaces_attempted=ns_attempted,
-                rlimits_applied=rlimits_applied,
             )
+        _close(report_w)  # the child has its own copy; a parent copy would stop the read from ending
 
         if on_start is not None:
             try:
                 on_start(proc.pid)
             except BaseException:
                 _kill_group(proc)  # no caller knows this child, so nothing could stop it later
+                _close(report_r)
                 raise
 
         timed_out = False
@@ -491,13 +544,14 @@ class ProcessJail:
                 stdout_b, stderr_b = b"", b""
         duration_ms = (time.perf_counter() - t0) * 1000.0
 
-        # unshare success is not observable without IPC; report attempted as used when linux
-        ns_used = list(ns_attempted) if (ns_flags and caps["linux"]) else []
-        # If child died immediately with permission errors, note degrade
-        stderr = (stderr_b or b"").decode("utf-8", errors="replace")
-        if "Operation not permitted" in stderr or "Invalid argument" in stderr:
+        # What the child applied is what it reported. A limit or namespace the plan named and the
+        # report lacks was not applied, so the run is partial. The program's own stderr does not count.
+        reported = _read_report(report_r)
+        rlimits_applied = [name for name in planned_rlimits if name in reported]
+        ns_used = list(ns_attempted) if NAMESPACES_NOTE in reported else []
+        if len(rlimits_applied) < len(planned_rlimits) or (ns_attempted and not ns_used):
             degraded.append("namespace_or_rlimit_partial")
-            ns_used = []
+        stderr = (stderr_b or b"").decode("utf-8", errors="replace")
 
         code = proc.returncode
         ok = (not timed_out) and code == 0
