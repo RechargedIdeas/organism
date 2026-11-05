@@ -6,7 +6,6 @@ Linux only, where containment exists.
 
 from __future__ import annotations
 
-import signal
 import subprocess
 import sys
 import threading
@@ -324,7 +323,7 @@ def test_a_group_that_ignores_sigterm_is_killed_after_the_grace() -> None:
         assert child.stdout is not None
         assert child.stdout.readline().strip() == b"ready"
         assert end_process_group(child.pid, grace_s=0.2) is True
-        assert child.wait(timeout=30) == -signal.SIGKILL
+        assert child.wait(timeout=30) == -9  # SIGKILL, spelled out: Windows has no signal.SIGKILL
     finally:
         child.kill()
         child.wait()
