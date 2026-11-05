@@ -24,9 +24,9 @@ def test_email_address_negatives_stay_unsure() -> None:
 
 
 def test_the_context_rule_on_the_fresh_set_written_before_it() -> None:
-    # S2: this set was written before the rule, from each query's meaning. Eleven of the twelve
-    # extraction requests reach the extractor. "Which email addresses are in this export" has no
-    # verb of retrieval, so it stays unsure: a recall miss, not a wrong route. No query goes to the
+    # S2: this set was written before the rule, from each query's meaning. Twelve of the twelve
+    # extraction requests reach the extractor. "Which email addresses are in this export" opens with
+    # a question and names the supplied text, so the question rule routes it (O4). No query goes to the
     # wrong expert, and every negative stays unsure.
     scorer = LexicalScorer()
     reached = 0
@@ -39,4 +39,4 @@ def test_the_context_rule_on_the_fresh_set_written_before_it() -> None:
             assert decision.expert_id == row.label, row.query
             if row.label == "extractor":
                 reached += 1
-    assert reached == 11
+    assert reached == 12

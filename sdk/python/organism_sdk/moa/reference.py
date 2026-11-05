@@ -31,7 +31,7 @@ _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?\b")
 EXTRACT_KEYS = ("dates", "emails", "numbers")
-# Verbs of retrieval. They count for the extractor only beside an "email address" phrase (O4).
+# Verbs of retrieval. They count for the extractor when they open the request (O4).
 EMAIL_CUES = (
     "pull",
     "extract",
@@ -45,6 +45,9 @@ EMAIL_CUES = (
     "grab",
     "fetch",
 )
+# Question openers that ask what text holds, and the words that point at text the user supplied (O4).
+EMAIL_QUESTIONS = ("which", "what", "are there", "is there")
+EMAIL_REFERENCES = ("this", "these", "the attached", "below", "above", "following")
 
 
 def _contains(text: str, phrase: str) -> bool:
@@ -115,8 +118,8 @@ class Extractor(BaseExpert):
                 role=ModuleRole.FEATURE_EXTRACTOR,
                 expected_latency_ms=4.0,
                 cued_keywords=(
-                    CuedKeyword("email address", EMAIL_CUES),
-                    CuedKeyword("email addresses", EMAIL_CUES),
+                    CuedKeyword("email address", EMAIL_CUES, EMAIL_QUESTIONS, EMAIL_REFERENCES),
+                    CuedKeyword("email addresses", EMAIL_CUES, EMAIL_QUESTIONS, EMAIL_REFERENCES),
                 ),
             )
         )

@@ -51,8 +51,29 @@ def _contains(text: str, phrase: str) -> bool:
     return re.search(r"\b" + re.escape(phrase) + r"\b", text) is not None
 
 
+_REQUEST_LEAD = r"(?:(?:please|can you|could you|would you|just)\s+)?"
+
+
+def _opens(text: str, words: tuple[str, ...], lead: str = "") -> bool:
+    """True when one of ``words`` opens the query, after an optional ``lead``."""
+    if not words:
+        return False
+    alternation = "|".join(re.escape(word) for word in words)
+    return re.match(lead + r"(?:" + alternation + r")\b", text.lstrip()) is not None
+
+
 def _cued(text: str, cued: CuedKeyword) -> bool:
-    return _contains(text, cued.phrase) and any(_contains(text, cue) for cue in cued.cues)
+    """A cued phrase counts when a cue opens the request, or a question names supplied text (O4).
+
+    A cue counts only in command position, so "get" in "should the new hire get" and the noun "list"
+    do not count. A question opener ("which", "what", "are there") counts with a reference to text
+    the user supplied ("this", "the attached"). Neither rule matches a phrase that is absent.
+    """
+    if not _contains(text, cued.phrase):
+        return False
+    if _opens(text, cued.cues, _REQUEST_LEAD):
+        return True
+    return _opens(text, cued.questions) and any(_contains(text, ref) for ref in cued.references)
 
 
 class LexicalScorer:
