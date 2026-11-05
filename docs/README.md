@@ -11,6 +11,9 @@ Start with [STATUS.md](../STATUS.md) for the current release and what is in prog
   open decisions in section 7.
 - [v1.11/MOA_LAYER.md](v1.11/MOA_LAYER.md): the mixture-of-experts layer. Its design record covers
   experts, routing, tiers, and the Phase 5 guardrails.
+- [CUSTODE_UPGRADE_PLAN.md](CUSTODE_UPGRADE_PLAN.md): the plan for running the Custode browser agent as an Organism
+  application: its phases, corrections, and decisions.
+- [custode/README.md](custode/README.md): the design package behind that plan (contracts, bridge, learning, governance).
 
 ## Frozen contracts
 
