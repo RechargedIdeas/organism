@@ -32,7 +32,7 @@ registered with Organism).
 
 | ID | Gap | Evidence | Consumers | Priority | Planned fix |
 |---|---|---|---|---|---|
-| B1 | Promotion ignores shadow evidence and the approver. `promote()` takes `shadow_records` and `approver_signature` and never uses them | `sdk/python/organism_sdk/registry.py` `promote` | LS ("never serve before shadow"), All learned experts | P0 | K6: make the gate mandatory inside the registry. Kotlin K1 does not check it either (see `Registry.kt` header) |
+| B1 | Promotion ignores shadow evidence and the approver. `promote()` takes `shadow_records` and `approver_signature` and never uses them | `sdk/python/organism_sdk/registry.py` `promote` | LS ("never serve before shadow"), All learned experts | P0 | K6: make the gate mandatory inside the registry. **Done (K6, `0d38866`):** gated states need evidence over `ShadowThreshold`, and the approver signature covers the evidence |
 | B2 | Registry state lives in memory. A restart loses every registration and every lifecycle state | `registry.py` `self._modules` dict | All | P0 | Lifecycle stream on the op log (K4) |
 | B3 | Kotlin registry was not synchronized, while the reference holds an RLock | `registry.py` line 122 `RLock`. Fixed in this change: `ModuleRegistry.kt` methods are `@Synchronized` | KotMoE on Android (multi-thread) | P1 | Done in K1 (`Registry.kt`) |
 | B4 | The ladder has no transitions for DEVELOPMENT, SELF_TERMINATING, SUCCEEDED or DEGRADED. The Python reference raises `ValueError` for them. Kotlin returns a typed rejection | `registry.py` `_PROMOTE_ORDER` and `_EXTENDED_STATES`; `conformance/vectors/lifecycle.json` (`DEVELOPMENT` rows) | LS (self-termination and degraded experts), KotMoE | P2 | Define the extended transitions in the reference, then vectors |
@@ -53,8 +53,8 @@ registered with Organism).
 
 | ID | Gap | Evidence | Consumers | Priority | Planned fix |
 |---|---|---|---|---|---|
-| D1 | No public eligibility mask. Exclusions exist only inside `decide()` | `sdk/python/organism_sdk/router.py` `excluded` list built inside `decide` | LS (M1), KotMoE (RAMA prompt) | P0 | Eligibility API with typed exclusions (K2) |
-| D2 | No learned router backend. The policy artifact has no weights type | `docs/v1.11/MOA_LAYER.md` section 9 (Phase 4 not started, learned backends undecided); section 6, item 6 | LS, KotMoE | P0 | Policy artifact type and a learned-backend interface (MoA Phase 4) |
+| D1 | No public eligibility mask. Exclusions exist only inside `decide()` | `sdk/python/organism_sdk/router.py` `excluded` list built inside `decide` | LS (M1), KotMoE (RAMA prompt) | P0 | Eligibility API with typed exclusions (K2). **Done (K2, `c706613`).** |
+| D2 | No learned router backend. The policy artifact has no weights type | `docs/v1.11/MOA_LAYER.md` section 9 (Phase 4 not started, learned backends undecided); section 6, item 6 | LS, KotMoE | P0 | Policy artifact type and a learned-backend interface (MoA Phase 4). **Partly done (K2):** the router policy artifact has a digest. The learned-backend interface is open |
 | D3 | Aggregation confidence is a rule margin, not a calibrated probability | `docs/v1.11/MOA_LAYER.md` section 3 (intent classifier) | LS (cross-check and abstain), KotMoE | P1 | Calibration service (ECE and isotonic), shared by experts |
 | D4 | No synthesis. Aggregation picks one output and never merges text | `docs/v1.11/MOA_LAYER.md` section 5 ("No generative synthesis") | KotMoE (composite answers), LS | P1 | Synthesiser expert (MoA Phase 4) |
 
@@ -83,7 +83,7 @@ registered with Organism).
 
 | ID | Gap | Evidence | Consumers | Priority | Planned fix |
 |---|---|---|---|---|---|
-| H1 | No shadow runner on live traffic. Shadow exists only as labelled-set evaluation and generative code metrics | `sdk/python/organism_sdk/moa/shadow.py` (labelled set); `generative/code_pipeline.py` `ShadowMetrics` | LS (stage E), KotMoE (learning loop) | P0 | `ShadowRunner` with a traffic callback (K6) |
+| H1 | No shadow runner on live traffic. Shadow exists only as labelled-set evaluation and generative code metrics | `sdk/python/organism_sdk/moa/shadow.py` (labelled set); `generative/code_pipeline.py` `ShadowMetrics` | LS (stage E), KotMoE (learning loop) | P0 | `ShadowRunner` with a traffic callback (K6). **Done (K6, `0d38866`):** `shadow_runner.py` and `Shadow.kt` |
 | H2 | The promote gate is tied to generative shadow metrics. No per-track model gate, and no gates-as-data per model | `generative/stages.py`; `ci/gates.yaml` is for pipeline gates only | LS (LS-Bench tracks), KotMoE | P1 | Gate file per model in the gates format, read by the promote gate |
 | H3 | No model-quality record. The harness checks faults, soak and performance, not accuracy, calibration or energy per task | `harness/scenarios/` (faults, soak, performance) | LS (scorecard), KotMoE | P1 | Metric record type that the gate reads (LS-Bench keeps the suite in KotMoE) |
 | H4 | No evolution proposals (spawn, retire, merge). The metamodel is a hypernetwork stub | `docs/KOTMOE_SUBSTRATE.md` section 2.6; `sdk/python/organism_sdk/metamodel.py` | KotMoE (Agents page owner queue), LS | P2 | Propose-only evolution (K7) |
@@ -93,10 +93,10 @@ registered with Organism).
 
 | ID | Gap | Evidence | Consumers | Priority | Planned fix |
 |---|---|---|---|---|---|
-| I1 | The Kotlin SDK covers hypervectors, degradation, contracts and the registry. No plan, router, workspace, op log, MoA, shadow or sandbox types | `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | KotMoE on Android | P1 | K2 to K5 |
+| I1 | The Kotlin SDK covers hypervectors, degradation, contracts and the registry. No plan, router, workspace, op log, MoA, shadow or sandbox types | `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | KotMoE on Android | P1 | K2 (routing) and K6 (shadow) **done**. K3 to K5 open |
 | I2 | No MCP, ACP or OpenAI-compatible gateway. Nothing exposes the registry over HTTP | `docs/KOTMOE_SUBSTRATE.md` section 2.7; `docs/KOTLIN_PARITY_PLAN.md` K8 | KotMoE tools and editors | P1 | Gateway (K8) |
 | I3 | The Python dependency set is heavy for small hosts (protobuf, grpcio, numpy, pydantic, cryptography, structlog) | `pyproject.toml` | Phones and small hosts running the Python reference | P2 | Keep the core importable without them (plan G14) |
-| I4 | Conformance vectors cover hypervectors, degradation, contracts and the lifecycle. None yet for routing plans, workspace or the op log | `conformance/generate.py` | KotMoE (K2), All | P1 | Vectors added with each K-phase |
+| I4 | Conformance vectors cover hypervectors, degradation, contracts and the lifecycle. None yet for routing plans, workspace or the op log | `conformance/generate.py` | KotMoE (K2), All | P1 | Vectors added with each K-phase. **Partly done:** `router.json` (K2) and `shadow.json` (K6), plus the K1b vectors. Workspace, op log, trace persistence and sandbox are open |
 | I5 | No CI check that the checked-in vectors match a fresh run of the Python generator. The only conformance gate is `conformance:kotlin` (`ci/gates.yaml`), so a stale vector would pass | `ci/gates.yaml` (only `conformance:kotlin`) | KotMoE, All | P1 | Regenerate-and-diff gate. Not added yet: it touches the pipeline, so it needs the owner's go |
 
 ---
@@ -112,9 +112,12 @@ registered with Organism).
   experts, tools, platform adapters, data handling and the user interface. Gaps A2, B6, C2, E2 and G1 sit on that
   boundary, and each one needs an owner decision.
 - **Fixed in K1:** B3 (Kotlin registry synchronized, commit `34c25a2`). Everything else is still open.
-- **Fixed in K1b (uncommitted until reviewed):** A1 (output forms TEXT, TOKEN_STREAM, TOOL_CALL, with a warning for a
+- **Fixed in K1b (`38d5fdd`):** A1 (output forms TEXT, TOKEN_STREAM, TOOL_CALL, with a warning for a
   tool call that names no action class), A2 (`ToolContract`), A3 (`HUMAN_CONFIRMATION`), A8 (`ModelArtifact`), A9 (the
   Python verify is `signing.verify`; Kotlin has a pure verify), C3 (canonical JSON, `docs/INTEROP.md`). Vectors:
   `canonical.json`, `signature.json`, `tool.json`, `model_artifact.json`, and 5 new cases in `contract.json`. Still open
-  from K1b: B6, A5, A6, A7.
-- **Status 2026-11-04:** `docs/HANDOVER.md` has the working order for these gaps.
+  from K1b: B6, A5, A6, A7 (K1b task 7, deferred).
+- **Fixed in K2 and K6:** D1 (`c706613`), B1 and H1 (`0d38866`). D2, I1 and I4 are partly done. The owner review items
+  from these phases are in `docs/HANDOVER.md`.
+- **Status 2026-11-05:** `docs/HANDOVER.md` has the working order for these gaps. This file has no separate status
+  column, so status is recorded in the Planned fix column and in these notes.

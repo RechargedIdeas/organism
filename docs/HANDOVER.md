@@ -1,6 +1,6 @@
 # Handover: Organism (start here)
 
-Updated 2026-11-04. For the next agent or human taking over Organism. Keep this file public-safe: no secrets, no machine
+Updated 2026-11-05. For the next agent or human taking over Organism. Keep this file public-safe: no secrets, no machine
 paths, no usernames. Machine-specific state belongs in local notes, not here.
 
 ## What Organism is
@@ -13,24 +13,29 @@ of selected areas. `conformance/` holds the language-neutral vectors that tie th
 The main consumer is **KotMoE**, a separate private-to-public agent repository that depends on this SDK. Its Lightspeed
 model line is designed on this substrate. See the KotMoE pointers in section 7.
 
-## Current state (2026-11-04)
+## Current state (2026-11-05)
 
-- **Branch `feat/kotlin-parity`** (pushed to `origin`, the owner's private repository, at `0a84692`. The first push attempt
-  on 2026-11-04 was blocked, and the retry succeeded):
+- **Branch `feat/kotlin-parity`**. The last commit pushed to `origin` (the owner's private repository) is `0a84692`.
+  Everything after it is local only and not pushed: the K1b work, K2, K6, the merges and the fixes. Do not push without
+  the owner's go.
   - K0 done: Kotlin hypervector and degradation, conformant to the vectors.
-  - K1 partly done (commit `34c25a2`): contract validation, lifecycle ladder, synchronized registry, and vectors
-    `contract.json` and `lifecycle.json`. K1b is open (section 5).
-- **Branch `main`** has the v1.11 MoA layer (Phases 0 to 3, see `docs/v1.11/MOA_LAYER.md`) and the Windows fixes listed below.
-  **`feat/kotlin-parity` is 12 commits behind `main`. Nothing has been merged.** Merge or rebase before any PR. Expect
-  conflicts in `STATUS.md` and `CHANGELOG.md`.
-- **Test baseline on `feat/kotlin-parity` (Windows, Python 3.14 venv, after `pip install -e ".[dev,desktop]"` and
-  `make proto-python`):**
-  - Python, excluding `slow`, over `tests modules harness sdk/python/tests`: **273 passed, 3 skipped, 3 failed**.
-  - Desktop, `desktop/tests`, with `QT_QPA_PLATFORM=offscreen`: **96 passed, 2 failed**.
-  - Kotlin, `cd sdk/kotlin && ./gradlew test`: **6 passed**.
-  - The failures are all Windows-specific and all are fixed on `main`: four are the evolve wall-clock budget (250 ms
-    here, measured about 360 ms; `main` uses 2000 ms on Windows, 1000 ms elsewhere), and one is the POSIX executable-bit
-    test (`main` skips it on Windows).
+  - K1 partly done (`34c25a2`): contract validation, lifecycle ladder, synchronized registry, and vectors
+    `contract.json` and `lifecycle.json`.
+  - K1b partly done (`38d5fdd`): output forms, tool contract, human confirmation, model artifact, Ed25519 verify and
+    canonical JSON. Task 7 is open and deferred (section 5).
+  - K2 done (`c706613`, merged as `5a00291`): eligibility mask with typed exclusions, canonical `DispatchPlan` bytes,
+    policy digest and routing trace entries. Python and Kotlin, with `router.json`.
+  - K6 done (`0d38866`, merged as `931e72c`): shadow gate in `promote()` and `ShadowRunner`. Python and Kotlin, with
+    `shadow.json`. The section "Owner review after K2 and K6" lists what it raised.
+  - `cc543e4` fixes the lint and test expectations found after the merge.
+- **Branch `main`**: `feat/kotlin-parity` contains all of `main` (checked 2026-11-05). The earlier note "12 commits behind"
+  is out of date. Check again with `git rev-list --count main..feat/kotlin-parity` before any PR.
+- **Test baseline (2026-11-05, Windows):**
+  - Fast tier, `ci/run.py run --tier fast`: **76 passed, 0 blocking failures**. Of the 76 gates, 65 were cache hits and
+    11 ran fresh.
+  - Kotlin, `cd sdk/kotlin && ./gradlew cleanTest test`: **21 passed** in six classes (canonical and signature 4,
+    conformance 2, contract 5, router 5, shadow 2, tool and artifact 3).
+  - The full tier was not run in this pass. Run it before a PR.
 - **Private publish:** `./gradlew publish` in `sdk/kotlin` writes `sdk/kotlin/build/private-repo` by default. A shared
   private repository is set in the user's Gradle properties (`organismPrivateRepo`, `organismRepoUser`,
   `organismRepoToken`). Never put tokens in the repository.
@@ -47,6 +52,27 @@ model line is designed on this substrate. See the KotMoE pointers in section 7.
 Still open (see `docs/LIGHTSPEED_ON_ORGANISM.md` section 10): naming of `org.organism.sdk` imports in public code, the
 first confinement platform, shadow traffic defaults, evolution autonomy, the learned MoA backend (decision D1), and the
 provenance decision D4.
+
+## Owner review after K2 and K6 (open, 2026-11-05)
+
+These came out of the K2 and K6 work. Each is a choice for the owner to confirm or change. None blocks the branch.
+
+1. **The approver is checked only when keys are configured.** With no trust store (Python) or no approver keys (Kotlin),
+   a promotion's approver signature is not checked. The evidence gate still applies. Decide whether a gated promotion
+   must always carry a verified approver.
+2. **Generative runtime modules now stop at SANDBOXED.** Their synthetic shadow evidence is below the threshold, so
+   `test_v17_generative.py` and `desktop/tests/test_organism_evolution.py` now expect SANDBOXED, not EXPLORATION. Decide
+   whether generated modules should get real shadow evidence before any promotion.
+3. **The shadow thresholds are defaults, not measurements.** `ShadowThreshold(min_invocations=100, max_error_ratio=1.0)`
+   means the candidate's error may not exceed the incumbent's. Gap H3 (a measured quality record) is open, so these values
+   are not backed by data yet.
+4. **The promotion payload changed.** Shadow errors are integers in parts per million and latency is an integer in
+   microseconds, so the payload has no float text. Approver signatures made over the earlier payload no longer verify.
+   Any that exist must be re-made.
+5. **The `DispatchPlan` bytes leave out `plan_id`.** Two plans for the same decision therefore have the same bytes.
+   Confirm that is the identity you want.
+6. **K1b rules flagged for review.** The tool contract (A2) and the model-artifact manifest (A8) were written by the K1b
+   worker. The owner has not agreed their rules.
 
 ## Rules that still hold
 
@@ -84,7 +110,8 @@ Conformance vectors:
 .venv/Scripts/python.exe conformance/generate.py   # reference change only
 ```
 
-On Windows the generator writes CRLF. Git stores LF. Compare normalised content, not raw bytes.
+The generator writes LF on every host (K2). A working copy written before that can differ from git only in CRLF. Compare
+with `git diff --ignore-cr-at-eol`.
 
 Kotlin (needs JDK 17 as used here; the wrapper is Gradle 8.11.1; the Kotlin plugin is 1.9.22):
 
@@ -97,12 +124,12 @@ cd sdk/kotlin && ./gradlew publish     # to build/private-repo, unless organismP
 
 | Path | What it holds |
 |---|---|
-| `sdk/python/organism_sdk/contract.py`, `registry.py`, `router.py`, `degradation.py`, `workspace.py` | The reference: contracts, registry and ladder, router, degradation, workspace |
+| `sdk/python/organism_sdk/contract.py`, `registry.py`, `router.py`, `shadow_runner.py`, `signing.py`, `degradation.py`, `workspace.py` | The reference: contracts, registry and ladder, router, shadow runner and promotion payload, degradation, workspace |
 | `sdk/python/organism_sdk/moa/` | MoA layer (on `main` only): keyword experts, scorer, shadow gate, tiers, VSA aggregation |
 | `sdk/python/organism_sdk/sandbox/`, `generative/` | Native jail (rlimits, Linux namespaces) and the code, asset and skill pipelines |
-| `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | `Hypervector.kt`, `Degradation.kt`, `Json.kt` (parse only), `Contract.kt` (K1), `Registry.kt` (K1) |
-| `sdk/kotlin/src/test/kotlin/org/organism/sdk/` | `ConformanceTest.kt` (hypervector, degradation), `ContractConformanceTest.kt` (contract, lifecycle, queries) |
-| `conformance/generate.py`, `conformance/vectors/*.json` | The generator and the vectors (hypervector, degradation, contract, lifecycle) |
+| `sdk/kotlin/src/main/kotlin/org/organism/sdk/` | `Hypervector.kt`, `Degradation.kt`, `Json.kt` (`parse` and `parseExact`), `Canonical.kt` (C3), `Ed25519.kt` (A9), `Contract.kt` (K1), `Registry.kt` (K1, K6), `Routing.kt` (K2), `Shadow.kt` and `Signing.kt` (K6) |
+| `sdk/kotlin/src/test/kotlin/org/organism/sdk/` | `ConformanceTest.kt` (hypervector, degradation), `ContractConformanceTest.kt` (contract, lifecycle, queries, evidence gate), `RouterConformanceTest.kt`, `ShadowConformanceTest.kt`, `CanonicalSignatureConformanceTest.kt`, `ToolArtifactConformanceTest.kt` |
+| `conformance/generate.py`, `conformance/vectors/*.json` | The generator and the vectors (hypervector, degradation, contract, lifecycle, canonical, signature, tool, model artifact, router, shadow) |
 | `ci/gates.yaml` | The gate list. The only conformance gate is `conformance:kotlin` |
 | `docs/INTEROP.md` | Rules for vectors and ports, the areas table, and the running commands |
 | `docs/KOTLIN_PARITY_PLAN.md` | The K-phases (K0 to K8), the gaps G1 to G14, and the KotMoE integration table |
@@ -112,8 +139,8 @@ cd sdk/kotlin && ./gradlew publish     # to build/private-repo, unless organismP
 
 ## Deviations from the Python reference (K1)
 
-1. `promote()` does not check shadow evidence or an approver. The reference does not check them either. K6 has to add
-   the gate. Until then the registry does not enforce "never serve before shadow validation".
+1. Closed in K6: `promote()` checks shadow evidence for the gated states in both SDKs. The approver is checked when keys
+   are configured (owner review, item 1).
 2. An unknown module id is a `not_found` rejection in Kotlin. The reference raises `KeyError`.
 3. Promotion from or to a state outside the ladder (DEVELOPMENT, SELF_TERMINATING, SUCCEEDED, DEGRADED) is an
    `invalid_promotion` rejection in Kotlin. The reference raises `ValueError`. The vectors record the Python behaviour
@@ -126,26 +153,23 @@ rank for DEVELOPMENT equals EXPLORATION.
 
 ## Next steps, in order
 
-1. **Merge `main` into `feat/kotlin-parity`** (or rebase). That brings in the MoA layer and the Windows fixes. Resolve
-   `STATUS.md` and `CHANGELOG.md`. Run the tests again. This is the owner's call on merge versus rebase.
-2. **K1b:** the P0 items are done on this branch: output forms (A1), tool contract (A2), human confirmation (A3), model
-   artifact (A8), Ed25519 verify (A9), canonical JSON (C3). See `docs/INTEROP.md` for the rules and vectors. What is left
-   of K1b is item 7 below.
-3. **K2:** eligibility mask with typed exclusions, canonical `DispatchPlan` bytes, and a router policy artifact with a
-   digest. Python and Kotlin, with a `router.json` vector. This is the first stage on the Lightspeed path.
-4. **Persistence and traces:** a lifecycle stream on the op log with a digest chain (B2, C1), and a redaction hook in the
-   trace sink (C2).
-5. **K6:** shadow gate inside the registry's `promote` (B1). Learned experts must not be promoted before this exists.
-6. **CI:** a regenerate-and-diff check for the vectors (I5), and the planned `conformance:all` gate that `INTEROP.md`
+1. **K1b task 7**, deferred on 2026-11-05: health and drain in Kotlin (B6), calibration evidence (A5), a measured-metabolics
+   record (A6), and GPU and NPU hardware classes (A7). Start it when the owner says to.
+2. **K3:** hormone bus, autonomic, circadian, immune and interoception parity; plain-name modulators (E3); the level table
+   as data (E1). This is the next K-phase in `docs/KOTLIN_PARITY_PLAN.md`.
+3. **K4, persistence and traces:** a lifecycle stream on the op log with a digest chain (B2, C1), and a redaction hook in
+   the trace sink (C2).
+4. **CI:** a regenerate-and-diff check for the vectors (I5), and the planned `conformance:all` gate that `INTEROP.md`
    promises. Both change the pipeline, so they need the owner's go.
-7. **Health and drain** in Kotlin (B6), calibration evidence (A5), a measured-metabolics record (A6), and GPU and NPU
-   hardware classes (A7).
-8. **KotMoE integration** after K2. The KotMoE side is in the KotMoE repository's `docs/LIGHTSPEED.md`, stage B.
+5. **KotMoE integration after K2** (the `PlanningRouter` that wraps `Rama.decide`) is KotMoE's work, in the KotMoE
+   repository. Nothing in this repository changes for it.
 
 ## Gotchas
 
 - Python on Windows reads `;` as the path separator in `PYTHONPATH`.
-- The vector generator writes CRLF on Windows, and git stores LF.
+- The vector generator writes LF (K2). Working copies written before that can show as modified in CRLF only. Check with
+  `git diff --ignore-cr-at-eol`.
+- Two extra git worktrees hold the K2 and K6 branches (`k2-router`, `k6-shadow`). Remove them only with the owner's go-ahead.
 - `.venv/`, `build/`, `.gradle/`, `*.egg-info/` and the generated `_proto/` folder are gitignored. Regenerate `_proto/`
   after a fresh checkout.
 - `make` comes from the MSYS toolchain on this machine. Pass `PYTHON=` explicitly.

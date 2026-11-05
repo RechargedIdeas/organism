@@ -18,13 +18,14 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 3. **Wire formats are language neutral.** Messages use `proto/organism/v1` (gRPC) or the JSON forms in the vectors. Byte
    strings (hypervectors) are lower-case hex words, never language-native ints (64-bit safety).
 4. **Floats.** Vectors carry IEEE-754 doubles; ports must use the same operation order as the reference (the degradation
-   thresholds are written as `1.0 - ALPHA - delta`, not folded). Canonical byte output (plans, traces) will use the
-   reference's shortest round-trip float text; each SDK ships a formatter proven against the vectors.
-   The canonical JSON writer (gap C3) is done and uses no floats at all; see "Canonical JSON" below.
+   thresholds are written as `1.0 - ALPHA - delta`, not folded). Canonical byte output (plans, traces, promotion
+   payloads, shadow digests) uses the canonical JSON writer, which has no float text at all (gap C3; see "Canonical JSON"
+   below). Sums over floats use explicit loops in the same order in each SDK, because Python's `sum()` is compensated and
+   Kotlin's is not.
 5. **Randomness is not portable.** Vectors never depend on an RNG stream. Generators write explicit inputs.
    **Comparison rules (contract area):** the vectors compare severity, code and field path, in order. Messages are for
-   people and are not conformance. The generator writes text with the host's newline, so on Windows the files are CRLF
-   and git stores them as LF. Compare normalised content.
+   people and are not conformance. The generator writes LF on every host (K2). A working copy written before that can
+   differ only in CRLF; compare with `git diff --ignore-cr-at-eol`.
 6. **Time is injected.** Anything with hysteresis takes a virtual clock so vectors are deterministic.
 7. **Safety invariants are tested in every language**: bio actuation refused, `may_actuate=False` for synthesised modules,
    shield parameters unreachable, promote ladder order, fail-closed defaults.
@@ -42,10 +43,11 @@ reference (Python) ──generate──▶ conformance/vectors/*.json ◀──r
 | Ed25519 verification (A9) | `signature.json` (17 cases, RFC 8032 section 7.1 plus rejects) | reference (`signing.verify`, over OpenSSL) | **conformant** (`Ed25519.kt`, pure BigInteger, verify only) | none |
 | Tool contract (A2) | `tool.json` (24 cases) | reference (`ToolContract`) | **conformant** | none |
 | Model artifact manifest (A8) | `model_artifact.json` (22 cases) | reference (`model_artifact.py`) | **conformant** | none |
-| Router + canonical `DispatchPlan` bytes | planned `router.json` | reference | planned (K2) | partial |
+| Shadow evidence, promotion gate, approver payload (K6) | `shadow.json` (5 cases); `lifecycle.json` evidence cases (12), threshold and gated states | reference (`shadow_runner.py`, `registry.py`, `signing.py`) | **conformant** (`Shadow.kt`, `Signing.kt`, `Registry.kt`) | none |
+| Router: eligibility mask, `DispatchPlan` bytes, policy digest | `router.json` (8 eligibility, 8 exclusion codes, 2 plans, 4 policy, 2 traces) | reference (`router.py`) | **conformant** (K2, `Routing.kt`) | partial |
 | Workspace + ops log + snapshots | planned `workspace.json` | reference | planned (K4) | partial |
 | Hormone bus / autonomic / immune / circadian | planned | reference | planned (K3) | none |
-| Trace entries | planned `trace.json` | reference | planned (K2) | none |
+| Routing trace entries | in `router.json` (2 cases) | reference | **conformant** (K2, `Routing.kt`) | none |
 | Sandbox policy | planned `sandbox.json` | reference | planned (K5) | none |
 
 ## Canonical JSON
@@ -65,6 +67,8 @@ expected text with its UTF-8 bytes in hex, or an error code.
   `non_finite_number` (NaN and the infinities), `integer_out_of_range`, `invalid_string`.
 - The Kotlin `Json.parseExact` reads integer literals as `Long` (or `BigInteger`) and accepts `NaN`/`Infinity`, as
   Python's `json.loads` does, so the writer can reject them by code. The plain `Json.parse` is unchanged.
+- The routing plan and trace bytes (K2), the shadow evidence digest and the promotion payload (K6) are all written by this
+  writer.
 
 ## Ed25519 verification
 
@@ -72,6 +76,18 @@ expected text with its UTF-8 bytes in hex, or an error code.
 R must decode to curve points (y below 2^255 - 19), S must be below the group order (S + L is rejected), and the check is
 cofactorless. A wrong length or a bad point is `false`, never an exception. The Kotlin version is pure `BigInteger` because
 `java.security` has Ed25519 only from JDK 15 and the SDK targets JVM 11. It verifies only; signing stays in Python.
+
+## Promotion payload and shadow digest (K6)
+
+An approver signs the domain line `organism.registry.promote.v1` and a newline, followed by the canonical JSON of
+`{module_id, from_state, to_state, shadow}`. Each shadow record becomes `{invocations, incumbent_error_ppm,
+candidate_error_ppm, p95_latency_us, gates_passed, evidence_digest}`. Errors are scaled to integer parts per million and
+latency to integer microseconds, rounded half to even: Python's `round` and Kotlin's `Math.rint` agree on that rule. Any
+change to the evidence changes the bytes, so an approval cannot be reused with other evidence. Approver signatures made
+over the earlier payload no longer verify.
+
+The shadow evidence digest is the SHA-256 of the canonical JSON `{"version": 1, "rows": [...]}`. Each row is `[incumbent
+loss, candidate loss, candidate failed (0 or 1), candidate latency in microseconds]`. Losses are integers from 0 to 1000.
 
 ## Adding a language
 
