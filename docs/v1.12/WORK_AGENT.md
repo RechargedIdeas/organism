@@ -1,6 +1,6 @@
 # Work Agent Layer: Design Record (v1.12)
 
-**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W6 (reply channel, off by default), W7 (operator surface), W8 (Thread ownership routing) and W9 (signed Policy adoption) implemented in part, sections 10 to 13. W5 not started: it waits for Claude Code to be installed in the jail and its flags checked (W-D1a).
+**Status:** W0 accepted with the working defaults in section 1. W1 (pure domain), W2 (store and effects queue), W3 (GitHub source, read only) and W4 (Eval, rule assessment and shadow promotion) implemented. W5 (the Executor and the `work_executor` jail profile) implemented in part, section 10: the Ticket driver that calls it is not built. W6 (reply channel, off by default), W7 (operator surface), W8 (Thread ownership routing) and W9 (signed Policy adoption) implemented in part, sections 11 to 14.
 
 **Covers:** [docs/SUPERAGENT_COMPARISON.md](../SUPERAGENT_COMPARISON.md), the comparison with dsh-superagent and the build-out plan this record follows.
 
@@ -74,6 +74,7 @@ These come from the superagent's domain document and are kept as rules:
 | `routing.py` | `route`, `ThreadOwnershipError`: the open Ticket that owns a human message's Thread. Pure. |
 | `governance.py` | `adopt`, `affected_tickets`, `is_approved`, `policy_payload`, `PolicyRejected`: signed Policy adoption and the notices it queues. Pure apart from `adopt`, which writes through the store. |
 | `operator.py` | `status`, `tickets`, `attention`, `stop`, `pause`, `resume`, `retry`, `evaluate_triggers`: what the CLI and the `needs_you` panel both show and change. |
+| `executors/` | `ProcessExecutor`, `Slots`, `Execution`, `recover`, `containment_gap`: the Executor that runs the CLI for one Ticket, inside the jail (W5). An I/O adapter, so it lives in `executors/`. |
 | `channels/` | `GitHubChannel`, `ChannelGone`, `queue_reply`, `queue_next_reply`, `reply_handlers`: the reply channel. An I/O adapter, so it lives in `channels/`. |
 
 ## 6. W1 behaviour
@@ -191,11 +192,53 @@ A verdict is a person's `Verdict` on one Decision, stored with `WorkStore.label`
 
 ### Changes from W3
 
-- `Rule` gained `pattern` and `auto`, so every Policy with a rule has a new digest. The digest of the empty Policy is unchanged. No Mandate is stored yet, so no recorded version is affected. Section 16 applies from the first Mandate on.
+- `Rule` gained `pattern` and `auto`, so every Policy with a rule has a new digest. The digest of the empty Policy is unchanged. No Mandate is stored yet, so no recorded version is affected. Section 17 applies from the first Mandate on.
 - `may_accept_inferred` requires a graduated rule. Before W4, auto mode accepted any enabled matched rule.
 - The store is at schema 2. `triggers` records when each Trigger was received, `tickets` records its Thread, and `labels` is new. A schema 1 store is refused, as before.
 
-## 10. W6 behaviour
+## 10. W5 behaviour
+
+The Executor runs a coding-agent CLI for one Ticket, inside the jail. The CLI is Claude Code, in print mode, and its argv is a parameter, so no CLI is hard-coded in the executor. The flags were checked against Claude Code 2.1.318, installed on Windows and in WSL (W-D1a).
+
+### The profile
+
+`SandboxPolicy.work_executor()` allows thirty minutes of wall-clock time, a 4 GB address space, thirty CPU minutes, 256 descriptors and 128 processes. It passes exactly one variable from the environment, `ANTHROPIC_API_KEY`, by name. The jail builds the child's environment from that name and a short base list (`PATH`, `HOME`, the temporary-directory variables and similar), and nothing else is inherited. A stored variable passes too, because naming it is the decision to pass it.
+
+The profile's network allowlist names the CLI's API host and the forge's hosts. **The jail does not enforce it.** Enforcing an allowlist needs a network namespace and a proxy, and neither exists. Until one does, the CLI can reach any host the machine can reach.
+
+### The executor
+
+`ProcessExecutor` runs the argv for one Ticket. It refuses, and runs nothing, when:
+
+- the program is blocked: `sudo`, `su`, `doas`, `ssh`, `scp`, `sftp`, `nc`, `netcat` or `telnet`, under any path, with or without `.exe`;
+- the host has no Linux containment. Containment needs rlimits and namespaces, and Windows has neither in this jail;
+- the Ticket id is not a safe directory name;
+- none of the profile's variables is set. The message names the variable, and the value is never read.
+
+A run creates the Ticket's own directory under the root, runs the prepare argv first if there is one (ten-minute limit), then runs the CLI argv in that directory. Each refusal is a value in the `Execution`, so a caller records it rather than catching an exception. An `Execution`'s output comes from a program the agent does not trust, so a caller that records it treats it as data.
+
+### Worker slots
+
+`Slots` is D4. Ticket work may use every slot but one, so a person's message always finds a slot. A run waits five seconds for a slot, then is refused with `no worker slot is free`.
+
+### Recovery
+
+`recover(store)` runs after a restart. Each running Assignment ends, and one recovery note is queued per Ticket. `attention` shows the note, and nothing reruns. A retry starts a new Assignment in the same directory (D2), and that retry is not built.
+
+### Platforms
+
+| Host | linux | rlimits | unshare | Executor |
+|---|---|---|---|---|
+| Windows | no | no | no | refused |
+| WSL (Ubuntu 22.04) | yes | yes | yes | runs; the real-jail test passes |
+
+### Not built
+
+- The Ticket driver. No command or service takes a Mandate to a Ticket and calls the Executor, so nothing runs a CLI yet. This is the next step of W5.
+- The argv template in the deployment config. The executor takes its argv as a parameter, and the config reader is not written.
+- Network enforcement, described above.
+
+## 11. W6 behaviour
 
 ### The reply
 
@@ -209,7 +252,7 @@ A reply is a comment on the Issue or pull request of the Thread, named `github:o
 
 With `enabled=False`, `reply_handlers` returns no handler. The replies wait in the queue and nothing reaches GitHub. No command passes `enabled=True` yet. Turning external writes on is a separate, deliberate change.
 
-## 11. W7 behaviour
+## 12. W7 behaviour
 
 ### The CLI
 
@@ -221,6 +264,12 @@ The reads (`status`, `tickets`, `attention`) open the store read-only. They run 
 
 `stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. Nothing cancels a running process, because the Executor does not exist until W5. `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
 
+### Verdicts and adoption
+
+`organism work label DECISION agree|disagree` records a person's verdict on a Decision, and the latest verdict stands. An unknown Decision is an error.
+
+`organism work adopt POLICY.json --signature FILE --trust FILE` adopts a Policy. `POLICY.json` is the Policy as JSON. `FILE` for the signature holds the approver's signature in hex. `FILE` for the trust store is `{"authors": [...], "approvers": [...]}`, with each key in hex. A Policy is adopted only when an approver signed it. An author key does not count, and a rejected Policy changes nothing (section 14).
+
 ### The needs-you panel
 
 The `needs_you` panel sits beside Home and reads the store beside the writer. Its first line is the healthy state: `running` or `paused`, the open Tickets, how many need a person, and the policy version or `none`. Below it is one row for each item that needs a person: a Ticket waiting on one, a policy notice, a failing effect, or a failing source. With no store it says that nothing needs the person.
@@ -229,7 +278,7 @@ The `needs_you` panel sits beside Home and reads the store beside the writer. It
 
 `organism serve` answers `GET /work/status` with the same JSON as `organism work status`, read beside the writer. A missing store gives 404 with `no_work_store`. A store that SQLite cannot read gives 503 with `work_store_unreadable`.
 
-## 12. W8 behaviour
+## 13. W8 behaviour
 
 ### Thread ownership
 
@@ -239,7 +288,7 @@ A Ticket owns its Thread while it is open. `route` sends a human message on an o
 
 Nothing in the SDK calls `route` yet, so its result has no consumer until the Executor (W5) exists. Hand-back, release and pull-request following (D7 and D9) wait for shadow data, and are not built.
 
-## 13. W9 behaviour
+## 14. W9 behaviour
 
 ### Signed Policies
 
@@ -255,20 +304,21 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - Mandate revalidation after a notice.
 - The approver's key. This record generates no key and stores none. The approver keeps the private key outside the repo (W-D5).
 
-## 14. Not yet built
+## 15. Not yet built
 
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
-- Mandates from accepted Decisions, and the Executor: W5.
-- Stopping a running process. `stop` ends the Ticket and drops its waiting replies, but cannot cancel a process until the Executor exists (W5). `Outcome.STOP` is in the domain, but Eval does not produce it.
-- Labelling verdicts and adopting a Policy from the CLI. `WorkStore.label` and `governance.adopt` are the Python API only. Adoption needs an approver's signature (section 13), and a graduated Policy is adopted the same way.
-- Mandate revalidation and the instruction artifacts: W9, section 13.
-- Subscriptions, hand-back and release, and pull-request following: W8. `route` exists (section 12), but nothing calls it yet.
+- Mandates from accepted Decisions, and the Ticket driver that takes a Mandate to a Ticket and calls the Executor (section 10). The Executor exists; nothing calls it yet.
+- The network allowlist of the `work_executor` profile is recorded, not enforced (section 10).
+- Stopping a running process. `stop` ends the Ticket and drops its waiting replies, but cannot cancel a process until the Ticket driver calls the Executor (section 10). `Outcome.STOP` is in the domain, but Eval does not produce it.
+- Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
+- Mandate revalidation and the instruction artifacts: W9, section 14.
+- Subscriptions, hand-back and release, and pull-request following: W8. `route` exists (section 13), but nothing calls it yet.
 - Scope facts are fixed: `evaluate` treats every Trigger as listened and observed, in the row given by `--row`. Per-scope listening waits for configuration.
-- External writes: no command enables the reply channel (section 10).
+- External writes: no command enables the reply channel (section 11).
 - Context-only follows, which do not admit anything: W8.
 
-## 15. Gates
+## 16. Gates
 
 `work:domain` (fast tier) runs three files:
 
@@ -286,7 +336,10 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `desktop/tests/test_needs_you_panel.py` and `desktop/tests/test_nav.py` (`work:needs_you_panel`, offscreen): the panel's summary and rows, reading beside a writer, refresh, the missing-store message, and the fourteen panels in navigation order.
 - `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests.
 - `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, and the notices.
+- `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
+- `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.
+- `test_v112_work_executor.py` (`work:executor_fake`, fast tier): the refusals, the Ticket's own directory, prepare before run, the worker slots, recovery, and on Linux only, the real jail giving the child only `ANTHROPIC_API_KEY`.
 
-## 16. Changing this record
+## 17. Changing this record
 
 Changing the canonical form of the Policy digest changes the version of every Policy, and so the recorded version of every Mandate. Treat that as a breaking change to stored records. Make it only with a migration.

@@ -1,4 +1,5 @@
 """Sandbox policy — resource caps, network allowlist, escape denials."""
+
 from __future__ import annotations
 
 import os
@@ -34,6 +35,8 @@ class SandboxPolicy:
     workdir: str | None = None
     # Extra env cleared in child (security)
     scrub_env_prefixes: tuple[str, ...] = ("AWS_", "OPENAI_", "ORGANISM_LLM_API_KEY")
+    # When set, the child gets only these variables and a minimal base, and inherits nothing else
+    env_allowlist: tuple[str, ...] | None = None
     # Label for audit
     label: str = "default"
     # Self-sandbox: Organism wrapping its own workers
@@ -42,6 +45,8 @@ class SandboxPolicy:
     def as_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["scrub_env_prefixes"] = list(self.scrub_env_prefixes)
+        if self.env_allowlist is not None:
+            d["env_allowlist"] = list(self.env_allowlist)
         return d
 
     @classmethod
@@ -103,6 +108,29 @@ class SandboxPolicy:
             allow_network=False,
             label="self_containment",
             self_sandbox=True,
+        )
+
+    @classmethod
+    def work_executor(cls) -> SandboxPolicy:
+        """Policy for the coding-agent CLI that the work agent runs for a Ticket (v1.12 W5).
+
+        The network allowlist names the CLI's API host and the forge's hosts. The jail does not
+        enforce it yet: enforcing it needs a network namespace and a proxy, and neither exists.
+        The child gets only `ANTHROPIC_API_KEY` from the environment, by name.
+        """
+        return cls(
+            timeout_s=1800.0,
+            max_rss_mb=4096,
+            cpu_time_s=1800,
+            max_fds=256,
+            max_nproc=128,
+            network_allowlist=["api.anthropic.com", "api.github.com", "github.com"],
+            allow_network=True,
+            use_namespaces=True,
+            deny_shell_escape=True,
+            env_allowlist=("ANTHROPIC_API_KEY",),
+            label="work_executor",
+            self_sandbox=False,
         )
 
 

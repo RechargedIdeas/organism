@@ -373,7 +373,7 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
 
 
 def _cmd_work(args: argparse.Namespace) -> int:
-    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate (v1.12 W7)"""
+    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt"""
     from organism_sdk.work import operator
     from organism_sdk.work.store import WorkStore, default_store_path
 
@@ -402,6 +402,30 @@ def _cmd_work(args: argparse.Namespace) -> int:
             _print({"ok": True, "stopped": args.ticket})
         elif action == "retry":
             _print({"ok": True, "made_due": operator.retry(store, args.kind)})
+        elif action == "label":
+            from organism_sdk.work.domain import Verdict
+
+            try:
+                operator.label(store, args.decision, Verdict(args.verdict))
+            except KeyError:
+                _print({"ok": False, "error": f"no decision {args.decision}"})
+                return 1
+            _print({"ok": True, "decision": args.decision, "verdict": args.verdict})
+        elif action == "adopt":
+            from organism_sdk.signing import load_trust_store
+            from organism_sdk.work import codec
+            from organism_sdk.work.governance import PolicyRejected
+            from organism_sdk.work.policy import Policy
+
+            policy = codec.from_text(Policy, Path(args.policy_file).read_text(encoding="utf-8"))
+            signature = bytes.fromhex(Path(args.signature).read_text(encoding="utf-8").strip())
+            trust = load_trust_store(Path(args.trust))
+            try:
+                notified = operator.adopt(store, policy, signature=signature, trust=trust)
+            except PolicyRejected as error:
+                _print({"ok": False, "error": str(error)})
+                return 1
+            _print({"ok": True, "policy": policy.version, "notified": notified})
         else:
             try:
                 report = operator.evaluate_triggers(store, row=args.row)
@@ -561,6 +585,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_weval.add_argument("--row", default="repo", help="The admission row the Triggers arrived in")
     p_weval.set_defaults(func=_cmd_work)
+    p_wlabel = work_sub.add_parser(
+        "label", parents=[store_option], help="Record a verdict on a Decision: agree or disagree"
+    )
+    p_wlabel.add_argument("decision")
+    p_wlabel.add_argument("verdict", choices=["agree", "disagree"])
+    p_wlabel.set_defaults(func=_cmd_work)
+    p_wadopt = work_sub.add_parser(
+        "adopt", parents=[store_option], help="Adopt a Policy that an approver has signed"
+    )
+    p_wadopt.add_argument("policy_file", help="The Policy, as JSON")
+    p_wadopt.add_argument(
+        "--signature", required=True, help="File with the approver's signature, hex"
+    )
+    p_wadopt.add_argument(
+        "--trust", required=True, help="Trust store file: approver and author public keys, hex"
+    )
+    p_wadopt.set_defaults(func=_cmd_work)
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:

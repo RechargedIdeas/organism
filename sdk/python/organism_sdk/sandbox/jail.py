@@ -1,4 +1,5 @@
 """Process jail — rlimits + optional Linux namespaces; graceful degrade elsewhere."""
+
 from __future__ import annotations
 
 import logging
@@ -8,7 +9,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -180,6 +181,27 @@ def _plan_namespaces(policy: SandboxPolicy) -> tuple[int, list[str], list[str]]:
     return flags, attempted, degraded
 
 
+# What a child gets, with or without an allowlist, so programs find their tools and temp files.
+ENV_BASE = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE")
+
+
+def allowlisted_env(
+    names: Sequence[str],
+    *,
+    extra: dict[str, str] | None = None,
+    source: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """A child environment with the base variables and the named ones, and nothing else inherited.
+
+    A named variable passes even when the store holds it: the allowlist is the decision to pass it.
+    """
+    keep = set(ENV_BASE) | set(names)
+    child_env = {k: v for k, v in (os.environ if source is None else source).items() if k in keep}
+    if extra:
+        child_env.update(extra)
+    return child_env
+
+
 class ProcessJail:
     """Run an argv under SandboxPolicy containment."""
 
@@ -200,14 +222,17 @@ class ProcessJail:
         except JailRefused as e:
             return JailResult(ok=False, refused=str(e), exit_code=None)
 
-        child_env = dict(os.environ)
-        if env:
-            child_env.update(env)
-        for prefix in self.policy.scrub_env_prefixes:
-            for k in list(child_env):
-                if k.startswith(prefix) or k == prefix.rstrip("_"):
-                    child_env.pop(k, None)
-        child_env = without_stored(child_env)
+        if self.policy.env_allowlist is not None:
+            child_env = allowlisted_env(self.policy.env_allowlist, extra=env)
+        else:
+            child_env = dict(os.environ)
+            if env:
+                child_env.update(env)
+            for prefix in self.policy.scrub_env_prefixes:
+                for k in list(child_env):
+                    if k.startswith(prefix) or k == prefix.rstrip("_"):
+                        child_env.pop(k, None)
+            child_env = without_stored(child_env)
         child_env["ORGANISM_IN_JAIL"] = "1"
         child_env["ORGANISM_JAIL_LABEL"] = self.policy.label
 

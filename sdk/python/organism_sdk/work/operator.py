@@ -11,10 +11,15 @@ from collections import Counter
 from dataclasses import replace
 from typing import Any
 
+from organism_sdk.signing import TrustStore
+from organism_sdk.work import governance
 from organism_sdk.work.assess import RuleAssessor
 from organism_sdk.work.channels.replies import REPLY
+from organism_sdk.work.domain import Verdict
+from organism_sdk.work.executors.process import RECOVERY
 from organism_sdk.work.gate import ScopeFacts
 from organism_sdk.work.governance import NOTICE
+from organism_sdk.work.policy import Policy
 from organism_sdk.work.runner import EvalReport, evaluate
 from organism_sdk.work.stage import Stage, stage_of
 from organism_sdk.work.store import ReceiptStatus, WorkStore
@@ -76,6 +81,14 @@ def attention(store: WorkStore) -> list[dict[str, Any]]:
                     "detail": f"policy changed to {effect.payload.get('policy')}",
                 }
             )
+        elif effect.kind == RECOVERY:
+            items.append(
+                {
+                    "kind": "recovery",
+                    "id": effect.key,
+                    "detail": "a run was interrupted by a restart; review its directory",
+                }
+            )
         elif effect.last_error is not None:
             items.append(
                 {"kind": "effect", "id": f"{effect.kind}:{effect.key}", "detail": effect.last_error}
@@ -113,6 +126,20 @@ def resume(store: WorkStore) -> None:
 def retry(store: WorkStore, kind: str | None = None) -> int:
     """Make the waiting effects due now, all of them or one kind. Returns how many."""
     return store.retry_effects(kind)
+
+
+def label(store: WorkStore, decision_id: str, verdict: Verdict) -> None:
+    """Record a person's verdict on a Decision. The latest verdict stands. An unknown Decision
+    raises KeyError."""
+    store.label(decision_id, verdict)
+
+
+def adopt(store: WorkStore, policy: Policy, *, signature: bytes, trust: TrustStore) -> list[str]:
+    """Adopt an approver-signed Policy, and return the ids of the Tickets it notified.
+
+    Raises PolicyRejected, and stores nothing, when no approver in `trust` signed the Policy.
+    """
+    return governance.adopt(store, policy, signature=signature, trust=trust)
 
 
 def evaluate_triggers(store: WorkStore, *, row: str) -> EvalReport:

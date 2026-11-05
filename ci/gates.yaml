@@ -324,7 +324,7 @@ gates:
   # The operator's surface (v1.12 W7): the view, the changes it may make, and the CLI over both.
   - id: work:operator
     tier: fast
-    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_operator.py"
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_operator.py sdk/python/tests/test_v112_work_adopt.py"
 
   # The needs-you panel (v1.12 W7), offscreen, beside the navigation test it extends.
   - id: work:needs_you_panel
@@ -336,6 +336,17 @@ gates:
   - id: env:store_and_panel
     tier: fast
     command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_envstore.py desktop/tests/test_envvars_panel.py desktop/tests/test_nav.py"
+
+  # The work_executor profile and its environment allowlist (v1.12 W5). Pure: runs on any host.
+  - id: work:jail_profile
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_jail_profile.py"
+
+  # The Executor (v1.12 W5): refusals, the Ticket's directory, slots, recovery, and on Linux the
+  # real jail giving the child only the allowed variable.
+  - id: work:executor_fake
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_executor.py"
 
   # The status route of serve (v1.12 W7): answers beside the writer, and 404s without a store.
   - id: work:serve_status
