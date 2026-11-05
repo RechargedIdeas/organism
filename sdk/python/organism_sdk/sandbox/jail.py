@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from organism_sdk.envstore import without_stored
 from organism_sdk.sandbox.egress import Allow, EgressProxy
@@ -126,6 +126,11 @@ SIOCSIFFLAGS = 0x8914
 IFF_UP = 0x1
 IFREQ = "16sh14x"  # struct ifreq: the interface name, then the flags
 
+# A child that fails its own setup exits before exec, with this code, and writes the marker and the
+# reason to its stderr. Nothing else of the child's is written first, so the marker starts stderr.
+SETUP_FAILED_EXIT = 71  # EX_OSERR, from sysexits.h
+SETUP_MARKER = "organism jail: setup failed: "
+
 
 def _bring_up_loopback() -> None:
     """Set loopback up in a new network namespace, where it starts down.
@@ -147,25 +152,49 @@ def _bring_up_loopback() -> None:
         sock.close()
 
 
+def _setup_failed(what: str, detail: str) -> NoReturn:
+    """Exit the forked child before exec, and say why on its stderr. Raising here would reach the
+    parent only as "Exception occurred in preexec_fn", which does not say what failed."""
+    reason = f"{what}: {detail}" if detail else what
+    with contextlib.suppress(OSError):
+        os.write(2, f"{SETUP_MARKER}{reason}\n".encode())
+    os._exit(SETUP_FAILED_EXIT)
+
+
+def _setup_refusal(code: int | None, stderr: str) -> str | None:
+    """The reason a child gave for failing its own setup, or None. The exit code and the marker must
+    both match, so a program that prints the marker by chance is not taken for a setup failure."""
+    if code != SETUP_FAILED_EXIT or not stderr.startswith(SETUP_MARKER):
+        return None
+    return stderr.split("\n", 1)[0][len(SETUP_MARKER) :]
+
+
 def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
     # Runs in the forked child before exec. Logging there can deadlock on a lock another
     # thread held at fork time, so a limit that cannot be applied is skipped silently.
     # Enforcement is the exception: a child that could not get its own namespace must not run,
-    # so the error is raised, and the spawn fails and is reported.
+    # so it exits before exec with the reason on stderr, and the parent reports that reason.
     def _preexec() -> None:
         if ns_flags and sys.platform.startswith("linux"):
             unshared = False
+            detail = ""
             try:
                 import ctypes
 
                 libc = ctypes.CDLL("libc.so.6", use_errno=True)
                 unshared = libc.unshare(ns_flags) == 0
-            except Exception:  # noqa: BLE001, S110
-                pass
+                err = ctypes.get_errno()
+                if not unshared and err:
+                    detail = os.strerror(err)
+            except Exception as error:  # noqa: BLE001
+                detail = str(error)
             if policy.enforce_network:
                 if not unshared:
-                    raise OSError("the network namespace could not be made")
-                _bring_up_loopback()
+                    _setup_failed("the network namespace could not be made", detail)
+                try:
+                    _bring_up_loopback()
+                except OSError as error:
+                    _setup_failed("loopback could not be brought up", str(error))
         if not has_resource_module():
             return
         import resource
@@ -470,6 +499,7 @@ class ProcessJail:
         return JailResult(
             ok=ok,
             exit_code=code,
+            refused=_setup_refusal(code, stderr),
             stdout=(stdout_b or b"").decode("utf-8", errors="replace"),
             stderr=stderr,
             timed_out=timed_out,

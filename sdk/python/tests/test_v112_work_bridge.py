@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from organism_sdk.sandbox import egress_bridge
 from organism_sdk.sandbox.egress import Allow
-from organism_sdk.sandbox.jail import ProcessJail
+from organism_sdk.sandbox.jail import SETUP_FAILED_EXIT, ProcessJail
 from organism_sdk.sandbox.policy import SandboxPolicy
 from organism_sdk.work.executors.process import ProcessExecutor, Slots
 
@@ -206,7 +206,35 @@ def test_a_child_whose_namespace_cannot_be_made_does_not_run(
         [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
     )
     assert result.ok is False
-    assert "spawn_failed" in result.stderr
+    assert result.exit_code == SETUP_FAILED_EXIT
+    assert (result.refused or "").startswith("the network namespace could not be made")
+    assert "organism jail: setup failed" in result.stderr
+    assert not marker.exists()
+
+
+@LINUX
+def test_a_child_whose_loopback_cannot_come_up_says_why_and_does_not_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import fcntl  # Linux only, as the jail imports it
+
+    # This branch needs the namespace to exist, so a host that cannot make one skips here.
+    probe = ProcessJail(_enforced()).run([sys.executable, "-c", "pass"])
+    if not probe.ok:
+        pytest.skip(f"this host cannot run an enforced child: {probe.refused or probe.stderr}")
+
+    def refuse(*_: object) -> int:
+        raise OSError(1, "Operation not permitted")
+
+    # The forked child inherits the patched ioctl, which _bring_up_loopback calls before exec.
+    monkeypatch.setattr(fcntl, "ioctl", refuse)
+    marker = tmp_path / "ran"
+    result = ProcessJail(_enforced()).run(
+        [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"]
+    )
+    assert result.ok is False
+    assert result.refused == "loopback could not be brought up: [Errno 1] Operation not permitted"
+    assert result.exit_code == SETUP_FAILED_EXIT
     assert not marker.exists()
 
 
@@ -275,3 +303,17 @@ def test_a_command_killed_by_a_signal_reports_128_plus_the_signal() -> None:
         ]
     )
     assert status == 128 + 9
+
+
+@LINUX
+def test_the_executor_reports_the_setup_reason_as_its_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_cdll = ctypes.CDLL
+    monkeypatch.setattr(ctypes, "CDLL", lambda *a, **k: _NoUnshare(real_cdll(*a, **k)))
+    executor = ProcessExecutor(
+        tmp_path, argv=[sys.executable, "-c", "pass"], slots=Slots(2), policy=_enforced()
+    )
+    execution = executor.run("ticket-setup")
+    assert execution.ok is False
+    assert (execution.refused or "").startswith("the network namespace could not be made")
