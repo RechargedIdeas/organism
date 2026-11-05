@@ -6,19 +6,36 @@ Deterministic given identical inputs (C.4 invariant 8).
 from __future__ import annotations
 
 import hashlib
-import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 from uuid import uuid4
 
 from organism_sdk.autonomic import RouterExposedParams
+from organism_sdk.canonical import canonical_bytes
 from organism_sdk.hormone import HormoneBus, HormoneReading
 from organism_sdk.registry import ModuleHandle, RegistryClient
 from organism_sdk.trace import RoutingTraceEntry, TraceEmitter
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanType = Literal["DispatchPlan", "DegradedDispatchPlan"]
+
+# Typed exclusions (gap D1). The codes are part of the contract: the Kotlin port and router.json use the same set.
+ExclusionCode = Literal[
+    "role_mismatch",
+    "level_ineligible",
+    "tier_ineligible",
+    "critical_forbids_learned",
+    "l4_deterministic_only",
+    "health_failed",
+    "hardware_capability_missing",
+    "interpretability_required",
+]
+EXCLUSION_CODES: tuple[str, ...] = get_args(ExclusionCode)
+
+BOOTSTRAP_POLICY_ID = "organism.router.bootstrap"
+BOOTSTRAP_POLICY_VERSION = "0.1.0"
 
 # Default form → roles (C.3 Step 1)
 DEFAULT_FORM_TO_ROLES: dict[str, tuple[str, ...]] = {
@@ -117,12 +134,22 @@ class RouterPolicyArtifact:
         default_factory=lambda: dict(DEFAULT_FORM_TO_ROLES)
     )
 
+    def digest_matches(self) -> bool:
+        """True when ``digest`` is the digest of this policy's content (see ``compute_policy_digest``)."""
+        return self.digest == compute_policy_digest(self.policy_id, self.version, self.form_to_roles)
+
 
 @dataclass
 class Excluded:
+    """One module the router did not consider, with a code from the closed set ``EXCLUSION_CODES``."""
+
     module_id: str
-    reason_code: str
+    reason_code: ExclusionCode
     reason_params: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.reason_code not in EXCLUSION_CODES:
+            raise ValueError(f"unknown exclusion code: {self.reason_code!r}")
 
 
 @dataclass
@@ -146,7 +173,8 @@ class DispatchPlan:
     candidate_roles: list[str] = field(default_factory=list)
 
     def to_canonical_bytes(self) -> bytes:
-        """Byte-stable serialization for determinism tests (excludes plan_id randomness if fixed)."""
+        """Canonical JSON of the plan (``canonical.py``, gap C3). plan_id is left out, so the bytes are
+        stable across runs. The Kotlin port must produce the same bytes (``router.json``)."""
         body = {
             "task_id": self.task_id,
             "policy_id": self.policy_id,
@@ -155,9 +183,12 @@ class DispatchPlan:
             "plan_type": self.plan_type,
             "primary": None if self.primary is None else self.primary.module_id,
             "fallbacks": [f.module_id for f in self.fallbacks],
-            "constraints_applied": self.constraints_applied,
-            "excluded": [(e.module_id, e.reason_code) for e in self.excluded],
-            "ranking_trace": self.ranking_trace,
+            "constraints_applied": list(self.constraints_applied),
+            "excluded": [
+                {"module_id": e.module_id, "reason_code": e.reason_code, "reason_params": dict(e.reason_params)}
+                for e in self.excluded
+            ],
+            "ranking_trace": list(self.ranking_trace),
             "cross_check_required": self.cross_check_required,
             "cross_check_module": None
             if self.cross_check_module is None
@@ -165,19 +196,118 @@ class DispatchPlan:
             "justification_required": self.justification_required,
             "disposition": self.disposition,
             "hold_reason": self.hold_reason,
-            "candidate_roles": self.candidate_roles,
+            "candidate_roles": list(self.candidate_roles),
         }
-        return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+        return canonical_bytes(body)
+
+
+def compute_policy_digest(
+    policy_id: str, version: str, form_to_roles: Mapping[str, Sequence[str]]
+) -> bytes:
+    """SHA-256 of the canonical JSON of the policy content (gap D2). It changes when the id, the version or any
+    form mapping changes, so a plan can name the exact policy it was made with."""
+    body = {
+        "policy_id": policy_id,
+        "version": version,
+        "form_to_roles": {form: list(roles) for form, roles in form_to_roles.items()},
+    }
+    return hashlib.sha256(canonical_bytes(body)).digest()
 
 
 def default_bootstrap_policy() -> RouterPolicyArtifact:
-    body = json.dumps({"form_to_roles": DEFAULT_FORM_TO_ROLES}, sort_keys=True).encode()
     return RouterPolicyArtifact(
-        policy_id="organism.router.bootstrap",
-        version="0.1.0",
-        digest=hashlib.sha256(body).digest(),
+        policy_id=BOOTSTRAP_POLICY_ID,
+        version=BOOTSTRAP_POLICY_VERSION,
+        digest=compute_policy_digest(BOOTSTRAP_POLICY_ID, BOOTSTRAP_POLICY_VERSION, DEFAULT_FORM_TO_ROLES),
         lifecycle_state="DELIBERATION",
     )
+
+
+@dataclass(frozen=True)
+class Eligibility:
+    """The eligibility mask for one task: modules that may be ranked, and a typed exclusion for each one that may not.
+    Both tuples keep registry order."""
+
+    eligible: tuple[ModuleHandle, ...]
+    excluded: tuple[Excluded, ...]
+
+
+def eligibility(
+    handles: Sequence[ModuleHandle],
+    *,
+    roles: Sequence[str],
+    task: RouterTask,
+    level: Level,
+    health: Mapping[str, str],
+    available_hardware: set[str],
+) -> Eligibility:
+    """Filter ``handles`` for one task (C.3 steps 1 and 2, C.4.4). The checks run in a fixed order and the first one a
+    module fails gives its exclusion code, so each module has at most one exclusion. Pure: no registry, trace or
+    clock, so the Kotlin port can be checked against the same vectors."""
+    eligible_roles, _ = LEVEL_ELIGIBILITY[level]
+    allowed_tiers = TIER_ELIGIBILITY.get(task.safety_tier, set())
+    # Correction 1.1: control_actuation at high/critical prefers T0 GOVERNANCE/ACTUATOR
+    if task.form == "control_actuation":
+        allowed_tiers = {"T0_DETERMINISTIC", "T1_CALIBRATED_NONLEARNED"}
+    eligible: list[ModuleHandle] = []
+    excluded: list[Excluded] = []
+    for h in handles:
+        role = h.role.value if hasattr(h.role, "value") else str(h.role)
+        tier = h.tier.value if hasattr(h.tier, "value") else str(h.tier)
+        if role not in roles:
+            excluded.append(Excluded(h.module_id, "role_mismatch", {"role": role}))
+            continue
+        if role not in eligible_roles:
+            excluded.append(Excluded(h.module_id, "level_ineligible", {"level": level}))
+            continue
+        if tier not in allowed_tiers:
+            excluded.append(Excluded(h.module_id, "tier_ineligible", {"tier": tier}))
+            continue
+        # C.4.4: critical never to T2/T3
+        if task.safety_tier == "critical" and tier in ("T2_LEARNED_CALIBRATED", "T3_LEARNED_UNCALIBRATED"):
+            excluded.append(Excluded(h.module_id, "critical_forbids_learned", {}))
+            continue
+        # L4: deterministic engine only (module_id check)
+        if level == "L4" and h.module_id != "deterministic_engine":
+            excluded.append(Excluded(h.module_id, "l4_deterministic_only", {}))
+            continue
+        if health.get(h.module_id, "HEALTHY") == "FAILED":
+            excluded.append(Excluded(h.module_id, "health_failed", {}))
+            continue
+        hw = getattr(h, "hardware_requirement", "NONE") or "NONE"
+        if hw != "NONE" and hw not in available_hardware:
+            excluded.append(
+                Excluded(
+                    h.module_id,
+                    "hardware_capability_missing",
+                    {"required": hw, "available": ",".join(sorted(available_hardware))},
+                )
+            )
+            continue
+        # interpretability: require T0/T1 if requested (correction 1.3)
+        if task.requires_interpretability and tier in ("T2_LEARNED_CALIBRATED", "T3_LEARNED_UNCALIBRATED"):
+            excluded.append(Excluded(h.module_id, "interpretability_required", {}))
+            continue
+        eligible.append(h)
+    return Eligibility(tuple(eligible), tuple(excluded))
+
+
+def canonical_routing_entry(entry: RoutingTraceEntry) -> bytes:
+    """Canonical JSON of the identity of one routing trace entry: which task, which form, which policy and level, the
+    primary, the hold reason and the exclusion codes. Floats in ``rationale`` (hormone levels, autonomic values) are
+    left out, so the bytes have no float text to agree on."""
+    body = {
+        "task_id": entry.task_id,
+        "form": entry.form,
+        "plan_type": entry.plan_type,
+        "primary_module_id": entry.primary_module_id,
+        "policy_id": entry.policy_id,
+        "policy_digest": None if entry.policy_digest is None else entry.policy_digest.hex(),
+        "level": entry.level,
+        "hold_reason": entry.rationale.get("hold_reason"),
+        "excluded": list(entry.rationale.get("excluded", [])),
+    }
+    return canonical_bytes(body)
 
 
 class Router:
@@ -258,6 +388,9 @@ class Router:
 
         if self._policy.lifecycle_state != "DELIBERATION":
             return self._hold(task, "policy_not_deliberation", [])
+        # Gap D2: a policy whose content does not match its digest is not evaluated.
+        if not self._policy.digest_matches():
+            return self._hold(task, "policy_digest_mismatch", [])
 
         hormone_reading: HormoneReading | None = None
         if self._hormone_bus is not None:
@@ -269,7 +402,7 @@ class Router:
             return self._hold(task, "unknown_form", [])
 
         # Step 3 plan type
-        eligible_roles, plan_type = LEVEL_ELIGIBILITY[self._level]
+        _, plan_type = LEVEL_ELIGIBILITY[self._level]
         constraints = [f"level:{self._level}", f"form:{task.form}", f"safety:{task.safety_tier}"]
 
         # Gather modules
@@ -278,62 +411,16 @@ class Router:
                 min_lifecycle_state="DELIBERATION"
             )
         )
-        excluded: list[Excluded] = []
-        candidates: list[ModuleHandle] = []
-
-        allowed_tiers = TIER_ELIGIBILITY.get(task.safety_tier, set())
-        # Correction 1.1: control_actuation at high/critical prefers T0 GOVERNANCE/ACTUATOR
-        if task.form == "control_actuation":
-            allowed_tiers = {"T0_DETERMINISTIC", "T1_CALIBRATED_NONLEARNED"}
-
-        for h in all_handles:
-            role = h.role.value if hasattr(h.role, "value") else str(h.role)
-            tier = h.tier.value if hasattr(h.tier, "value") else str(h.tier)
-            if role not in roles:
-                excluded.append(Excluded(h.module_id, "role_mismatch", {"role": role}))
-                continue
-            if role not in eligible_roles:
-                excluded.append(Excluded(h.module_id, "level_ineligible", {"level": self._level}))
-                continue
-            if tier not in allowed_tiers:
-                excluded.append(Excluded(h.module_id, "tier_ineligible", {"tier": tier}))
-                continue
-            # C.4.4: critical never to T2/T3
-            if task.safety_tier == "critical" and tier in (
-                "T2_LEARNED_CALIBRATED",
-                "T3_LEARNED_UNCALIBRATED",
-            ):
-                excluded.append(Excluded(h.module_id, "critical_forbids_learned", {}))
-                continue
-            # L4: deterministic engine only (module_id check)
-            if self._level == "L4" and h.module_id != "deterministic_engine":
-                excluded.append(Excluded(h.module_id, "l4_deterministic_only", {}))
-                continue
-            hs = self._health.get(h.module_id, "HEALTHY")
-            if hs == "FAILED":
-                excluded.append(Excluded(h.module_id, "health_failed", {}))
-                continue
-            hw = getattr(h, "hardware_requirement", "NONE") or "NONE"
-            if hw != "NONE" and hw not in self._available_hardware:
-                excluded.append(
-                    Excluded(
-                        h.module_id,
-                        "hardware_capability_missing",
-                        {
-                            "required": hw,
-                            "available": ",".join(sorted(self._available_hardware)),
-                        },
-                    )
-                )
-                continue
-            # interpretability: require T0/T1 if requested (correction 1.3)
-            if task.requires_interpretability and tier in (
-                "T2_LEARNED_CALIBRATED",
-                "T3_LEARNED_UNCALIBRATED",
-            ):
-                excluded.append(Excluded(h.module_id, "interpretability_required", {}))
-                continue
-            candidates.append(h)
+        mask = eligibility(
+            all_handles,
+            roles=roles,
+            task=task,
+            level=self._level,
+            health=self._health,
+            available_hardware=self._available_hardware,
+        )
+        excluded: list[Excluded] = list(mask.excluded)
+        candidates: list[ModuleHandle] = list(mask.eligible)
 
         # Step 5 re-rank
         ranking_trace: list[str] = []
@@ -440,6 +527,9 @@ class Router:
                 plan_type=plan_type,
                 primary_module_id=primary.module_id,
                 rationale=rationale,
+                policy_id=self._policy.policy_id,
+                policy_digest=self._policy.digest,
+                level=self._level,
             )
         )
         return plan
@@ -481,7 +571,13 @@ class Router:
                 form=task.form,
                 plan_type="DegradedDispatchPlan",
                 primary_module_id="",
-                rationale={"hold_reason": reason},
+                rationale={
+                    "hold_reason": reason,
+                    "excluded": [e.reason_code for e in excluded],
+                },
+                policy_id=self._policy.policy_id,
+                policy_digest=self._policy.digest,
+                level=self._level,
             )
         )
         return plan

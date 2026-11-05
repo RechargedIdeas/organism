@@ -50,8 +50,19 @@ from organism_sdk.contract import (
 from organism_sdk.degradation import DegradationMachine, HealthSignals
 from organism_sdk.hypervector import DIM, WORD_COUNT, Hypervector
 from organism_sdk.model_artifact import ModelArtifact
-from organism_sdk.registry import CapabilityFilter, LifecycleState, RegistryClient
+from organism_sdk.registry import CapabilityFilter, LifecycleState, ModuleHandle, RegistryClient
+from organism_sdk.router import (
+    DEFAULT_FORM_TO_ROLES,
+    EXCLUSION_CODES,
+    DispatchPlan,
+    Excluded,
+    RouterTask,
+    canonical_routing_entry,
+    default_bootstrap_policy,
+    eligibility,
+)
 from organism_sdk.signing import verify as ed25519_verify
+from organism_sdk.trace import RoutingTraceEntry
 
 OUT = Path(__file__).parent / "vectors"
 SCHEMA = 1
@@ -584,13 +595,153 @@ def model_artifact_vectors() -> dict:
     return {"schema": SCHEMA, "cases": cases}
 
 
+def _route_case(name: str, form: str, tier: str, level: str, modules: list, *, health: dict | None = None,
+                hardware: tuple = ("NONE",), interpretability: bool = False) -> dict:
+    """One eligibility mask (K2, gap D1). ``modules`` are (id, role, tier, hardware) tuples."""
+    handles = [ModuleHandle(module_id=mid, version="1.0.0", role=role, tier=t, state="DELIBERATION",
+                            contract_digest=b"\x00" * 32, hardware_requirement=hw)
+               for mid, role, t, hw in modules]
+    task = RouterTask(task_id="vector", form=form, safety_tier=tier, requires_interpretability=interpretability)
+    mask = eligibility(handles, roles=list(DEFAULT_FORM_TO_ROLES.get(form, ())), task=task, level=level,
+                       health=health or {}, available_hardware=set(hardware))
+    return {
+        "name": name, "form": form, "safety_tier": tier, "level": level,
+        "requires_interpretability": interpretability, "health": health or {},
+        "available_hardware": sorted(hardware),
+        "modules": [{"module_id": mid, "role": role, "tier": t, "hardware": hw} for mid, role, t, hw in modules],
+        "eligible": [h.module_id for h in mask.eligible],
+        "excluded": [{"module_id": e.module_id, "reason_code": e.reason_code, "reason_params": dict(e.reason_params)}
+                     for e in mask.excluded],
+    }
+
+
+def _dispatch(*, primary: str | None, fallbacks: list[str], excluded: list[Excluded], roles: list[str],
+              constraints: list[str], ranking: list[str], plan_type: str = "DispatchPlan",
+              disposition: str = "DISPATCH", hold_reason: str | None = None,
+              cross_check_required: bool = False) -> DispatchPlan:
+    policy = default_bootstrap_policy()
+
+    def handle(mid: str) -> ModuleHandle:
+        return ModuleHandle(module_id=mid, version="1.0.0", role="SOLVER", tier="T0_DETERMINISTIC",
+                            state="DELIBERATION", contract_digest=b"\x00" * 32)
+
+    return DispatchPlan(
+        plan_id="fixed-plan-id", task_id="vector-plan", policy_id=policy.policy_id, policy_digest=policy.digest,
+        level="L0", plan_type=plan_type, primary=handle(primary) if primary else None,
+        fallbacks=[handle(f) for f in fallbacks], constraints_applied=constraints, excluded=excluded,
+        ranking_trace=ranking, cross_check_required=cross_check_required, cross_check_module=None,
+        justification_required="NONE", disposition=disposition, hold_reason=hold_reason, candidate_roles=roles,
+    )
+
+
+def _trace_case(name: str, *, plan_type: str, primary_module_id: str, hold_reason: str | None,
+                excluded_codes: list[str]) -> dict:
+    """One routing trace entry's canonical identity (K2). The Kotlin port rebuilds the entry from ``entry``."""
+    policy = default_bootstrap_policy()
+    rationale: dict = {"excluded": list(excluded_codes)}
+    if hold_reason is not None:
+        rationale["hold_reason"] = hold_reason
+    entry = RoutingTraceEntry(task_id="vector-trace", form="pattern_recognition", plan_type=plan_type,
+                              primary_module_id=primary_module_id, rationale=rationale, policy_id=policy.policy_id,
+                              policy_digest=policy.digest, level="L0")
+    return {
+        "name": name,
+        "entry": {"task_id": entry.task_id, "form": entry.form, "plan_type": plan_type,
+                  "primary_module_id": primary_module_id, "policy_id": policy.policy_id,
+                  "policy_digest": policy.digest.hex(), "level": "L0", "hold_reason": hold_reason,
+                  "excluded": list(excluded_codes)},
+        "canonical": canonical_routing_entry(entry).decode("utf-8"),
+    }
+
+
+def router_vectors() -> dict:
+    """Eligibility masks, DispatchPlan canonical bytes, trace identity and the policy digest (K2, gaps D1 and D2)."""
+    policy = default_bootstrap_policy()
+    eligibility_cases = [
+        _route_case("pattern_mixed", "pattern_recognition", "medium", "L0", [
+            ("ok_perception", "PERCEPTION", "T0_DETERMINISTIC", "NONE"),
+            ("learned_prediction", "PREDICTION", "T3_LEARNED_UNCALIBRATED", "NONE"),
+            ("solver_wrong_role", "SOLVER", "T0_DETERMINISTIC", "NONE"),
+            ("failed_perception", "PERCEPTION", "T0_DETERMINISTIC", "NONE"),
+        ], health={"failed_perception": "FAILED"}),
+        _route_case("symbolic_l3", "symbolic_reasoning", "medium", "L3", [
+            ("memory", "MEMORY", "T0_DETERMINISTIC", "NONE"),
+            ("governance", "GOVERNANCE", "T1_CALIBRATED_NONLEARNED", "NONE"),
+            ("verifier", "VERIFIER", "T0_DETERMINISTIC", "NONE"),
+        ]),
+        _route_case("causal_critical", "causal_inference", "critical", "L0", [
+            ("verifier_t0", "VERIFIER", "T0_DETERMINISTIC", "NONE"),
+            ("verifier_t2", "VERIFIER", "T2_LEARNED_CALIBRATED", "NONE"),
+            ("governance_t3", "GOVERNANCE", "T3_LEARNED_UNCALIBRATED", "NONE"),
+        ]),
+        _route_case("actuation_high", "control_actuation", "high", "L0", [
+            ("actuator_t0", "ACTUATOR", "T0_DETERMINISTIC", "NONE"),
+            ("actuator_t2", "ACTUATOR", "T2_LEARNED_CALIBRATED", "NONE"),
+            ("governance_t1", "GOVERNANCE", "T1_CALIBRATED_NONLEARNED", "NONE"),
+        ]),
+        _route_case("actuation_l4", "control_actuation", "high", "L4", [
+            ("deterministic_engine", "GOVERNANCE", "T0_DETERMINISTIC", "NONE"),
+            ("other_governance", "GOVERNANCE", "T0_DETERMINISTIC", "NONE"),
+        ]),
+        _route_case("signal_hardware", "signal_analysis", "low", "L0", [
+            ("fe_gpu", "FEATURE_EXTRACTOR", "T0_DETERMINISTIC", "GPU"),
+            ("fe_neuro", "FEATURE_EXTRACTOR", "T0_DETERMINISTIC", "NEURO"),
+            ("fe_plain", "FEATURE_EXTRACTOR", "T0_DETERMINISTIC", "NONE"),
+        ], hardware=("NEURO", "NONE")),
+        _route_case("generation_interpretable", "generation", "medium", "L0", [
+            ("predict_t2", "PREDICTION", "T2_LEARNED_CALIBRATED", "NONE"),
+            ("perceive_t0", "PERCEPTION", "T0_DETERMINISTIC", "NONE"),
+        ], interpretability=True),
+        _route_case("unknown_form", "not_a_form", "medium", "L0", [
+            ("memory", "MEMORY", "T0_DETERMINISTIC", "NONE"),
+        ]),
+    ]
+    mixed = eligibility_cases[0]
+    mixed_excluded = [Excluded(e["module_id"], e["reason_code"], e["reason_params"]) for e in mixed["excluded"]]
+    dispatch = _dispatch(
+        primary="ok_perception", fallbacks=["learned_prediction"], excluded=mixed_excluded,
+        roles=["PERCEPTION", "PREDICTION"], constraints=["level:L0", "form:pattern_recognition", "safety:medium"],
+        ranking=["order=['ok_perception', 'learned_prediction']"],
+    )
+    hold = _dispatch(
+        primary=None, fallbacks=[], excluded=[Excluded("memory", "role_mismatch", {"role": "MEMORY"})],
+        roles=["SOLVER"], constraints=["level:L0", "form:constrained_allocation", "safety:medium"], ranking=[],
+        plan_type="DegradedDispatchPlan", disposition="HOLD", hold_reason="no_eligible_candidates",
+        cross_check_required=True,
+    )
+    plans = [
+        {"name": "dispatch_with_fallback", "plan": json.loads(dispatch.to_canonical_bytes()),
+         "canonical": dispatch.to_canonical_bytes().decode("utf-8")},
+        {"name": "hold_no_candidates", "plan": json.loads(hold.to_canonical_bytes()),
+         "canonical": hold.to_canonical_bytes().decode("utf-8")},
+    ]
+    traces = [
+        _trace_case("dispatch", plan_type="DispatchPlan", primary_module_id="ok_perception", hold_reason=None,
+                    excluded_codes=["role_mismatch", "health_failed"]),
+        _trace_case("hold", plan_type="DegradedDispatchPlan", primary_module_id="",
+                    hold_reason="no_eligible_candidates", excluded_codes=[]),
+    ]
+    return {
+        "schema": SCHEMA,
+        "policy": {"policy_id": policy.policy_id, "version": policy.version,
+                   "form_to_roles": {f: list(r) for f, r in DEFAULT_FORM_TO_ROLES.items()},
+                   "digest": policy.digest.hex()},
+        "exclusion_codes": list(EXCLUSION_CODES),
+        "eligibility": eligibility_cases,
+        "plans": plans,
+        "traces": traces,
+    }
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, data in (("hypervector", hypervector_vectors()), ("degradation", degradation_vectors()),
                        ("contract", contract_vectors()), ("lifecycle", lifecycle_vectors()),
                        ("canonical", canonical_vectors()), ("signature", signature_vectors()),
-                       ("tool", tool_vectors()), ("model_artifact", model_artifact_vectors())):
-        (OUT / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+                       ("tool", tool_vectors()), ("model_artifact", model_artifact_vectors()),
+                       ("router", router_vectors())):
+        (OUT / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n",
+                                          encoding="utf-8", newline="\n")
         print("wrote", name)
     d = json.loads((OUT / "degradation.json").read_text())
     seen = {t[1] for s in d["scenarios"] for t in s["transitions"]}
