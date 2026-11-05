@@ -1,0 +1,356 @@
+package org.organism.sdk
+
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/** Replays `contract.json` and `lifecycle.json` produced by the Python reference (`conformance/generate.py`). */
+class ContractConformanceTest {
+    private fun load(name: String): Map<String, Any?> {
+        val dir = System.getProperty("organism.conformance.dir") ?: error("organism.conformance.dir not set")
+        return Json.parse(File(dir, "$name.json").readText(Charsets.UTF_8)).asMap()
+    }
+
+    private fun Map<String, Any?>.str(key: String): String = this[key] as String
+
+    private fun Map<String, Any?>.bool(key: String): Boolean = this[key] as Boolean
+
+    private fun Map<String, Any?>.int(key: String): Int = this[key].asInt()
+
+    private fun Map<String, Any?>.long(key: String): Long = this[key].asLong()
+
+    private fun Map<String, Any?>.dbl(key: String): Double = this[key].asDouble()
+
+    private fun Map<String, Any?>.obj(key: String): Map<String, Any?> = this[key].asMap()
+
+    private fun Map<String, Any?>.arr(key: String): List<Any?> = this[key].asList()
+
+    private fun Map<String, Any?>.strs(key: String): List<String> = arr(key).map { it as String }
+
+    private fun parseProbe(d: Map<String, Any?>): HealthProbe = when (d.str("type")) {
+        "HTTP" -> HealthProbe.Http(d.str("url"), d.str("expected_status"), d.int("timeout_ms"))
+        "RPC" -> HealthProbe.Rpc(d.str("method_fqn"), d.int("timeout_ms"))
+        "STREAM" -> HealthProbe.Stream(d.str("topic"), d.int("expected_period_ms"), d.int("stall_timeout_ms"))
+        else -> error("unknown probe type ${d.str("type")}")
+    }
+
+    private fun parseContract(d: Map<String, Any?>): SubstrateContract {
+        val identity = d.obj("identity")
+        val perception = d.obj("perception")
+        val emission = d.obj("emission")
+        val metabolic = d.obj("metabolic")
+        val failure = d.obj("failure")
+        val escalation = failure.obj("escalation")
+        val recovery = failure.obj("recovery")
+        val safety = d.obj("safety")
+        val caps = d.obj("capabilities")
+        val lifecycle = d.obj("lifecycle")
+        return SubstrateContract(
+            identity = Identity(identity.str("module_id"), identity.str("version"), ModuleRole.valueOf(identity.str("role"))),
+            perception = PerceptionSignature(
+                modalities = perception.strs("modalities").map { Modality.valueOf(it) },
+                requiredModalities = perception.strs("required_modalities").map { Modality.valueOf(it) },
+            ),
+            emission = EmissionSignature(
+                outputForm = OutputForm.valueOf(emission.str("output_form")),
+                uncertainty = UncertaintyKind.valueOf(emission.str("uncertainty")),
+                determinism = Determinism.valueOf(emission.str("determinism")),
+                requiresJustificationFor = emission.strs("requires_justification_for"),
+            ),
+            metabolic = MetabolicProfile(
+                latencyP50Ms = metabolic.dbl("latency_p50_ms"),
+                latencyP95Ms = metabolic.dbl("latency_p95_ms"),
+                latencyP99Ms = metabolic.dbl("latency_p99_ms"),
+                energyPerInferenceJ = metabolic.dbl("energy_per_inference_j"),
+                memoryFootprintMb = metabolic.dbl("memory_footprint_mb"),
+                memoryPeakMb = metabolic.dbl("memory_peak_mb"),
+                requiresGpu = metabolic.bool("requires_gpu"),
+                requiresGradientTraining = metabolic.bool("requires_gradient_training"),
+                maxConcurrentInvocations = metabolic.int("max_concurrent_invocations"),
+                requiresSpecialHardware = HardwareRequirement.valueOf(metabolic.str("requires_special_hardware")),
+            ),
+            failure = FailureSignature(
+                probe = parseProbe(failure.obj("probe")),
+                escalation = EscalationPolicy(
+                    kind = EscalationKind.valueOf(escalation.str("kind")),
+                    consecutiveProbeFailures = escalation.int("consecutive_probe_failures"),
+                    degradedDurationMs = escalation.int("degraded_duration_ms"),
+                    escalateOnProbeTimeout = escalation.bool("escalate_on_probe_timeout"),
+                    escalateOnProbeUnreachable = escalation.bool("escalate_on_probe_unreachable"),
+                    probeIntervalMs = escalation.int("probe_interval_ms"),
+                ),
+                recovery = RecoveryProcedure(RecoveryKind.valueOf(recovery.str("kind")), recovery.int("max_attempts")),
+            ),
+            safety = SafetyDeclaration(
+                reliabilityTier = ReliabilityTier.valueOf(safety.str("reliability_tier")),
+                mayActuate = safety.bool("may_actuate"),
+                requiresCausalCertificate = safety.bool("requires_causal_certificate"),
+                requiresCrossCheck = safety.bool("requires_cross_check"),
+                maxSafetyTier = MaxSafetyTier.valueOf(safety.str("max_safety_tier")),
+            ),
+            capabilities = CapabilityScopes(
+                canOverrideTraceSink = caps.bool("can_override_trace_sink"),
+                canOverrideTraceSinkExploration = caps.bool("can_override_trace_sink_exploration"),
+                explorationTraceSinkId = caps.str("exploration_trace_sink_id"),
+            ),
+            lifecycle = Lifecycle(
+                hotSwapSupported = lifecycle.bool("hot_swap_supported"),
+                shadowValidationRequired = lifecycle.bool("shadow_validation_required"),
+                selfTerminationPermitted = lifecycle.bool("self_termination_permitted"),
+            ),
+            justification = Justification(JustificationKind.valueOf(d.obj("justification").str("kind"))),
+        )
+    }
+
+    @Test
+    fun contractValidationMatchesReference() {
+        val cases = load("contract").arr("cases").map { it.asMap() }
+        assertEquals(33, cases.size, "contract case count changed: regenerate and review the vectors")
+        for (case in cases) {
+            val name = case.str("name")
+            val contract = parseContract(case.obj("contract"))
+            val issues = contract.validate()
+            assertEquals(case.bool("registered"), issues.none { it.severity == Severity.ERROR }, "$name: registered")
+            val expected = case.arr("issues").map {
+                val m = it.asMap()
+                Triple(Severity.valueOf(m.str("severity")), m.str("code"), m.str("field_path"))
+            }
+            assertEquals(expected, issues.map { Triple(it.severity, it.code, it.fieldPath) }, "$name: issues")
+        }
+    }
+
+    private fun unhex(s: String): ByteArray = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private fun record(d: Map<String, Any?>) = ShadowValidationRecord(
+        invocations = d.int("invocations"),
+        incumbentError = d.dbl("incumbent_error"),
+        candidateError = d.dbl("candidate_error"),
+        p95LatencyMs = d.dbl("p95_latency_ms"),
+        gatesPassed = d.strs("gates_passed"),
+        evidenceDigest = unhex(d.str("evidence_digest")),
+    )
+
+    /** K6: a gated promotion needs evidence over the threshold and a verifying approver; `lifecycle.json` holds the cases. */
+    @Test
+    fun gateAndApproverMatchReference() {
+        val doc = load("lifecycle")
+        val threshold = doc.obj("threshold").let { t -> ShadowThreshold(t.int("min_invocations"), t.dbl("max_error_ratio")) }
+        assertEquals(ShadowThreshold(), threshold, "default threshold changed")
+        assertEquals(doc.strs("gated_states").sorted(), GATED_STATES.map { it.name }.sorted(), "gated states")
+        val approvers = doc.obj("trust").arr("approvers").map { unhex(it as String) }
+        val contract = parseContract(doc.obj("contract"))
+        val cases = doc.arr("evidence_cases").map { it.asMap() }
+        assertEquals(12, cases.size, "evidence case count changed: regenerate and review lifecycle.json")
+        for (c in cases) {
+            val name = c.str("name")
+            val registry = ModuleRegistry(approvers = approvers, threshold = threshold)
+            registry.register(contract, LifecycleState.valueOf(c.str("initial")))
+            val shadow = c.arr("shadow").map { record(it.asMap()) }
+            val result = registry.promote(
+                "m.lc",
+                LifecycleState.valueOf(c.str("from")),
+                LifecycleState.valueOf(c.str("to")),
+                shadow,
+                unhex(c.str("approver_signature")),
+            )
+            assertEquals(c.bool("accepted"), result.accepted, "$name: accepted")
+            assertEquals(c["code"] as String?, result.code, "$name: code")
+            assertEquals(LifecycleState.valueOf(c.str("state_after")), registry.state("m.lc"), "$name: state")
+        }
+    }
+
+    @Test
+    fun statesMatchReference() {
+        val names = load("lifecycle").strs("states")
+        assertEquals(names, LifecycleState.entries.map { it.name })
+    }
+
+    @Test
+    fun transitionsMatchReference() {
+        val doc = load("lifecycle")
+        val contract = parseContract(doc.obj("contract"))
+        val all = doc.arr("transitions") + doc.arr("lifecycle_mismatch")
+        assertEquals(121 + 11, all.size)
+        for (raw in all) {
+            val t = raw.asMap()
+            val registry = ModuleRegistry()
+            assertTrue(registry.register(contract, LifecycleState.valueOf(t.str("initial"))).accepted)
+            val result = registry.promote(
+                "m.lc", LifecycleState.valueOf(t.str("from")), LifecycleState.valueOf(t.str("to")),
+            )
+            val label = "${t.str("initial")} ${t.str("from")} -> ${t.str("to")}"
+            assertEquals(t.bool("accepted"), result.accepted, "$label: accepted")
+            assertEquals(t["code"] as String?, result.code, "$label: code")
+            assertEquals(t.str("state_after"), registry.state("m.lc")?.name, "$label: state after")
+        }
+    }
+
+    @Test
+    fun capabilityQueriesMatchReference() {
+        val queries = load("lifecycle").obj("queries")
+        val registry = ModuleRegistry()
+        for (raw in queries.arr("modules")) {
+            val m = raw.asMap()
+            registry.register(parseContract(m.obj("contract")), LifecycleState.valueOf(m.str("state")))
+        }
+        val cases = queries.arr("cases")
+        assertTrue(cases.size >= 8)
+        for (raw in cases) {
+            val c = raw.asMap()
+            val f = c.obj("filter")
+            val filter = CapabilityFilter(
+                roles = (f["roles"] as List<*>?)?.map { ModuleRole.valueOf(it as String) }?.toSet() ?: emptySet(),
+                minReliability = (f["min_reliability"] as String?)?.let { ReliabilityTier.valueOf(it) },
+                minLifecycleState = (f["min_lifecycle_state"] as String?)?.let { LifecycleState.valueOf(it) },
+            )
+            val got = registry.query(filter).map { it.moduleId }.sorted()
+            assertEquals(c.strs("expected_ids"), got, "filter $f")
+        }
+    }
+
+    private fun issueTriples(list: List<Any?>): List<Triple<Severity, String, String>> = list.map {
+        val m = it.asMap()
+        Triple(Severity.valueOf(m.str("severity")), m.str("code"), m.str("field_path"))
+    }
+
+    private fun calibrationRecord(d: Map<String, Any?>) = CalibrationRecord(
+        ece = d.dbl("ece"),
+        targetCoverage = d.dbl("target_coverage"),
+        empiricalCoverage = d.dbl("empirical_coverage"),
+        samples = d.int("samples"),
+        evidenceDigest = unhex(d.str("evidence_digest")),
+    )
+
+    private fun measuredRecord(d: Map<String, Any?>) = MeasuredMetabolics(
+        deviceClass = d.str("device_class"),
+        latencyP95Ms = d.dbl("latency_p95_ms"),
+        energyPerInferenceJ = d.dbl("energy_per_inference_j"),
+        memoryPeakMb = d.dbl("memory_peak_mb"),
+        samples = d.int("samples"),
+        evidenceDigest = unhex(d.str("evidence_digest")),
+    )
+
+    /** K1b task 7 (B6): health and drain through the registry, replayed from health.json. */
+    @Test
+    fun healthAndDrainMatchReference() {
+        val doc = load("health")
+        val nowMs = doc.long("now_ms")
+        val base = parseContract(doc.obj("contract"))
+        val cases = doc.arr("cases").map { it.asMap() }
+        assertEquals(8, cases.size, "health case count changed: regenerate and review health.json")
+        for (c in cases) {
+            val name = c.str("name")
+            val spec = c["module"]?.asMap()
+            val hooks = spec?.let { ScriptedHooks(HealthStatus.valueOf(it.str("status")), it.dbl("score")) }
+            val registry = ModuleRegistry()
+            registry.register(base, LifecycleState.valueOf(c.str("initial")), hooks)
+            val queryId = c.str("query_id")
+            val expected = c.obj("expected")
+            if (c.str("action") == "health") {
+                val report = registry.health(queryId)
+                assertEquals(expected.bool("found"), report != null, "$name: found")
+                if (report != null) {
+                    assertEquals(expected.str("status"), report.status.name, "$name: status")
+                    assertEquals(expected.dbl("score"), report.score, "$name: score")
+                }
+            } else {
+                val stateBefore = registry.state(queryId)?.name
+                registry.deregister(queryId, nowMs, c.long("timeout_s"))
+                assertEquals(expected["state_before"] as String?, stateBefore, "$name: state before")
+                assertEquals(expected.bool("drain_called"), hooks?.deadlineMs != null, "$name: drain called")
+                assertEquals(expected["deadline_ms"]?.asLong(), hooks?.deadlineMs, "$name: deadline")
+                assertEquals(expected.bool("found_after"), registry.health(queryId) != null, "$name: found after")
+            }
+        }
+    }
+
+    /** K1b task 7 (A5, A6): the calibration and measured-metabolics gates, from evidence.json. */
+    @Test
+    fun evidenceGatesMatchReference() {
+        val doc = load("evidence")
+        val cal = doc.obj("calibration_default")
+        assertEquals(
+            CalibrationThreshold(cal.dbl("max_ece"), cal.dbl("max_coverage_gap"), cal.int("min_samples")),
+            CalibrationThreshold(),
+            "default calibration threshold changed",
+        )
+        val met = doc.obj("metabolic_default")
+        assertEquals(MetabolicTolerance(met.dbl("factor"), met.int("min_samples")), MetabolicTolerance(), "default tolerance changed")
+
+        val calCases = doc.arr("calibration_cases").map { it.asMap() }
+        assertEquals(8, calCases.size, "calibration case count changed: regenerate and review evidence.json")
+        for (c in calCases) {
+            val name = c.str("name")
+            val t = c.obj("threshold")
+            val threshold = CalibrationThreshold(t.dbl("max_ece"), t.dbl("max_coverage_gap"), t.int("min_samples"))
+            val issues = calibrationGate(calibrationRecord(c.obj("record")), threshold)
+            assertEquals(issueTriples(c.arr("issues")), issues.map { Triple(it.severity, it.code, it.fieldPath) }, "$name: issues")
+        }
+
+        val metCases = doc.arr("metabolic_cases").map { it.asMap() }
+        assertEquals(7, metCases.size, "metabolic case count changed: regenerate and review evidence.json")
+        for (c in metCases) {
+            val name = c.str("name")
+            val d = c.obj("declared")
+            val declared = MetabolicProfile(
+                latencyP50Ms = 0.0,
+                latencyP95Ms = d.dbl("latency_p95_ms"),
+                latencyP99Ms = 0.0,
+                energyPerInferenceJ = d.dbl("energy_per_inference_j"),
+                memoryFootprintMb = 0.0,
+                memoryPeakMb = d.dbl("memory_peak_mb"),
+            )
+            val tol = c.obj("tolerance")
+            val issues = metabolicGate(declared, measuredRecord(c.obj("measured")), MetabolicTolerance(tol.dbl("factor"), tol.int("min_samples")))
+            assertEquals(issueTriples(c.arr("issues")), issues.map { Triple(it.severity, it.code, it.fieldPath) }, "$name: issues")
+        }
+    }
+
+    /** K1b task 7: promote() with calibration and measurement evidence and the registry's requirement switches. */
+    @Test
+    fun promoteWithEvidenceMatchesReference() {
+        val doc = load("evidence")
+        val base = parseContract(doc.obj("contract"))
+        val cases = doc.arr("promote_cases").map { it.asMap() }
+        assertEquals(9, cases.size, "promote case count changed: regenerate and review evidence.json")
+        for (c in cases) {
+            val name = c.str("name")
+            val tier = ReliabilityTier.valueOf(c.str("tier"))
+            val contract = base.copy(safety = base.safety.copy(reliabilityTier = tier))
+            val registry = ModuleRegistry(
+                requireCalibration = c.bool("require_calibration"),
+                requireMeasurement = c.bool("require_measurement"),
+            )
+            val id = contract.identity.moduleId
+            registry.register(contract, LifecycleState.valueOf(c.str("initial")))
+            val shadow = c.arr("shadow").map { record(it.asMap()) }
+            val calibration = c["calibration"]?.let { calibrationRecord(it.asMap()) }
+            val measured = c["measured"]?.let { measuredRecord(it.asMap()) }
+            val result = registry.promote(
+                id,
+                LifecycleState.valueOf(c.str("initial")),
+                LifecycleState.valueOf(c.str("to")),
+                shadow,
+                ByteArray(0),
+                calibration,
+                measured,
+            )
+            assertEquals(c.bool("accepted"), result.accepted, "$name: accepted")
+            assertEquals(c["code"] as String?, result.code, "$name: code")
+            assertEquals(c.str("state_after"), registry.state(id)?.name, "$name: state after")
+        }
+    }
+}
+
+/** A module that answers one health report and records the drain deadline it is given (the Python `ScriptedModule`). */
+private class ScriptedHooks(private val status: HealthStatus, private val score: Double) : ModuleHooks {
+    var deadlineMs: Long? = null
+        private set
+
+    override fun health(): HealthReport = HealthReport("m.h", status, score)
+
+    override fun onDrain(deadlineMs: Long) {
+        this.deadlineMs = deadlineMs
+    }
+}

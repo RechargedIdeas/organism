@@ -9,11 +9,14 @@ verifies does not need it installed.
 from __future__ import annotations
 
 import json
+import math
 import secrets
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from organism_sdk.canonical import canonical_bytes
 
 if TYPE_CHECKING:
     from organism_sdk.registry import ShadowValidationRecord
@@ -41,7 +44,8 @@ def promotion_payload(
     """Bytes an approver signs to move a module from one lifecycle state to another.
 
     The shadow evidence is part of the payload, so an approval cannot be reused with different
-    evidence.
+    evidence. The payload is canonical JSON (``canonical.py``), so it has no float text: error rates
+    are written as parts per million and latency as microseconds, both rounded half to even.
     """
     body = {
         "module_id": module_id,
@@ -55,16 +59,24 @@ def promotion_payload(
 def _shadow_json(record: ShadowValidationRecord) -> dict[str, Any]:
     return {
         "invocations": record.invocations,
-        "incumbent_error": record.incumbent_error,
-        "candidate_error": record.candidate_error,
-        "p95_latency_ms": record.p95_latency_ms,
+        "incumbent_error_ppm": _scaled(record.incumbent_error, 1_000_000),
+        "candidate_error_ppm": _scaled(record.candidate_error, 1_000_000),
+        "p95_latency_us": _scaled(record.p95_latency_ms, 1_000),
         "gates_passed": list(record.gates_passed),
         "evidence_digest": record.evidence_digest.hex(),
     }
 
 
+def _scaled(value: float, scale: int) -> int:
+    """``value`` in units of ``1/scale``, rounded half to even. Kotlin rounds the same way (``Math.rint``)."""
+    scaled = value * scale
+    if not math.isfinite(scaled):
+        raise ValueError("shadow evidence must be finite")
+    return round(scaled)
+
+
 def _canonical(body: dict[str, Any]) -> bytes:
-    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return canonical_bytes(body)
 
 
 @dataclass(frozen=True)

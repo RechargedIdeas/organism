@@ -175,7 +175,9 @@ def test_e2e_evolve_improve_promote_appears_in_catalog(
     assert hot is not None
     assert hot["module_id"].startswith("gen_")
     assert hot["may_actuate"] is False
-    assert "EXPLORATION" in hot["shadow_gate"] or hot["state"] == "EXPLORATION"
+    # K6 (gap B1): synthetic shadow evidence is below the threshold, so the module is held in SANDBOXED, not served.
+    assert hot["state"] == "SANDBOXED"
+    assert "EXPLORATION" not in hot["shadow_gate"]
 
     # 4. Appear in Desktop module catalog (dynamic generative entry)
     cat = svc.module_catalog()

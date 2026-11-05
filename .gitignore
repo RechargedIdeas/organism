@@ -59,5 +59,10 @@ organism_data/assets/**
 organism_data/organisms/**
 !organism_data/organisms/.gitkeep
 
+.venv/
+.pipcache/
+.gradle/
+build/
+.kotlin/
 # Harness lock file written by the desktop app
 .claude/scheduled_tasks.lock
