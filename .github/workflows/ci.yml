@@ -30,6 +30,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # The Kotlin gate runs Gradle 8.11.1, which does not run on JDK 25. The runner's default JDK
+      # is newer than that, so pin the JDK 17 that the Kotlin SDK is built and tested with locally.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: System packages (protoc, Qt offscreen)
         run: |
           sudo apt-get update
@@ -42,6 +48,15 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install -e ".[dev,desktop]" -c constraints-dev.txt
+      # The jail tests put each child in a new user and network namespace and bring loopback up inside
+      # it. On this image, unshare succeeds and then bringing loopback up fails with EPERM. Ubuntu's AppArmor
+      # restriction on unprivileged user namespaces is the likely cause. This runner is ephemeral, so the
+      # restriction is switched off here only, and only where the setting exists.
+      - name: Allow unprivileged user namespaces (jail tests)
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
       - name: Full tier
         run: .venv/bin/python ci/run.py run --tier full
       - name: Upload run report
