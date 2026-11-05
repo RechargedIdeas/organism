@@ -76,15 +76,21 @@ data class PromoteResult(val accepted: Boolean, val issues: List<ValidationIssue
  * In-process registry. Holds contracts and their lifecycle state.
  *
  * Deliberate differences from the reference, each one a finding for the gap list:
- * - [promote] does not check shadow evidence or an approver. The reference does not check them either, so the
- *   "never serve before shadow validation" rule is not enforced here. The promote gate (K6) has to add it.
+ * - [promote] checks the approver when [approvers] is set, and the shadow evidence for gated states (K6). Without
+ *   [approvers] the approver is not checked, as in the reference without a trust store. The reference's
+ *   `test_bypass_validation` has no counterpart here; the evidence check is never skipped.
  * - An unknown module id is a `not_found` rejection, not a KeyError.
  * - Registering an id that already exists replaces the entry, as the reference does. No warning is raised.
+ * - [register] does not check an author signature. The reference does with a trust store; the Kotlin port has no
+ *   registration signing yet.
  *
  * Every public method is synchronized, as the reference is (it holds a lock), so the registry can be shared between
  * threads on Android and on the desktop.
  */
-class ModuleRegistry {
+class ModuleRegistry(
+    private val approvers: List<ByteArray>? = null,
+    private val threshold: ShadowThreshold = ShadowThreshold(),
+) {
     private class Entry(val contract: SubstrateContract, var state: LifecycleState)
 
     private val entries = LinkedHashMap<String, Entry>()
@@ -108,16 +114,36 @@ class ModuleRegistry {
 
     /**
      * Moves [moduleId] from [from] to [to]. The module must be in [from] and [to] must be the next ladder step.
-     * Rejections: `not_found`, `lifecycle_mismatch`, `invalid_promotion`. A rejection leaves the state unchanged.
+     * With [approvers] set, [approverSignature] must verify over the promotion payload (`signature_invalid` otherwise),
+     * as the reference does with a trust store. A promotion into a [GATED_STATES] state also needs [shadow] evidence
+     * that passes [threshold] (`shadow_evidence_insufficient`, `shadow_evidence_unattributed`,
+     * `shadow_error_regression`). The checks run in that order. A rejection leaves the state unchanged.
      */
     @Synchronized
-    fun promote(moduleId: String, from: LifecycleState, to: LifecycleState): PromoteResult {
+    fun promote(
+        moduleId: String,
+        from: LifecycleState,
+        to: LifecycleState,
+        shadow: List<ShadowValidationRecord> = emptyList(),
+        approverSignature: ByteArray = ByteArray(0),
+    ): PromoteResult {
         val entry = entries[moduleId] ?: return reject("not_found", "module_id", "unknown module")
+        val trusted = approvers
+        if (trusted != null) {
+            val payload = Signing.promotionPayload(moduleId, from.name, to.name, shadow)
+            if (trusted.none { Ed25519.verify(it, approverSignature, payload) }) {
+                return reject("signature_invalid", "approver_signature", "no trusted approver key verifies this signature")
+            }
+        }
         if (entry.state != from) {
             return reject("lifecycle_mismatch", "from_state", "actual=${entry.state} expected=$from")
         }
         if (!Ladder.isNextStep(from, to)) {
             return reject("invalid_promotion", "to_state", "cannot promote $from -> $to")
+        }
+        if (to in GATED_STATES) {
+            val issues = shadowGate(shadow, threshold)
+            if (issues.isNotEmpty()) return PromoteResult(false, issues)
         }
         entry.state = to
         return PromoteResult(true, emptyList())

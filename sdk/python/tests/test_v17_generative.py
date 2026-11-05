@@ -396,7 +396,11 @@ def test_evolution_runtime_hot_register(art: ArtifactStore, tmp_path: Path) -> N
     hot = result["hot_register"]
     assert hot is not None
     assert hot["module_id"].startswith("gen_")
-    assert "EXPLORATION" in hot["shadow_gate"] or hot["state"] == "EXPLORATION"
+    # K6 (gap B1): the runtime's shadow evidence is synthetic, from shadow_score, and is below the threshold of 100
+    # live invocations. The registry therefore holds the module in SANDBOXED and it is not served. Promotion to
+    # EXPLORATION needs live evidence from ShadowRunner. Owner decision: see the K6 report.
+    assert hot["state"] == "SANDBOXED"
+    assert "EXPLORATION" not in hot["shadow_gate"]
     assert hot["may_actuate"] is False
     assert hot["module_id"] in reg.list_module_ids()
     assert any(e["module_id"] == hot["module_id"] for e in rt.catalog_entries())
