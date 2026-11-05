@@ -6,6 +6,8 @@ Linux only, where containment exists.
 
 from __future__ import annotations
 
+import signal
+import subprocess
 import sys
 import threading
 from collections.abc import Callable, Sequence
@@ -305,3 +307,31 @@ def test_a_restart_forgets_the_process_of_an_interrupted_run(tmp_path: Path) -> 
         assert (ticket.assignment.state, ticket.assignment.pid) == (AssignmentState.ENDED, None)
         (assignment,) = store.assignments_of("t-run")
         assert (assignment.state, assignment.pid) == (AssignmentState.ENDED, None)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process groups are Linux here")
+def test_a_group_that_ignores_sigterm_is_killed_after_the_grace() -> None:
+    script = (
+        "import signal, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "print('ready', flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script], stdout=subprocess.PIPE, start_new_session=True
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline().strip() == b"ready"
+        assert end_process_group(child.pid, grace_s=0.2) is True
+        assert child.wait(timeout=30) == -signal.SIGKILL
+    finally:
+        child.kill()
+        child.wait()
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process groups are Linux here")
+def test_a_group_that_has_already_exited_has_nothing_to_end() -> None:
+    child = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    child.wait(timeout=30)
+    assert end_process_group(child.pid) is False

@@ -245,3 +245,33 @@ def test_a_client_is_told_when_the_proxy_socket_is_gone(tmp_path: Path) -> None:
         egress_bridge._serve(client, str(tmp_path / "gone.sock"))
         answer = far.recv(256)
     assert answer.startswith(b"HTTP/1.1 502")
+
+
+def test_a_command_that_cannot_start_is_reported_as_127() -> None:
+    probe = socket.create_server(("127.0.0.1", 0))
+    port = int(probe.getsockname()[1])
+    probe.close()
+    status = egress_bridge.main(
+        ["--listen", f"127.0.0.1:{port}", "--upstream", "x", "--", "/no/such/program/here"]
+    )
+    assert status == 127
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="signals are Linux here")
+def test_a_command_killed_by_a_signal_reports_128_plus_the_signal() -> None:
+    probe = socket.create_server(("127.0.0.1", 0))
+    port = int(probe.getsockname()[1])
+    probe.close()
+    status = egress_bridge.main(
+        [
+            "--listen",
+            f"127.0.0.1:{port}",
+            "--upstream",
+            "x",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, signal; os.kill(os.getpid(), signal.SIGKILL)",
+        ]
+    )
+    assert status == 128 + 9

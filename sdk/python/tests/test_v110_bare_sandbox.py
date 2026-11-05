@@ -17,6 +17,8 @@ from organism_sdk.sandbox import (
     SandboxPolicy,
     capabilities,
 )
+from organism_sdk.sandbox.audit import SandboxAuditEvent, SandboxAuditLog
+from organism_sdk.trace import SandboxTraceEntry
 
 ROOT = Path(__file__).resolve().parents[3]
 CFG_DIR = ROOT / "deploy" / "config"
@@ -160,3 +162,52 @@ def test_ci_docker_not_required_for_gates() -> None:
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "docker_optional" in ci or "continue-on-error: true" in ci
     assert "sandbox self-check" in ci.lower() or "Native sandbox" in ci
+
+
+def test_policy_from_env_reads_numbers_and_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORGANISM_JAIL_MAX_FDS", "17")
+    monkeypatch.setenv("ORGANISM_JAIL_ALLOW_NETWORK", "On")
+    monkeypatch.setenv("ORGANISM_JAIL_NAMESPACES", "no")
+    policy = SandboxPolicy.from_env()
+    assert policy.max_fds == 17
+    assert policy.allow_network is True
+    assert policy.use_namespaces is False
+
+
+def test_self_containment_profile_is_bounded_and_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ORGANISM_SELF_JAIL_TIMEOUT_S", raising=False)
+    policy = SandboxPolicy.self_containment()
+    assert policy.label == "self_containment"
+    assert policy.self_sandbox is True
+    assert policy.allow_network is False
+    assert policy.timeout_s == 600.0
+    assert policy.max_nproc == 128
+
+
+def test_audit_log_keeps_its_newest_events() -> None:
+    log = SandboxAuditLog(capacity=16)
+    for n in range(20):
+        log.record(SandboxAuditEvent(action="ok", label=str(n)))
+    assert [event["label"] for event in log.recent(limit=3)] == ["17", "18", "19"]
+    log.clear()
+    assert log.recent() == []
+
+
+def test_audit_log_forwards_to_a_tracer_and_survives_its_failure() -> None:
+    class Tracer:
+        def __init__(self) -> None:
+            self.entries: list[SandboxTraceEntry] = []
+
+        def emit_sandbox(self, entry: SandboxTraceEntry) -> None:
+            self.entries.append(entry)
+
+    class BrokenTracer:
+        def emit_sandbox(self, entry: SandboxTraceEntry) -> None:
+            raise RuntimeError("disk full")
+
+    tracer = Tracer()
+    log = SandboxAuditLog(tracer=tracer)
+    log.record(SandboxAuditEvent(action="ok", label="first"))
+    assert [entry.label for entry in tracer.entries] == ["first"]
+    log.attach_tracer(BrokenTracer())
+    assert log.record(SandboxAuditEvent(action="ok", label="second")).label == "second"

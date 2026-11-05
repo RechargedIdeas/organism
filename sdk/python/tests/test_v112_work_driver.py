@@ -942,3 +942,97 @@ def test_stopping_a_ticket_that_is_not_running_has_no_process_to_end(tmp_path: P
     with WorkStore(path) as store:
         (ticket_id,), _, _ = open_accepted(store)
         assert operator.stop(store, ticket_id) is None
+
+
+def _two_threads(path: Path) -> None:
+    store_with(
+        path,
+        message(1, "CI is red", thread="github:issue-1", addressed=Addressed.NONE),
+        message(2, "CI is red", thread="github:issue-2", addressed=Addressed.NONE),
+    )
+
+
+def _tickets_by_trigger(path: Path) -> dict[str, str]:
+    with WorkStore(path) as store:
+        return {d.trigger_id: ticket_id_for(d.id) for d in store.all_decisions()}
+
+
+def test_a_pause_during_a_pass_stops_it_before_the_next_ticket(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    _two_threads(path)
+
+    def pause_it(_: str) -> None:
+        with WorkStore(path) as other:
+            operator.pause(other)
+
+    executor = FakeExecutor(during=pause_it)
+    report = drive(opener(path), executor)
+    (first,) = report.ready
+    (second,) = [t for t in _tickets_by_trigger(path).values() if t != first]
+    assert [ticket_id for ticket_id, _ in executor.runs] == [first]
+    assert ticket_state(path, second) == (AssignmentState.PENDING, None)
+    with WorkStore(path) as store:
+        operator.resume(store)
+    assert drive(opener(path), executor).ready == [second]
+
+
+def test_a_ticket_stopped_during_a_pass_is_not_run(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    _two_threads(path)
+
+    def stop_the_others(running: str) -> None:
+        with WorkStore(path) as other:
+            for ticket in other.open_tickets():
+                if ticket.id != running:
+                    operator.stop(other, ticket.id)
+
+    executor = FakeExecutor(during=stop_the_others)
+    report = drive(opener(path), executor)
+    (first,) = report.ready
+    (second,) = [t for t in _tickets_by_trigger(path).values() if t != first]
+    assert [ticket_id for ticket_id, _ in executor.runs] == [first]
+    assert report.failed == {}
+    with WorkStore(path) as store:
+        ticket = store.ticket(second)
+        assert ticket is not None and ticket.ended is True
+
+
+def test_a_notice_is_dropped_once_the_mandate_stands_again(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    disabled = replace(POLICY, rules=(replace(CI, enabled=False),))
+    with WorkStore(path) as store:
+        (ticket_id,), _, _ = open_accepted(store)
+        store.enqueue(NOTICE, ticket_id, {"policy": "changed", "previous": POLICY.version})
+        store.enqueue("audit", ticket_id, {"note": "not a notice"})
+        store.save_policy(disabled, signature=b"approved in test")
+        store.set_active_policy(disabled.version)
+    assert drive(opener(path), FakeExecutor()).needs_person == [ticket_id]
+    with WorkStore(path) as store:
+        store.set_active_policy(POLICY.version)
+    report = drive(opener(path), FakeExecutor())
+    assert report.needs_person == []
+    assert report.ready == [ticket_id]
+    with WorkStore(path) as store:
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None and ticket.attention is False
+        kinds = [effect.kind for effect in store.pending_effects()]
+    assert "audit" in kinds and NOTICE not in kinds
+
+
+def test_a_notice_for_a_stopped_ticket_is_cancelled(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    with WorkStore(path) as store:
+        (ticket_id,), _, _ = open_accepted(store)
+        operator.stop(store, ticket_id)
+        store.enqueue(NOTICE, ticket_id, {"policy": "changed", "previous": POLICY.version})
+    report = drive(opener(path), FakeExecutor())
+    assert report.needs_person == []
+    with WorkStore(path) as store:
+        assert NOTICE not in [effect.kind for effect in store.pending_effects()]
+
+
+def test_with_no_active_policy_a_pass_opens_nothing(tmp_path: Path) -> None:
+    with WorkStore(tmp_path / "work.sqlite") as store:
+        assert open_accepted(store) == ([], [], [])
