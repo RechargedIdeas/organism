@@ -121,12 +121,8 @@ def test_shadow_gate_passes_on_held_out_set() -> None:
     assert (report.domains["extraction"].precision or 0.0) >= shadow.PRECISION_GATE
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="recall gap: singular 'email' is not a keyword, so 'email addresses' queries go unsure. "
-    "Precision is unaffected. See docs/v1.11/MOA_LAYER.md, section 4.",
-)
-def test_known_recall_gap_singular_email_is_routed_to_extractor() -> None:
+def test_email_addresses_beside_a_retrieval_verb_are_routed_to_extractor() -> None:
+    # The O4 context rule: "email address(es)" counts for the extractor only beside a verb of retrieval.
     decision = LexicalScorer().decide("Pull the email addresses out of this list", reference_experts())
     assert decision.route == ROUTE_EXPERT
     assert decision.expert_id == "extractor"

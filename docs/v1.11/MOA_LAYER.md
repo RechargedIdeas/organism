@@ -99,7 +99,18 @@ Found while building. These change the plan in
 
 **Fixed weakness.** The bare verb "find" routed generic queries ("Find a good recipe for dinner") to the extractor. Held-out extraction precision was 0.78. The verb is no longer an extractor keyword; its targets ("dates", "numbers", "emails") carry the signal. The held-out set exposed this flaw, so it is no longer an untouched holdout. Measure any further change on a new labeled set.
 
-**Known recall gap.** The noun "email" is not an extractor keyword, so extraction queries built around "email address" go unsure. The strict `xfail` test in `test_v111_moa_routing.py` pins one case. Adding "email address" and "email addresses" as keywords was measured and rejected. On the fresh set `sdk/python/tests/data/moa_routing_email_recall.json` (13 items, labels fixed before the trial), recall rose from 1/7 to 7/7, but the four negatives such as "Set up a new email address for the new hire" also routed to the extractor. Extraction precision fell to 7/11, below the 0.90 gate. Closing the gap needs a context rule: a keyword that counts only when a source reference such as "in this" or "out of" is present. That is a scorer design change, not a keyword edit. `sdk/python/tests/test_v111_moa_email_routing.py` keeps the four negatives unsure in the meantime. The fresh set has now been used for one measurement, so it is no longer untouched.
+**Email address, context rule (O4).** "email address" and "email addresses" count for the extractor only when the query also has a verb of retrieval: pull, extract, get, take, copy, list, find, pick, dig, grab, or fetch. A `CuedKeyword` in `moa/experts.py` holds the phrase and its cues, and the scorer counts a cued phrase only when one of its cues is present. Adding the phrase as a plain keyword had been rejected: on `moa_routing_email_recall.json` (13 items) it recalled 7 of 7, but the four negatives such as "Set up a new email address for the new hire" also routed to the extractor, and extraction precision fell to 7/11. The earlier note suggested "in this" or "out of" as cues. Verbs were used instead, because "in this" would send "set up an email address in this account" to the extractor.
+
+Measured on `sdk/python/tests/data/moa_routing_email_context.json` (26 items). Its labels were fixed from each query's meaning and committed before the rule was written.
+
+| Measure | Result |
+|---|---|
+| Extraction, routed to the extractor | 11 / 12 |
+| Extraction precision | 11 / 11 (1.00) |
+| Unsure correct | 12 / 12 |
+| Intent, "Remind me to email the invoice to finance tomorrow" | routed |
+
+The one extraction miss, "Which email addresses are in this export", has no verb of retrieval and stays unsure: a recall miss, not a wrong route. "Please email the signed contract to the client" also stays unsure, because no intent keyword covers it; that is unchanged by this rule. The four negatives in `moa_routing_email_recall.json` stay unsure, and `test_v111_moa_email_routing.py` checks them. The former strict `xfail` is now a plain test, `test_email_addresses_beside_a_retrieval_verb_are_routed_to_extractor`. Both labelled sets have been used for measurement, so any further change needs a new one.
 
 ## 5. Aggregation (Phase 3)
 

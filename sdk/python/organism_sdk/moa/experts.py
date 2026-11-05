@@ -61,6 +61,19 @@ HEALTH_METHOD_FQN = "organism.moa.Expert/Health"
 
 
 @dataclass(frozen=True)
+class CuedKeyword:
+    """A phrase that counts for an expert only when the query also has one of its cue words (O4).
+
+    "email address" alone is ambiguous. "Set up an email address" is not an extraction request,
+    but "pull the email address out of this" is. The phrase counts only beside a verb of retrieval,
+    so a cue word with no phrase has no effect, and "find" cannot pull in a query that has no phrase.
+    """
+
+    phrase: str
+    cues: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CapabilityDescriptor:
     """What an expert claims it can answer. The router's decision input."""
 
@@ -72,12 +85,16 @@ class CapabilityDescriptor:
     expected_latency_ms: float = 5.0
     requires_gpu: bool = False
     version: str = EXPERT_VERSION
+    cued_keywords: tuple[CuedKeyword, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.expert_id or not self.domain:
             raise ValueError("expert_id and domain are required")
         if not self.keywords:
             raise ValueError(f"{self.expert_id}: at least one keyword is required")
+        for cued in self.cued_keywords:
+            if not cued.phrase or not cued.cues:
+                raise ValueError(f"{self.expert_id}: a cued keyword needs a phrase and cues")
         if not self.task_forms:
             raise ValueError(f"{self.expert_id}: at least one task form is required")
         for form in self.task_forms:

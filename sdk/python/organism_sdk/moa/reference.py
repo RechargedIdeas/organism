@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 from organism_sdk.contract import ModuleRole
-from organism_sdk.moa.experts import BaseExpert, CapabilityDescriptor, ExpertOutput
+from organism_sdk.moa.experts import BaseExpert, CapabilityDescriptor, CuedKeyword, ExpertOutput
 
 INTENT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "schedule": ("schedule", "meeting", "calendar", "book", "appointment"),
@@ -31,6 +31,20 @@ _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?\b")
 EXTRACT_KEYS = ("dates", "emails", "numbers")
+# Verbs of retrieval. They count for the extractor only beside an "email address" phrase (O4).
+EMAIL_CUES = (
+    "pull",
+    "extract",
+    "get",
+    "take",
+    "copy",
+    "list",
+    "find",
+    "pick",
+    "dig",
+    "grab",
+    "fetch",
+)
 
 
 def _contains(text: str, phrase: str) -> bool:
@@ -100,6 +114,10 @@ class Extractor(BaseExpert):
                 keywords=("extract", "dates", "emails", "numbers"),
                 role=ModuleRole.FEATURE_EXTRACTOR,
                 expected_latency_ms=4.0,
+                cued_keywords=(
+                    CuedKeyword("email address", EMAIL_CUES),
+                    CuedKeyword("email addresses", EMAIL_CUES),
+                ),
             )
         )
 

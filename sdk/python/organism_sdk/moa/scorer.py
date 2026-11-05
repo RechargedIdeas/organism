@@ -20,7 +20,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
-from organism_sdk.moa.experts import CapabilityDescriptor, Expert
+from organism_sdk.moa.experts import CapabilityDescriptor, CuedKeyword, Expert
 
 ROUTE_EXPERT = "expert"
 ROUTE_UNSURE = "unsure"
@@ -51,6 +51,10 @@ def _contains(text: str, phrase: str) -> bool:
     return re.search(r"\b" + re.escape(phrase) + r"\b", text) is not None
 
 
+def _cued(text: str, cued: CuedKeyword) -> bool:
+    return _contains(text, cued.phrase) and any(_contains(text, cue) for cue in cued.cues)
+
+
 class LexicalScorer:
     def __init__(
         self,
@@ -67,11 +71,14 @@ class LexicalScorer:
         self.saturation = saturation
         self.allow_llm_fallback = allow_llm_fallback
 
-    def rank(self, query: str, descriptors: Iterable[CapabilityDescriptor]) -> tuple[ScoredExpert, ...]:
+    def rank(
+        self, query: str, descriptors: Iterable[CapabilityDescriptor]
+    ) -> tuple[ScoredExpert, ...]:
         text = query.lower()
         scored = []
         for d in descriptors:
             matched = tuple(kw for kw in d.keywords if _contains(text, kw))
+            matched += tuple(c.phrase for c in d.cued_keywords if _cued(text, c))
             score = min(1.0, len(matched) / self.saturation)
             scored.append(ScoredExpert(d.expert_id, score, matched))
         scored.sort(key=lambda s: (-s.score, s.expert_id))
