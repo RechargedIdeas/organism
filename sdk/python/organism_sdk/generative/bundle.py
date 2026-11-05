@@ -81,7 +81,7 @@ def export_organism_bundle(
     asset_bodies: dict[str, str] = {}
 
     if asset_pipeline is not None:
-        ids = {
+        ids: set[Any] = {
             appearance_d.get("avatar_id"),
             appearance_d.get("skin_id"),
             appearance_d.get("icon_id"),
@@ -209,7 +209,7 @@ def import_organism_bundle(
         if not aid:
             continue
         body = bodies.get(aid, meta.get("body_preview") or "")
-        kind = meta.get("kind") or "avatar"
+        kind: Any = meta.get("kind") or "avatar"  # not validated here; GeneratedAsset takes any str
         asset = GeneratedAsset(
             asset_id=aid,
             kind=kind,
@@ -271,12 +271,12 @@ def import_organism_bundle(
     )
     if switch_active:
         organism_store.set_active(oid)
-    profile = organism_store.get(oid)
-    assert profile is not None
+    stored = organism_store.get(oid)
+    assert stored is not None
     return {
         "ok": True,
         "organism_id": oid,
-        "display_name": profile.display_name,
+        "display_name": stored.display_name,
         "skills_imported": imported_skills,
         "assets_restored": restored_assets,
         "appearance": app.as_dict(),

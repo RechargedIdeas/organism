@@ -15,6 +15,7 @@ import logging
 import math
 import multiprocessing as mp
 import os
+import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -153,7 +154,7 @@ def _child_worker(
     q: Any,
 ) -> None:
     try:
-        if max_rss_mb is not None and max_rss_mb > 0:
+        if sys.platform != "win32" and max_rss_mb is not None and max_rss_mb > 0:
             try:
                 import resource
 

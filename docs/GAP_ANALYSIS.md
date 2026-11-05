@@ -24,7 +24,7 @@ Counts were taken with the project venv (`.venv`), the same interpreter the gate
 | Measure | Start | Now |
 |---|---|---|
 | Ruff findings (ratchet) | 170 | 1 (intentional `exec` in the generative sandbox) |
-| Mypy hand-written findings (ratchet) | 527 | 59 |
+| Mypy hand-written findings (ratchet) | 527 | 0 on Windows, 5 on Linux (O12) |
 | Package versions | 1.4.0 (SDK), 1.3.0 (Rust), 1.10.0 (root) | 1.10.0 everywhere, guarded by a test |
 | Declared dependencies unused in code | pydantic, blake3, structlog, SDK numpy | removed |
 | Registry signatures checked | never | when a trust store is configured |
@@ -65,9 +65,10 @@ done without one, but were not done in this review, with the reason given.
 | O6 | Signing | The trust store is not configured in any production entry point. The deploy stack, the generative runtime, and the MoA experts still pass placeholder bytes such as `b"deploy"` and `b"reference-unsigned"`. | **blocked** on D5. Checked 2026-11-05: with a trust store configured, `build_minimal_stack` raises `RegistrationRejected`, because the stack's own registrations carry placeholder signatures. The agent holds no signing keys, so nothing it runs can produce a valid one. Nothing is wired. The default stays unchecked, so existing behaviour is unchanged. |
 | O7 | Guardrails | Aggregation picks the highest-confidence answer. A grounded but wrong answer passes the guards, and a compromised expert reporting confidence 1.0 wins. The guards bound fabricated values, not correctness. | open, documented in `MOA_LAYER.md` §10. Calibration belongs to the judge, so it is covered by O2. |
 | O8 | Dependencies | No Python lock or constraints file. Installs resolve fresh every time. | open. A lock file adds a tool and an upkeep cost, so it is a choice, not a gap to close silently. |
-| O9 | Typing | 20 hand-written mypy findings remain, down from 59 at F14. The breakdown below is from the 59-finding run. | open. The annotation work is done (F14). The rest need the code read first, starting with `arg-type` and `attr-defined`. |
+| O9 | Typing | The last 20 hand-written mypy findings, down from 59 at F14. | **fixed**. The ratchet is at 0 on Windows, where the baseline is measured. See the backlog section below. |
 | O10 | Docs | `STATUS.md` was dated 2026-10-25 and listed MoA Phases 4 and 5 as not started. | fixed in this review. The CHANGELOG's chrono note was also wrong: `runtime/registry` no longer depends on chrono, but `runtime/workspace` and `organism-client` still do. |
 | O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **resolved** in `edd2924`. The evolve tests use `DesktopService.create(data_root=...)` on a temp directory. The replay log still grows in normal use, so bounding it (rotation or compaction) is an open runtime change. |
+| O12 | Typing | `envstore_windows.py` (added in `4eecd3f`) is Windows-only, so mypy's Linux view has no `ctypes.WinDLL` or `ctypes.get_last_error`. `python -m mypy --platform linux sdk/python` reports 5 `attr-defined` errors in that file. The ratchet is measured on Windows, so it does not see them. | **open**. Options: (a) a module-level platform guard, which changes what importing the module does on Linux, and `test_envstore.py` imports it; (b) per-line `type: ignore`, which `strict` reports as unused on Windows; (c) a `sys.platform` branch around each call. Needs a choice before the Linux type check can be trusted. |
 
 ## Decisions needed
 
@@ -82,10 +83,10 @@ These are the user's to make. Nothing above was decided on your behalf.
 - **D5 (new, 2026-11-05).** How do the stack's own registrations get author signatures once a trust store is configured? They are the deploy stack's two modules (the deterministic engine and the learned module), the MoA reference experts, and generative promotions. The agent holds no keys, so the options are: (a) an approver-signed manifest of those registrations, made on the approver's machine and loaded with the trust store; (b) register the built-in modules outside the agent's startup path, so only signed generative promotions are checked; (c) keep the stack unchecked and enforce only the promotions that carry an approver signature. This blocks O6. Until you decide, nothing is enforced.
 - **N1 (new).** The GitHub nightly workflow uses Actions minutes. The nightly tier took 589 s locally when it was last measured, and the job is capped at 120 minutes. Keep it, or leave only the Windows task (`OrganismNightlyCI`, which is registered and runs at 02:00)?
 
-## Mypy backlog (20 findings now, 59 at F14)
+## Mypy backlog (0 findings on Windows)
 
-Measured by the ratchet at 59 after F14. The two annotation codes are gone. This is the breakdown by
-error code, from the same run:
+The ratchet was at 59 after F14. Four slices cleared it (to 35, 24, 20, then 0). The breakdown at 59
+was:
 
 | Code | Count | Where it sits |
 |---|---|---|
@@ -97,10 +98,10 @@ error code, from the same run:
 | `index` | 4 | indexing a value whose type is a union |
 | `assignment`, `misc`, `var-annotated`, `operator`, `call-arg` | 10 | one-off findings |
 
-Start with the six `comparison-overlap` findings. One is in `sdk/python/organism_sdk/generative/code_pipeline.py`
-(lines 474 and 478), where a check against `CodeStage.REJECTED` is one mypy says can never match. It
-may be dead code or a branch that was meant to run, so read it before changing it. The other five are
-in harness and test files.
+The `comparison-overlap` findings in `sdk/python/organism_sdk/generative/code_pipeline.py` (lines 474 and
+478 at 59) were not dead code. `run_static` sets the `REJECTED` stage at line 343, and the check in
+`evolve()` is reached when it does. mypy had narrowed `b.stage` after `start()`, so the check now goes
+through `_rejected()`, which makes the same comparison. Runtime behaviour is unchanged.
 
 ## Verification
 
@@ -112,3 +113,5 @@ in harness and test files.
 - Full tier on WSL Ubuntu at `4083925`: 61 of 61 gates pass in 111.5 s.
 - Full tier on Windows at `edd2924`: 61 of 61 gates pass in 244.5 s. The evolve tests run on a clean data root (O11).
 - Full tier on WSL Ubuntu at `edd2924`: 61 of 61 gates pass in 110.3 s.
+- Mypy slice 3 (the last 20 findings): the ratchet is at 0 on Windows. `python -m mypy --platform linux sdk/python` reports only the 5 findings in O12. mypy is not installed in the WSL venv (`kc-venv`), and nothing was installed, so the WSL lint gate was not run.
+- Tests for the modules this slice touches: 233 passed, 31 skipped on Windows; 261 passed, 3 skipped on WSL.

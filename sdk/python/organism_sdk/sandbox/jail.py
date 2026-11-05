@@ -195,6 +195,8 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
                     _bring_up_loopback()
                 except OSError as error:
                     _setup_failed("loopback could not be brought up", str(error))
+        if sys.platform == "win32":  # mypy checks each platform's branch only on that platform
+            return
         if not has_resource_module():
             return
         import resource
@@ -472,7 +474,10 @@ class ProcessJail:
         except subprocess.TimeoutExpired:
             timed_out = True
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
+                if sys.platform == "win32":  # no process groups there, so the child is killed alone
+                    proc.kill()
+                else:
+                    os.killpg(proc.pid, signal.SIGKILL)
             except Exception:
                 logger.debug("run failed", exc_info=True)
                 try:

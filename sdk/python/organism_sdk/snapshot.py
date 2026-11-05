@@ -64,6 +64,7 @@ class OpsLog:
                 (op, binding_id, payload, checksum, datetime.now(UTC).isoformat()),
             )
             self._conn.commit()
+            assert cur.lastrowid is not None  # an INSERT always sets it
             return int(cur.lastrowid)
 
     def range(self, start: int, end: int | None = None) -> list[tuple[Any, ...]]:
@@ -183,7 +184,7 @@ class DurableWorkspace:
             h.update(rec.checksum)
             h.update(str(rec.binding_id).encode())
         merkle = h.digest()
-        snap_body = {
+        snap_body: dict[str, Any] = {
             "dimension": self._dim,
             "hypervector_encoding": "binary",
             "bindings": [_binding_payload(r).decode() for r in records],

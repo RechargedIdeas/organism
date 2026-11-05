@@ -181,10 +181,10 @@ class _UnjustifiedActuator(OrganismModule):
         )
 
     def handle(self, input: PerceptionInput) -> Emission:  # noqa: A002
-        return Emission(action_class="control_actuation", payload={"ok": False}, metadata={})
+        return Emission(action_class="control_actuation", payload=b'{"ok": false}', metadata={})
 
     def health(self) -> HealthReport:
-        return HealthReport(status="HEALTHY", detail={})
+        return HealthReport(module_id="fuzz.unjustified", status="HEALTHY")
 
     def justify(self, emission: Emission) -> None:
         return None  # deliberately missing

@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from organism_sdk.deploy.config import DeployConfig, default_cpu_only_config
 from organism_sdk.device import RuntimeId, select_compute_backend
 from organism_sdk.health import HealthReport
 from organism_sdk.registry import CapabilityFilter, RegistryClient
-from organism_sdk.router import Router
+from organism_sdk.router import Level, Router
 from organism_sdk.trace import TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
 
@@ -85,7 +85,7 @@ def build_minimal_stack(cfg: DeployConfig | None = None) -> MinimalStack:
     )
     router = Router(
         reg,
-        level=cfg.stack.router_level,
+        level=cast(Level, cfg.stack.router_level),  # not validated on load; Router takes any str
         trace=trace,
         plan_id_factory=lambda: "serve-plan",
     )
