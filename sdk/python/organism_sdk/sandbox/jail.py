@@ -6,15 +6,21 @@ import contextlib
 import logging
 import os
 import platform
+import shutil
 import signal
+import socket
+import struct
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from organism_sdk.envstore import without_stored
+from organism_sdk.sandbox.egress import Allow, EgressProxy
 from organism_sdk.sandbox.policy import SandboxPolicy
 
 logger = logging.getLogger(__name__)
@@ -115,18 +121,51 @@ def _check_shell_escape(argv: Sequence[str], policy: SandboxPolicy) -> None:
                 raise JailRefused(f"shell escape refused: pattern={pat}")
 
 
+SIOCGIFFLAGS = 0x8913
+SIOCSIFFLAGS = 0x8914
+IFF_UP = 0x1
+IFREQ = "16sh14x"  # struct ifreq: the interface name, then the flags
+
+
+def _bring_up_loopback() -> None:
+    """Set loopback up in a new network namespace, where it starts down.
+
+    This runs in the forked child before exec. Exec drops the capabilities that a namespace grants
+    to a process that is not root inside it, so a bridge started after exec could not do this.
+    """
+    if sys.platform == "win32":
+        raise OSError("loopback can only be brought up on Linux")
+    import fcntl  # Linux only, so not at module level, where Windows would fail
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        flags = struct.unpack(IFREQ, fcntl.ioctl(sock, SIOCGIFFLAGS, struct.pack(IFREQ, b"lo", 0)))[
+            1
+        ]
+        fcntl.ioctl(sock, SIOCSIFFLAGS, struct.pack(IFREQ, b"lo", flags | IFF_UP))
+    finally:
+        sock.close()
+
+
 def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
     # Runs in the forked child before exec. Logging there can deadlock on a lock another
     # thread held at fork time, so a limit that cannot be applied is skipped silently.
+    # Enforcement is the exception: a child that could not get its own namespace must not run,
+    # so the error is raised, and the spawn fails and is reported.
     def _preexec() -> None:
         if ns_flags and sys.platform.startswith("linux"):
+            unshared = False
             try:
                 import ctypes
 
                 libc = ctypes.CDLL("libc.so.6", use_errno=True)
-                libc.unshare(ns_flags)
+                unshared = libc.unshare(ns_flags) == 0
             except Exception:  # noqa: BLE001, S110
                 pass
+            if policy.enforce_network:
+                if not unshared:
+                    raise OSError("the network namespace could not be made")
+                _bring_up_loopback()
         if not has_resource_module():
             return
         import resource
@@ -179,8 +218,11 @@ def _plan_namespaces(policy: SandboxPolicy) -> tuple[int, list[str], list[str]]:
     CLONE_NEWPID = 0x20000000
     CLONE_NEWNET = 0x40000000
     wanted = [("user", CLONE_NEWUSER), ("mount", CLONE_NEWNS)]
-    if os.environ.get("ORGANISM_JAIL_FULL_NS", "").lower() in ("1", "true", "yes"):
-        wanted.extend([("pid", CLONE_NEWPID), ("net", CLONE_NEWNET)])
+    full = os.environ.get("ORGANISM_JAIL_FULL_NS", "").lower() in ("1", "true", "yes")
+    if full:
+        wanted.append(("pid", CLONE_NEWPID))
+    if full or policy.enforce_network:
+        wanted.append(("net", CLONE_NEWNET))
     for name, flag in wanted:
         attempted.append(name)
         flags |= flag
@@ -220,11 +262,22 @@ def _kill_group(proc: subprocess.Popen[bytes]) -> None:
     proc.wait()
 
 
-class ProcessJail:
-    """Run an argv under SandboxPolicy containment."""
+BRIDGE_PORT = 3128  # the in-child bridge's port, on the child's own loopback, so any free port
+BRIDGE = Path(__file__).with_name("egress_bridge.py")
 
-    def __init__(self, policy: SandboxPolicy | None = None) -> None:
+
+class ProcessJail:
+    """Run an argv under SandboxPolicy containment.
+
+    `proxy_allow` replaces the allowlist that the egress proxy enforces when the policy sets
+    `enforce_network`. Tests use it to reach a loopback server. The work executor never passes it.
+    """
+
+    def __init__(
+        self, policy: SandboxPolicy | None = None, *, proxy_allow: Allow | None = None
+    ) -> None:
         self.policy = policy or SandboxPolicy.from_env()
+        self.proxy_allow = proxy_allow
 
     def run(
         self,
@@ -237,6 +290,82 @@ class ProcessJail:
     ) -> JailResult:
         """`on_start` is called with the child's pid, which is also its process group, as soon as
         the child runs. If it raises, the child is killed and the error propagates."""
+        if self.policy.enforce_network:
+            return self._run_enforced(
+                argv, env=env, input_bytes=input_bytes, cwd=cwd, on_start=on_start
+            )
+        return self._run(argv, env=env, input_bytes=input_bytes, cwd=cwd, on_start=on_start)
+
+    def _run_enforced(
+        self,
+        argv: Sequence[str],
+        *,
+        env: dict[str, str] | None,
+        input_bytes: bytes | None,
+        cwd: str | None,
+        on_start: Callable[[int], None] | None,
+    ) -> JailResult:
+        """Run argv behind the egress proxy, in a network namespace with no route out.
+
+        The jail starts the bridge in the child first, and the bridge runs argv. The child reaches
+        the network only through the proxy, so a client that ignores the proxy variables cannot
+        connect at all. A host that cannot make the namespace refuses, rather than run open.
+        """
+        argv = [str(a) for a in argv]
+        if not sys.platform.startswith("linux"):
+            return JailResult(
+                ok=False, refused="network enforcement needs Linux, so this host cannot run it"
+            )
+        if "net" not in _plan_namespaces(self.policy)[1]:
+            return JailResult(
+                ok=False,
+                refused="network enforcement needs a network namespace, which this host lacks",
+            )
+        try:
+            _check_shell_escape(argv, self.policy)
+        except JailRefused as e:
+            return JailResult(ok=False, refused=str(e), exit_code=None)
+        allow = self.proxy_allow or Allow(
+            hosts=frozenset(host.lower() for host in self.policy.network_allowlist)
+        )
+        scratch = Path(tempfile.mkdtemp(prefix="organism-egress-"))
+        socket_path = scratch / "proxy.sock"
+        proxy_url = f"http://127.0.0.1:{BRIDGE_PORT}"
+        bridged = [
+            sys.executable,
+            "-I",
+            str(BRIDGE),
+            "--listen",
+            f"127.0.0.1:{BRIDGE_PORT}",
+            "--upstream",
+            str(socket_path),
+            "--",
+            *argv,
+        ]
+        proxy_env = {
+            **(env or {}),
+            "HTTP_PROXY": proxy_url,
+            "HTTPS_PROXY": proxy_url,
+            "http_proxy": proxy_url,
+            "https_proxy": proxy_url,
+        }
+        try:
+            with EgressProxy(allow, socket_path=socket_path):
+                return self._run(
+                    bridged, env=proxy_env, input_bytes=input_bytes, cwd=cwd, on_start=on_start
+                )
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    def _run(
+        self,
+        argv: Sequence[str],
+        *,
+        env: dict[str, str] | None = None,
+        input_bytes: bytes | None = None,
+        cwd: str | None = None,
+        on_start: Callable[[int], None] | None = None,
+    ) -> JailResult:
         argv = [str(a) for a in argv]
         try:
             _check_shell_escape(argv, self.policy)

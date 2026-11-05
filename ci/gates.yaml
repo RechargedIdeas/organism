@@ -343,10 +343,16 @@ gates:
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_jail_profile.py"
 
   # Network groundwork (v1.12 W5): the allowlist CONNECT proxy, on loopback, and on Linux a child
-  # in its own network namespace that cannot reach host loopback. Not yet enforced for the executor.
+  # in its own network namespace that cannot reach host loopback. The bridge (work:bridge) carries it.
   - id: work:egress
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_egress.py sdk/python/tests/test_v112_work_netns.py"
+
+  # The enforced network (v1.12 W5): the work executor's child reaches its allowlist through the
+  # bridge and nothing else. Linux runs the probe in the real jail; elsewhere, the refusal is checked.
+  - id: work:bridge
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_bridge.py"
 
   # Error and edge paths the other work suites do not reach in-process (v1.12 hardening).
   - id: work:hardening

@@ -27,6 +27,10 @@ class SandboxPolicy:
     # Network: empty allowlist = deny all outbound sockets (best-effort)
     network_allowlist: list[str] = field(default_factory=list)
     allow_network: bool = False
+    # Enforce the allowlist. The child gets its own network namespace, with no route out, and
+    # reaches only the listed hosts, through an egress proxy on a Unix socket. Linux only, and the
+    # jail refuses rather than run open. Off by default; see organism_sdk/sandbox/egress.py.
+    enforce_network: bool = False
     # Attempt Linux user/mount/pid/net namespaces when available
     use_namespaces: bool = True
     # Deny shell / interpreter escape patterns in argv
@@ -114,9 +118,9 @@ class SandboxPolicy:
     def work_executor(cls) -> SandboxPolicy:
         """Policy for the coding-agent CLI that the work agent runs for a Ticket (v1.12 W5).
 
-        The network allowlist names the CLI's API host and the forge's hosts. The jail does not
-        enforce it yet: enforcing it needs a network namespace and a proxy, and neither exists.
-        The child gets only `ANTHROPIC_API_KEY` from the environment, by name.
+        The network allowlist names the CLI's API host and the forge's hosts, and the jail enforces
+        it: the child reaches those hosts through an egress proxy and nothing else. The child gets
+        only `ANTHROPIC_API_KEY` from the environment, by name.
         """
         return cls(
             timeout_s=1800.0,
@@ -126,6 +130,7 @@ class SandboxPolicy:
             max_nproc=128,
             network_allowlist=["api.anthropic.com", "api.github.com", "github.com"],
             allow_network=True,
+            enforce_network=True,
             use_namespaces=True,
             deny_shell_escape=True,
             env_allowlist=("ANTHROPIC_API_KEY",),

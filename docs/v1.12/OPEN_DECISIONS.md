@@ -136,11 +136,18 @@ it. The shadow gate exists, and no real run has produced the data yet.
 
 ## 8. Network enforcement for the executor
 
+**Status:** chosen overnight by the manager, pending the user's confirmation. Built on Linux as
+option A below. Revertible: set `enforce_network=False` in `SandboxPolicy.work_executor()`
+(`sdk/python/organism_sdk/sandbox/policy.py`). The proxy and namespace code stay, so the revert is
+one line.
+
 **Question:** how does the work executor's network allowlist get enforced?
 
-**Today:** the allowlist in the `work_executor` profile is recorded, not enforced. The CLI can reach
-any host the machine can reach (section 10 of WORK_AGENT.md). The executor refuses to run on any
-host that lacks Linux containment, so it cannot run on Windows at all.
+**Today:** enforced on Linux. The child runs in its own network namespace and reaches the allowlist
+only through the bridge (`sandbox/egress_bridge.py`) and the proxy (`sandbox/egress.py`), as section
+10 of WORK_AGENT.md describes. The executor refuses to run on any host that lacks Linux containment,
+so it cannot run on Windows at all. Whether the CLI honours `HTTPS_PROXY` is not yet checked on a
+live run.
 
 **Options**
 
@@ -150,13 +157,16 @@ host that lacks Linux containment, so it cannot run on Windows at all.
   need a privileged step.
 - C. Leave it unenforced, and say so in the profile. This is the state today.
 
-**Recommendation:** A. Its groundwork is built: the proxy (`sandbox/egress.py`, any host) and the
-namespace opt-in (`ORGANISM_JAIL_FULL_NS`, tested under WSL). The bridge is the one piece left.
+**Recommendation:** A, as built. The proxy (`sandbox/egress.py`, any host) and the bridge
+(`sandbox/egress_bridge.py`, Linux) are both in place, and the profile sets the namespace.
 
 **Blocked until chosen:** whether an in-tree bridge is acceptable, or whether the user prefers a
-separate tool for it.
+separate tool for it. Until then, the one-line revert above stands.
 
 ## 9. Subscriptions and context-only follows (W8)
+
+**Status:** deferred overnight by the manager (option A), pending the user's confirmation. Nothing
+here is built: no Subscription, and no context-only follow.
 
 **Question:** should a Subscription exist in v1, and should a message on a subscribed Thread add
 context to a Ticket without admitting anything?

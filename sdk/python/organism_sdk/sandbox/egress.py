@@ -1,27 +1,30 @@
 """An allowlist CONNECT proxy for a sandboxed child (v1.12 W5, network groundwork).
 
-The work executor's profile names the hosts its CLI may reach, but the jail does not enforce that
-list (WORK_AGENT.md, section 10). Enforcing it takes two parts. The child runs in its own network
-namespace, which has no network of its own. And a route carries the child's connections to this
-proxy. The proxy is the part that decides: it opens a tunnel only to a host on its allowlist, on a
-port the allowlist permits, and relays the bytes without reading them. Anything else gets a 403.
+The work executor's profile names the hosts its CLI may reach. The jail enforces that list when the
+profile sets `enforce_network` (WORK_AGENT.md, section 10). The child then runs in its own network
+namespace, which has no route out, and the only way out is this proxy. The proxy is the part that
+decides: it opens a tunnel only to a host on its allowlist, on a port the allowlist permits, and
+relays the bytes without reading them. Anything else gets a 403.
 
-The route is not built. Until a bridge carries the child's connection here, the child cannot reach
-this proxy, and the work executor does not start it. The proxy listens on loopback and accepts any
-client that connects, so the bridge must let only the one child in.
+The jail starts this proxy on a Unix socket in an owner-only directory. A bridge in the child
+(`egress_bridge.py`) carries the child's connections to that socket. The proxy accepts any client
+that can reach the socket, so the directory's owner-only mode is part of the control.
 """
 
 from __future__ import annotations
 
 import contextlib
 import ipaddress
+import os
 import socket
 import socketserver
+import sys
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from io import BufferedIOBase
-from typing import Self, cast
+from pathlib import Path
+from typing import Any, Self, cast
 
 MAX_HEAD_BYTES = 8192
 UPSTREAM_TIMEOUT_S = 10.0
@@ -135,7 +138,7 @@ def _pump(read: Callable[[int], bytes], sink: socket.socket) -> None:
 
 
 class _Handler(socketserver.StreamRequestHandler):
-    server: _Server
+    server: Any  # a _TcpServer or a _UnixServer, each with an `allow`
 
     def handle(self) -> None:
         head = _read_head(self.rfile)
@@ -184,7 +187,7 @@ class _Handler(socketserver.StreamRequestHandler):
             )
 
 
-class _Server(socketserver.ThreadingTCPServer):
+class _TcpServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
@@ -193,20 +196,44 @@ class _Server(socketserver.ThreadingTCPServer):
         super().__init__(address, _Handler)
 
 
-class EgressProxy:
-    """A CONNECT proxy on loopback that tunnels only to its allowlist. Use it as a context manager.
+if sys.platform != "win32":  # Unix sockets exist on Linux and macOS, not on Windows
 
-    `port` 0 takes any free port, which `address` then reports.
+    class _UnixServer(socketserver.ThreadingUnixStreamServer):
+        daemon_threads = True
+
+        def __init__(self, path: str, allow: Allow) -> None:
+            self.allow = allow
+            super().__init__(path, _Handler)
+
+    def _unix_server(path: Path, allow: Allow) -> socketserver.BaseServer:
+        server = _UnixServer(str(path), allow)
+        # owner-only: the directory is owner-only too, this is the socket's own mode
+        os.chmod(path, 0o600)
+        return server
+
+
+class EgressProxy:
+    """A CONNECT proxy that tunnels only to its allowlist. Use it as a context manager.
+
+    It listens on loopback at `port` (0 takes any free port, which `address` then reports). Given
+    `socket_path`, it listens on that Unix socket instead, owner-only. The work executor's child
+    reaches the proxy that way, because the child's own network namespace has no route to loopback.
     """
 
-    def __init__(self, allow: Allow, *, port: int = 0) -> None:
-        self._server = _Server(("127.0.0.1", port), allow)
+    def __init__(self, allow: Allow, *, port: int = 0, socket_path: Path | None = None) -> None:
+        if socket_path is None:
+            self._server: socketserver.BaseServer = _TcpServer(("127.0.0.1", port), allow)
+        elif sys.platform == "win32":
+            raise RuntimeError("the egress proxy cannot listen on a Unix socket on Windows")
+        else:
+            self._server = _unix_server(socket_path, allow)
         self._thread: threading.Thread | None = None
 
     @property
     def address(self) -> tuple[str, int]:
-        host, port = self._server.server_address[:2]
-        return cast(str, host), port
+        """The loopback address of a TCP proxy."""
+        host, port = cast(tuple[str, int], self._server.server_address)
+        return host, port
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)

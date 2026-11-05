@@ -205,7 +205,7 @@ The Executor runs a coding-agent CLI for one Ticket, inside the jail. The CLI is
 
 `SandboxPolicy.work_executor()` allows thirty minutes of wall-clock time, a 4 GB address space, thirty CPU minutes, 256 descriptors and 128 processes. It passes exactly one variable from the environment, `ANTHROPIC_API_KEY`, by name. The jail builds the child's environment from that name and a short base list (`PATH`, `HOME`, the temporary-directory variables and similar), and nothing else is inherited. A stored variable passes too, because naming it is the decision to pass it.
 
-The profile's network allowlist names the CLI's API host and the forge's hosts. **The jail does not enforce it.** Enforcing an allowlist takes three parts: a child in a network namespace, a proxy that decides, and a route from the child to the proxy. The proxy exists (`sandbox/egress.py`). It tunnels only to listed hosts and ports, and it refuses a name that resolves to a loopback or private address. The namespace is an opt-in, `ORGANISM_JAIL_FULL_NS`. Both are tested, the namespace under WSL. The route does not exist, so the executor does not start the proxy. Until a route does, the CLI can reach any host the machine can reach.
+The profile's network allowlist names the CLI's API host and the forge's hosts, and the jail enforces it, since `work_executor()` sets `enforce_network`. Three parts do it. The child runs in its own network namespace, which has loopback and no route out. The jail brings loopback up in the child before exec, because exec drops the capability that would let the bridge do it. The bridge (`sandbox/egress_bridge.py`) runs in the child, listens on the child's loopback at port 3128, and carries each connection over a Unix socket to the egress proxy (`sandbox/egress.py`) in the host process. The proxy tunnels only to listed hosts on port 443, and it refuses a name that resolves to a loopback or private address. The child's environment points `HTTP_PROXY` and `HTTPS_PROXY` at the bridge, and a process that ignores them has no route out at all. If the namespace cannot be made, the child does not start. To revert, set `enforce_network=False` in `work_executor()`; the proxy and the namespace code stay.
 
 ### The executor
 
@@ -257,7 +257,7 @@ The same object can sit in the deploy config, under `work.executor`. `--config F
 
 - Delivery of a follow-up into a running process. A follow-up waits for the next run.
 - A retention limit for run output. The `runs` table grows with each run.
-- Network enforcement, described above.
+- A live run of the CLI through the proxy. The tests use a probe that makes the same connections, so whether the CLI honours `HTTPS_PROXY` is not yet checked.
 
 ## 11. W6 behaviour
 
@@ -328,7 +328,6 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 
 - Several Threads per Trigger (Correlation): context only. `Trigger.related_threads` holds the related Threads, and routing reads `Trigger.thread` alone (section 3). The GitHub source does not fill the field yet. What a Ticket does with it is open (OPEN_DECISIONS.md, item 6).
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
-- The network allowlist of the `work_executor` profile is recorded, not enforced (section 10).
 - `Outcome.STOP` is in the domain, but Eval does not produce it.
 - Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
 - Instruction text stored as versioned artifacts: W9, section 14.
@@ -358,6 +357,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.
 - `test_v112_work_egress.py` and `test_v112_work_netns.py` (`work:egress`, fast tier): the egress proxy's decisions and relay over loopback, and on Linux a child in a network namespace that cannot reach host loopback. Both run in WSL. The namespace test skips on other hosts.
+- `test_v112_work_bridge.py` (`work:bridge`, fast tier): the enforced network. On Linux a probe runs in the real jail: a direct connection fails, an allowlisted host through the bridge carries bytes, and a host off the list gets 403. A run without enforcement reaches the same host directly, so the first check is not passing for another reason. The work executor's own run goes through the same probe. The file also checks the bridge's exit codes, its refusal to run its command when it cannot bind, and its 502 when the proxy socket is gone. The Linux tests skip elsewhere, and the Windows refusal is checked there.
 - `test_v112_work_hardening.py` (`work:hardening`, fast tier): the error and edge paths that the other suites miss, such as a `gh` that cannot start, output that is not JSON, a notice for an ended Ticket, and a stored effect payload that is not an object. A coverage run found them; they are in-process, so they count on any host.
 - `test_v112_work_executor.py` (`work:executor_fake`, fast tier): the refusals, the Ticket's own directory, prepare before run, the worker slots, recovery, and on Linux only, the real jail giving the child only `ANTHROPIC_API_KEY`, and a run's process group ended on request.
 - `test_v112_work_driver.py` (`work:driver`, fast tier): an accepted Decision opens one Ticket with its Mandate, held and stopped Tickets, follow-ups and the bot hold, the task, the result of each kind of run and its kept output, slots, pause and halt, a Ticket whose Mandate no longer stands, a restart's rerun, a stop that ends a running process, the executor file, the deploy config's `work.executor`, and the CLI (`drive`, `runs`, `rerun`). On Linux only, a run through the real jail, both directly and through `organism work drive`.
