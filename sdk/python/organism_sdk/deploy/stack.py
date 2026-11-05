@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, cast, get_args
 
-from organism_sdk.deploy.config import DeployConfig, default_cpu_only_config
+from organism_sdk.deploy.config import DeployConfig, DeployConfigError, default_cpu_only_config
 from organism_sdk.device import RuntimeId, select_compute_backend
 from organism_sdk.health import HealthReport
 from organism_sdk.registry import CapabilityFilter, RegistryClient
@@ -66,6 +66,10 @@ class MinimalStack:
 def build_minimal_stack(cfg: DeployConfig | None = None) -> MinimalStack:
     """Build registry/workspace/router with optional deterministic + learned modules."""
     cfg = cfg or default_cpu_only_config()
+    level = cfg.stack.router_level
+    if level not in get_args(Level):  # checked here: an unknown level would fail on the first route
+        allowed = ", ".join(get_args(Level))
+        raise DeployConfigError(f"router_level must be one of {allowed}, not {level!r}")
 
     prefer = RuntimeId.GPU_CUDA if cfg.runtime.prefer_gpu else RuntimeId.CPU_GENERAL
     sel = select_compute_backend(prefer=prefer)
@@ -85,7 +89,7 @@ def build_minimal_stack(cfg: DeployConfig | None = None) -> MinimalStack:
     )
     router = Router(
         reg,
-        level=cast(Level, cfg.stack.router_level),  # not validated on load; Router takes any str
+        level=cast(Level, level),  # checked above
         trace=trace,
         plan_id_factory=lambda: "serve-plan",
     )

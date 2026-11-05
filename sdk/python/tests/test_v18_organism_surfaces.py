@@ -1,10 +1,12 @@
 """v1.8 Organism surfaces — theme apply, rollback deregister, multi-Organism, bundles."""
 from __future__ import annotations
 
+import json
+import zipfile
 from pathlib import Path
 
 import pytest
-from organism_sdk.deploy.config import default_cpu_only_config
+from organism_sdk.deploy.config import DeployConfigError, default_cpu_only_config
 from organism_sdk.deploy.stack import build_minimal_stack
 from organism_sdk.generative import (
     ArtifactStore,
@@ -144,3 +146,31 @@ def test_export_import_bundle_roundtrip(art: ArtifactStore, tmp_path: Path) -> N
     assert sk.may_control is False
     assert sk.research_tier is True
     assert assets2.appearance.palette
+
+
+def test_an_unknown_router_level_is_refused_before_anything_is_built() -> None:
+    cfg = default_cpu_only_config()
+    cfg.stack.router_level = "L9"
+    with pytest.raises(DeployConfigError, match="router_level must be one of L0, L1, L2, L3, L4"):
+        build_minimal_stack(cfg)
+
+
+def test_a_bundle_with_an_unknown_asset_kind_is_refused_before_anything_is_written(
+    art: ArtifactStore, tmp_path: Path
+) -> None:
+    dest = tmp_path / "bad.zip"
+    with zipfile.ZipFile(dest, "w") as zf:
+        zf.writestr("manifest.json", json.dumps({"format": "organism_bundle_v1"}))
+        zf.writestr("organism_profile.json", "{}")
+        zf.writestr("skills.json", "[]")
+        zf.writestr("appearance.json", "{}")
+        zf.writestr("assets/index.json", json.dumps([{"asset_id": "a1", "kind": "bogus"}]))
+    store = OrganismStore(tmp_path / "orgs")
+    skills = SkillRegistry(art)
+    assets = AssetPipeline(art, assets_root=tmp_path / "assets")
+    with pytest.raises(ValueError, match="unknown asset kind in bundle: 'bogus'"):
+        import_organism_bundle(
+            path=dest, organism_store=store, skill_registry=skills, asset_pipeline=assets
+        )
+    assert store.get("organism_import_x") is None
+    assert assets.assets == {}

@@ -12,10 +12,11 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast, get_args
 
 from organism_sdk.generative.assets import (
     AppearanceProfile,
+    AssetKind,
     AssetPipeline,
     AssetStage,
     GeneratedAsset,
@@ -161,6 +162,10 @@ def import_organism_bundle(
         assets_index = []
         if "assets/index.json" in names:
             assets_index = json.loads(zf.read("assets/index.json"))
+        # Checked before anything is written, so a bundle with a bad kind leaves the stores as they were.
+        for meta in assets_index:
+            if str(meta.get("kind") or "avatar") not in get_args(AssetKind):
+                raise ValueError(f"unknown asset kind in bundle: {meta.get('kind')!r}")
         bodies: dict[str, str] = {}
         for name in names:
             if name.startswith("assets/") and name.endswith(".body"):
@@ -209,10 +214,10 @@ def import_organism_bundle(
         if not aid:
             continue
         body = bodies.get(aid, meta.get("body_preview") or "")
-        kind: Any = meta.get("kind") or "avatar"  # not validated here; GeneratedAsset takes any str
+        kind = str(meta.get("kind") or "avatar")  # its kind was checked on load, above
         asset = GeneratedAsset(
             asset_id=aid,
-            kind=kind,
+            kind=cast(AssetKind, kind),
             brief=str(meta.get("brief") or "imported"),
             stage=AssetStage.STAGED,
             width=int(meta.get("width") or 128),
