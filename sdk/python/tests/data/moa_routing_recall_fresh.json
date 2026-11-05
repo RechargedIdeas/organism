@@ -1,0 +1,22 @@
+[
+  {"query": "Which email addresses appear in the attached log? fay@f.net", "form": null, "label": "extractor"},
+  {"query": "What email addresses are listed in this contact export? gil@g.org", "form": null, "label": "extractor"},
+  {"query": "Which email addresses show up in this thread? hal@h.io and ian@i.io", "form": null, "label": "extractor"},
+  {"query": "Are there any email addresses in this document? jan@j.dev", "form": null, "label": "extractor"},
+  {"query": "Which email addresses are in the signature block below? kip@k.net", "form": null, "label": "extractor"},
+  {"query": "What email addresses does this message contain? oz@o.com", "form": null, "label": "extractor"},
+  {"query": "Which email addresses are in this file? nia@n.org", "form": null, "label": "extractor"},
+  {"query": "Email addresses in this export, please: ros@r.me", "form": null, "label": "extractor"},
+
+  {"query": "Which email addresses should we retire after the merger?", "form": null, "label": "unsure"},
+  {"query": "Which email addresses are allowed to post to the all-staff list?", "form": null, "label": "unsure"},
+  {"query": "What email addresses are best for a monthly newsletter?", "form": null, "label": "unsure"},
+  {"query": "Are there any email addresses that bounced last week?", "form": null, "label": "unsure"},
+  {"query": "Are email addresses case sensitive in most mail systems?", "form": null, "label": "unsure"},
+  {"query": "Which email address should the new hire get?", "form": null, "label": "unsure"},
+  {"query": "Update the email addresses in this directory for the new hire.", "form": null, "label": "unsure"},
+  {"query": "Why do some email addresses in this system look invalid?", "form": null, "label": "unsure"},
+  {"query": "Do email addresses need a domain part to be valid?", "form": null, "label": "unsure"},
+  {"query": "Please delete the old email addresses from the staff directory.", "form": null, "label": "unsure"},
+  {"query": "Please email the signed contract to the client.", "form": null, "label": "unsure"}
+]
