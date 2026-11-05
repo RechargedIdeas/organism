@@ -500,7 +500,7 @@ class CodePipeline:
             "stage": b.stage.value,
             "progress": list(b.stage_progress),
             "checklist": [
-                {"stage": s.value, "done": s.value in done or b.stage == CodeStage.REJECTED and False}
+                {"stage": s.value, "done": s.value in done}
                 for s in self.STAGE_ORDER
             ],
             "rejected": b.stage == CodeStage.REJECTED,

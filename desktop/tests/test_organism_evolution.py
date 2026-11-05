@@ -10,12 +10,11 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
-
 from organism_desktop.app import MainWindow
 from organism_desktop.nav import panel_ids
-from organism_desktop.service import ActuationRefused, DESKTOP_VERSION, DesktopService
+from organism_desktop.service import DESKTOP_VERSION, ActuationRefused, DesktopService
 from organism_sdk.generative import code_pipeline
+from PySide6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="module")
