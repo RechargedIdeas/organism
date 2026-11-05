@@ -1,8 +1,8 @@
 {
   "version": 1,
   "tool": "mypy",
-  "generated": "2026-11-05T10:16:53Z",
-  "total": 47,
+  "generated": "2026-11-05T10:30:31Z",
+  "total": 35,
   "counts": {
     "harness/scenarios/v02_biological.py::index": 3,
     "harness/scenarios/v04_security_fuzz.py::arg-type": 1,
@@ -23,12 +23,6 @@
     "sdk/python/organism_sdk/sandbox/jail.py::attr-defined": 9,
     "sdk/python/organism_sdk/snapshot.py::arg-type": 2,
     "sdk/python/organism_sdk/snapshot.py::no-any-return": 1,
-    "sdk/python/organism_sdk/snapshot.py::var-annotated": 1,
-    "sdk/python/tests/test_m2_registry_workspace.py::arg-type": 2,
-    "sdk/python/tests/test_v111_moa_pipeline.py::arg-type": 1,
-    "sdk/python/tests/test_v111_moa_routing.py::arg-type": 6,
-    "sdk/python/tests/test_v111_moa_routing.py::operator": 1,
-    "sdk/python/tests/test_v17_generative.py::assignment": 1,
-    "sdk/python/tests/test_v18_organism_surfaces.py::arg-type": 1
+    "sdk/python/organism_sdk/snapshot.py::var-annotated": 1
   }
 }

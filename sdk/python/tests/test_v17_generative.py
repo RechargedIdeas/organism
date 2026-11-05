@@ -300,11 +300,11 @@ def test_improve_from_trace(art: ArtifactStore, tmp_path: Path) -> None:
     skill, _ = skills.generate_skill("traceable", intent="v1", code_pipeline=pipe, auto_promote=False)
     store.log(profile.organism_id, "skill_generate", "Generated traceable", payload={"skill_id": skill.skill_id})
     store.log(profile.organism_id, "note", "need better scoring")
-    profile = store.get(profile.organism_id)
-    assert profile is not None
+    current = store.get(profile.organism_id)
+    assert current is not None
     improved, bundle = skills.improve_from_trace(
         skill.skill_id,
-        evolution_log=profile.evolution_log,
+        evolution_log=current.evolution_log,
         code_pipeline=pipe,
         auto_promote=False,
     )

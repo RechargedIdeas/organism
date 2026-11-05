@@ -99,9 +99,11 @@ def test_export_import_bundle_roundtrip(art: ArtifactStore, tmp_path: Path) -> N
     looks = assets.evolve_looks("teal theme Organism", kind="theme")
     assert looks["ok"]
     store.sync_appearance(profile.organism_id, assets.appearance)
+    current = store.get(profile.organism_id)
+    assert current is not None
     dest = tmp_path / "bundle.zip"
     exported = export_organism_bundle(
-        profile=store.get(profile.organism_id),
+        profile=current,
         skills=skills.list_skills(),
         appearance=assets.appearance,
         asset_pipeline=assets,

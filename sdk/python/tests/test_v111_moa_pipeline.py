@@ -160,6 +160,7 @@ def test_custom_deterministic_fallback_is_used() -> None:
     _reference(pipeline, "extractor").fail()
     result = pipeline.run(BOTH_ACTIVE)
     assert result.expert_id == "custom_fallback"
+    assert result.payload is not None
     assert json.loads(result.payload) == {"answer": "fixed"}
 
 

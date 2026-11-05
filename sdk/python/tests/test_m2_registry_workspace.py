@@ -6,7 +6,12 @@ from uuid import uuid4
 from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.contract import ModuleRole
 from organism_sdk.hypervector import Hypervector
-from organism_sdk.registry import CapabilityFilter, RegistryClient, ShadowValidationRecord
+from organism_sdk.registry import (
+    CapabilityFilter,
+    LifecycleState,
+    RegistryClient,
+    ShadowValidationRecord,
+)
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 
@@ -24,12 +29,13 @@ def test_register_query_promote_roundtrip() -> None:
     assert resp.initial_state == "PROPOSED"
 
     # Adjacent promotions
-    for frm, to in [
+    transitions: list[tuple[LifecycleState, LifecycleState]] = [
         ("PROPOSED", "SANDBOXED"),
         ("SANDBOXED", "SHADOW_VALIDATED"),
         ("SHADOW_VALIDATED", "EXPLORATION"),
         ("EXPLORATION", "DELIBERATION"),
-    ]:
+    ]
+    for frm, to in transitions:
         pr = reg.promote(
             resp.module_id,
             frm,

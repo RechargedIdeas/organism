@@ -17,7 +17,7 @@ precision on real traffic.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -73,7 +73,7 @@ def load_labeled(path: Path) -> list[LabeledQuery]:
     return [LabeledQuery(r["query"], r.get("form"), r["label"]) for r in rows]
 
 
-def _structural_choice(form: str | None, experts: list[Expert]) -> str | None:
+def _structural_choice(form: str | None, experts: Sequence[Expert]) -> str | None:
     """Stage 1 alone: the expert for a form, when exactly one expert serves it."""
     if form is None:
         return None
@@ -83,7 +83,7 @@ def _structural_choice(form: str | None, experts: list[Expert]) -> str | None:
 
 def evaluate(
     labeled: Iterable[LabeledQuery],
-    experts: list[Expert],
+    experts: Sequence[Expert],
     scorer: CapabilityScorer,
 ) -> RoutingReport:
     """Score every labeled query and gate the result."""

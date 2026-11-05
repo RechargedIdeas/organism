@@ -101,7 +101,9 @@ def test_shadow_gate_passes_on_synthetic_set() -> None:
     report = shadow.evaluate(shadow.load_labeled(DATA), reference_experts(), LexicalScorer())
     assert report.passed, report.failures
     assert report.domains["intent"].precision == 1.0
-    assert report.domains["extraction"].precision >= shadow.PRECISION_GATE
+    extraction = report.domains["extraction"].precision
+    assert extraction is not None
+    assert extraction >= shadow.PRECISION_GATE
     assert report.structural_precision == 1.0
 
 
