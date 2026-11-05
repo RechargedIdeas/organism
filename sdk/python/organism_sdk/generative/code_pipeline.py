@@ -9,15 +9,16 @@ v1.7.2: wall-clock evolve/promote budgets recorded on last_timings.
 from __future__ import annotations
 
 import ast
-import json
 import hashlib
+import json
+import logging
 import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from organism_sdk.generative.artifacts import ArtifactStore, ProvenanceRecord
@@ -27,8 +28,11 @@ from organism_sdk.generative.backends import (
     GeneratorBackend,
     TemplateDraftBackend,
 )
+from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
 from organism_sdk.generative.sandbox import SafeSandbox, SandboxResult
 from organism_sdk.generative.stages import PromoteGate
+
+logger = logging.getLogger(__name__)
 
 
 class CodeStage(str, Enum):
@@ -87,7 +91,7 @@ class CodeBundle:
     shadow_metrics: dict[str, Any] = field(default_factory=dict)
     provenance: list[dict[str, Any]] = field(default_factory=list)
     may_control: bool = False
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     research_tier: bool = True
     replay_id: str | None = None
     stage_progress: list[str] = field(default_factory=list)
@@ -220,14 +224,14 @@ def _shadow_score(sandbox: SandboxResult) -> tuple[float, ShadowMetrics]:
 class CodePipeline:
     """Production generative code evolution path for Organisms."""
 
-    STAGE_ORDER = [
+    STAGE_ORDER = (
         CodeStage.DRAFT,
         CodeStage.STATIC_OK,
         CodeStage.CONTRACT_OK,
         CodeStage.SANDBOXED,
         CodeStage.SHADOW_SCORED,
         CodeStage.PROMOTED,
-    ]
+    )
 
     def __init__(
         self,
@@ -249,7 +253,7 @@ class CodePipeline:
         self._last_promoted: str | None = None
         self._last_timings: dict[str, float] = {}
         # Wall-clock budgets (ms) — see EvolutionRuntime constants
-        self.evolve_budget_ms: float = 250.0
+        self.evolve_budget_ms: float = EVOLVE_BUDGET_MS
         self.promote_budget_ms: float = 100.0
 
     def start(
@@ -508,6 +512,7 @@ class CodePipeline:
         try:
             known = json.loads(idx.read_text(encoding="utf-8"))
         except Exception:
+            logger.warning("_reload_promote_stack failed", exc_info=True)
             return
         for bid in known:
             path = self._bundle_state_path(bid)
@@ -516,6 +521,7 @@ class CodePipeline:
             try:
                 raw = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
+                logger.warning("_reload_promote_stack failed", exc_info=True)
                 continue
             if raw.get("promote_stack"):
                 self._promote_stack = list(raw["promote_stack"])
@@ -559,6 +565,7 @@ class CodePipeline:
         try:
             known = json.loads(idx.read_text(encoding="utf-8")) if idx.is_file() else []
         except Exception:
+            logger.warning("_persist failed", exc_info=True)
             known = []
         if b.bundle_id not in known:
             known.append(b.bundle_id)
@@ -566,7 +573,6 @@ class CodePipeline:
         return rec
 
     def _hydrate_bundle(self, bundle_id: str) -> CodeBundle | None:
-        from pathlib import Path
 
         path = self._bundle_state_path(bundle_id)
         if not path.is_file():
@@ -574,6 +580,7 @@ class CodePipeline:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
+            logger.warning("_hydrate_bundle failed", exc_info=True)
             return None
         gate_raw = raw.get("gate") or {}
         gate = PromoteGate(
@@ -588,6 +595,7 @@ class CodePipeline:
         try:
             stage = CodeStage(raw.get("stage") or "DRAFT")
         except Exception:
+            logger.warning("_hydrate_bundle failed", exc_info=True)
             stage = CodeStage.DRAFT
         b = CodeBundle(
             bundle_id=bundle_id,
@@ -648,6 +656,4 @@ class CodePipeline:
         p = self._last_timings.get("promote_ms")
         if e is not None and e > self.evolve_budget_ms:
             return False
-        if p is not None and p > self.promote_budget_ms:
-            return False
-        return True
+        return not (p is not None and p > self.promote_budget_ms)

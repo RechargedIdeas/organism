@@ -11,12 +11,17 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import math
 import multiprocessing as mp
 import os
-import traceback
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from organism_sdk.sandbox.jail import JailResult
+
+logger = logging.getLogger(__name__)
 
 
 class SandboxRefused(PermissionError):
@@ -46,8 +51,7 @@ _FORBIDDEN_NAMES = {
     "pickle", "marshal", "shelve", "tempfile", "io", "codecs",
     "asyncio", "threading", "multiprocessing", "concurrent",
     "requests", "urllib", "http", "ftplib", "smtplib",
-    "pty", "fcntl", "resource", "signal", "ctypes",
-    "code", "codeop", "inspect", "gc", "sysconfig",
+    "pty", "fcntl", "resource", "signal", "code", "codeop", "inspect", "gc", "sysconfig",
     "may_actuate",
 }
 
@@ -96,12 +100,16 @@ def _validate_ast(tree: ast.AST) -> None:
             raise SandboxRefused(f"disallowed AST node: {type(node).__name__}")
         if isinstance(node, ast.Name) and node.id in _FORBIDDEN_NAMES:
             raise SandboxRefused(f"forbidden name: {node.id}")
-        if isinstance(node, ast.Attribute):
-            if node.attr.startswith("__") or node.attr in _FORBIDDEN_ATTRS:
-                raise SandboxRefused(f"forbidden attribute: {node.attr}")
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in _FORBIDDEN_NAMES:
-                raise SandboxRefused(f"forbidden call: {node.func.id}")
+        if isinstance(node, ast.Attribute) and (
+            node.attr.startswith("__") or node.attr in _FORBIDDEN_ATTRS
+        ):
+            raise SandboxRefused(f"forbidden attribute: {node.attr}")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _FORBIDDEN_NAMES
+        ):
+            raise SandboxRefused(f"forbidden call: {node.func.id}")
 
 
 _SAFE_BUILTINS: dict[str, Any] = {
@@ -152,7 +160,7 @@ def _child_worker(
                 limit = int(max_rss_mb) * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
             except Exception:
-                pass
+                logger.debug("_child_worker failed", exc_info=True)
         result = _exec_body(source, entry, args)
         q.put({"ok": result.ok, "value": result.value, "error": result.error})
     except SandboxRefused as e:
@@ -160,6 +168,7 @@ def _child_worker(
     except MemoryError:
         q.put({"ok": False, "value": None, "error": "MemoryError: RSS cap exceeded"})
     except Exception as e:
+        logger.warning("_child_worker failed", exc_info=True)
         q.put({"ok": False, "value": None, "error": f"{type(e).__name__}: {e}"})
 
 
@@ -212,6 +221,7 @@ class SafeSandbox:
             except SandboxRefused as e:
                 result = SandboxResult(False, error=f"SandboxRefused: {e}")
             except Exception as e:
+                logger.warning("run failed", exc_info=True)
                 result = SandboxResult(False, error=f"{type(e).__name__}: {e}")
             result.isolated = False
             result.timeout_s = self.timeout_s
@@ -233,6 +243,7 @@ class SafeSandbox:
         try:
             proc.start()
         except Exception as e:
+            logger.warning("_run_isolated failed", exc_info=True)
             return self._inprocess_fallback(source, entry, args, note=f"start_failed:{e}")
         proc.join(self.timeout_s)
         if proc.is_alive():
@@ -251,6 +262,7 @@ class SafeSandbox:
         try:
             payload = q.get_nowait()
         except Exception:
+            logger.debug("_run_isolated failed", exc_info=True)
             return self._inprocess_fallback(
                 source, entry, args, note=f"child_exit={proc.exitcode}"
             )
@@ -271,6 +283,7 @@ class SafeSandbox:
         except SandboxRefused as e:
             result = SandboxResult(False, error=f"SandboxRefused: {e}")
         except Exception as e:
+            logger.warning("_inprocess_fallback failed", exc_info=True)
             result = SandboxResult(False, error=f"{type(e).__name__}: {e}")
         result.isolated = False
         result.timeout_s = self.timeout_s
@@ -279,7 +292,7 @@ class SafeSandbox:
         return result
 
 
-def run_under_organism_jail(argv: list[str], **kwargs):
+def run_under_organism_jail(argv: list[str], **kwargs: Any) -> JailResult:
     """Delegate argv containment to the native OrganismSandbox ProcessJail."""
     from organism_sdk.sandbox import OrganismSandbox, SandboxPolicy
 

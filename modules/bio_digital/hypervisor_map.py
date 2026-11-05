@@ -6,8 +6,9 @@ control actuation.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
@@ -15,6 +16,8 @@ from organism_sdk.module import OrganismModule
 from organism_sdk.registry import RegistryClient
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
+
+logger = logging.getLogger(__name__)
 
 Role = Literal["ACTIVE", "STANDBY", "DEAD", "PROMOTED"]
 
@@ -27,7 +30,7 @@ class DrainPolicy:
     abandon_in_flight: bool = False
 
     def deadline(self, now: datetime | None = None) -> datetime:
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         return now + timedelta(seconds=self.drain_timeout_s)
 
 
@@ -252,7 +255,7 @@ class HypervisorMapper:
             try:
                 self.drain_module(active_mod)
             except Exception:
-                pass
+                logger.debug("kill_active_mid_flight failed", exc_info=True)
 
         if use_apoptosis and active_mod is not None:
             contract = active_mod.declare_contract()
@@ -280,7 +283,7 @@ class HypervisorMapper:
                 self.standby_id, self.active_id, pass_rate=1.0
             )
             # Force shadow ok if service requires prior certificate path
-            self.apoptosis._shadow_ok[self.standby_id] = True  # noqa: SLF001
+            self.apoptosis._shadow_ok[self.standby_id] = True
             promo = self.apoptosis.promote_successor(self.standby_id)
             if promo.promoted:
                 old = self.active_id

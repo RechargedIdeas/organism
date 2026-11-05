@@ -13,8 +13,7 @@ import json
 import math
 import struct
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from organism_sdk.contract import (
     BudgetClass,
@@ -267,7 +266,7 @@ class KernelBoundVerifier:
                 reason_params={},
                 verifier_id=self._id,
                 verifier_contract_digest=self._digest,
-                verified_at=datetime.now(timezone.utc),
+                verified_at=datetime.now(UTC),
             )
         if token.kind != JustificationKind.KERNEL_BOUND:
             return VerificationResult(
@@ -276,7 +275,7 @@ class KernelBoundVerifier:
                 reason_params={"kind": token.kind.value},
                 verifier_id=self._id,
                 verifier_contract_digest=self._digest,
-                verified_at=datetime.now(timezone.utc),
+                verified_at=datetime.now(UTC),
             )
         if "bound" not in obj or "c_m" not in obj:
             return VerificationResult(
@@ -285,7 +284,7 @@ class KernelBoundVerifier:
                 reason_params={},
                 verifier_id=self._id,
                 verifier_contract_digest=self._digest,
-                verified_at=datetime.now(timezone.utc),
+                verified_at=datetime.now(UTC),
             )
         # Accept if calibrated coverage meets target
         alpha = float(obj.get("alpha", 0.1))
@@ -297,7 +296,7 @@ class KernelBoundVerifier:
                 reason_params={"c_m": str(c_m), "target": str(1.0 - alpha)},
                 verifier_id=self._id,
                 verifier_contract_digest=self._digest,
-                verified_at=datetime.now(timezone.utc),
+                verified_at=datetime.now(UTC),
             )
         return VerificationResult(
             outcome="VERIFIED",
@@ -305,5 +304,5 @@ class KernelBoundVerifier:
             reason_params={},
             verifier_id=self._id,
             verifier_contract_digest=self._digest,
-            verified_at=datetime.now(timezone.utc),
+            verified_at=datetime.now(UTC),
         )

@@ -1,11 +1,16 @@
 """Organism CLI — serve / status / sandbox / validate-config / generative evolve (v1.10)."""
+
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _add_config(p: argparse.ArgumentParser) -> None:
@@ -48,16 +53,20 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_serve(args: argparse.Namespace) -> int:
     from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
     from organism_sdk.deploy.serve import serve_stack
+    from organism_sdk.envstore import apply_to_environ
 
+    apply_to_environ()
     cfg = load_deploy_config(args.config)
     issues = validate_deploy_config(cfg)
     if issues and not args.force:
         print(json.dumps({"ok": False, "issues": issues}, indent=2), file=sys.stderr)
         return 1
 
+    from organism_sdk.work.store import default_store_path
+
     dry = bool(args.dry_run)
     port = args.port
-    result = serve_stack(cfg, dry_run=dry, port=port)
+    result = serve_stack(cfg, dry_run=dry, port=port, work_store=default_store_path())
     server = result.pop("_server", None)
     print(json.dumps({k: v for k, v in result.items()}, indent=2))
     if dry or args.once:
@@ -106,7 +115,11 @@ def _build_generative(args: argparse.Namespace) -> dict[str, Any]:
     skills = SkillRegistry(art)
     organisms = OrganismStore(root / "organisms")
     organisms.ensure_default()
-    cfg = load_deploy_config(args.config) if getattr(args, "config", None) else default_cpu_only_config()
+    cfg = (
+        load_deploy_config(args.config)
+        if getattr(args, "config", None)
+        else default_cpu_only_config()
+    )
     stack = build_minimal_stack(cfg)
     stack.trace.attach_v02_sink(V02TraceSink())
     runtime = EvolutionRuntime(
@@ -168,7 +181,7 @@ def _cmd_evolve_looks(args: argparse.Namespace) -> int:
     if args.pack:
         result = g["assets"].evolve_pack(args.brief)
     else:
-        result = g["assets"].evolve_looks(args.brief, kind=args.kind)  # type: ignore[arg-type]
+        result = g["assets"].evolve_looks(args.brief, kind=args.kind)
     org = g["organisms"].get_active()
     if org is not None and (result.get("ok") if isinstance(result, dict) else True):
         g["organisms"].sync_appearance(org.organism_id, g["assets"].appearance)
@@ -302,7 +315,13 @@ def _cmd_list_templates(args: argparse.Namespace) -> int:
 
 def _cmd_list_organisms(args: argparse.Namespace) -> int:
     g = _build_generative(args)
-    _print({"ok": True, "organisms": g["organisms"].list_summaries(), "active": g["organisms"].active_id()})
+    _print(
+        {
+            "ok": True,
+            "organisms": g["organisms"].list_summaries(),
+            "active": g["organisms"].active_id(),
+        }
+    )
     return 0
 
 
@@ -317,7 +336,6 @@ def _cmd_list_drafts(args: argparse.Namespace) -> int:
     g = _build_generative(args)
     _print({"ok": True, "entries": g["replay"].list_entries()})
     return 0
-
 
 
 def _cmd_sandbox(args: argparse.Namespace) -> int:
@@ -354,6 +372,70 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_work(args: argparse.Namespace) -> int:
+    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt"""
+    from organism_sdk.work import operator
+    from organism_sdk.work.store import WorkStore, default_store_path
+
+    path = Path(args.store) if args.store else default_store_path()
+    action = args.work_action
+    reads_only = action in ("status", "tickets", "attention")
+    if reads_only and not path.exists():
+        _print({"ok": False, "error": f"no work store at {path}"})
+        return 1
+    with WorkStore(path, read_only=reads_only) as store:
+        if action == "status":
+            _print(operator.status(store))
+        elif action == "tickets":
+            _print(operator.tickets(store))
+        elif action == "attention":
+            _print(operator.attention(store))
+        elif action in ("pause", "resume"):
+            (operator.pause if action == "pause" else operator.resume)(store)
+            _print({"ok": True, "paused": action == "pause"})
+        elif action == "stop":
+            try:
+                operator.stop(store, args.ticket)
+            except KeyError:
+                _print({"ok": False, "error": f"no open ticket {args.ticket}"})
+                return 1
+            _print({"ok": True, "stopped": args.ticket})
+        elif action == "retry":
+            _print({"ok": True, "made_due": operator.retry(store, args.kind)})
+        elif action == "label":
+            from organism_sdk.work.domain import Verdict
+
+            try:
+                operator.label(store, args.decision, Verdict(args.verdict))
+            except KeyError:
+                _print({"ok": False, "error": f"no decision {args.decision}"})
+                return 1
+            _print({"ok": True, "decision": args.decision, "verdict": args.verdict})
+        elif action == "adopt":
+            from organism_sdk.signing import load_trust_store
+            from organism_sdk.work import codec
+            from organism_sdk.work.governance import PolicyRejected
+            from organism_sdk.work.policy import Policy
+
+            policy = codec.from_text(Policy, Path(args.policy_file).read_text(encoding="utf-8"))
+            signature = bytes.fromhex(Path(args.signature).read_text(encoding="utf-8").strip())
+            trust = load_trust_store(Path(args.trust))
+            try:
+                notified = operator.adopt(store, policy, signature=signature, trust=trust)
+            except PolicyRejected as error:
+                _print({"ok": False, "error": str(error)})
+                return 1
+            _print({"ok": True, "policy": policy.version, "notified": notified})
+        else:
+            try:
+                report = operator.evaluate_triggers(store, row=args.row)
+            except operator.NoActivePolicy as error:
+                _print({"ok": False, "error": str(error)})
+                return 1
+            _print({"ok": True, "decided": report.decided, "unavailable": report.unavailable})
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="organism", description="Organism substrate CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -371,7 +453,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _add_config(p_serve)
     p_serve.add_argument("--dry-run", action="store_true", help="Build stack; do not bind")
     p_serve.add_argument("--once", action="store_true", help="Bind briefly then exit (tests)")
-    p_serve.add_argument("--port", type=int, default=None, help="Override health port (0=ephemeral)")
+    p_serve.add_argument(
+        "--port", type=int, default=None, help="Override health port (0=ephemeral)"
+    )
     p_serve.add_argument("--force", action="store_true")
     p_serve.set_defaults(func=_cmd_serve)
 
@@ -469,10 +553,61 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_sbr.add_argument("--no-namespaces", action="store_true")
     p_sbr.set_defaults(func=_cmd_sandbox)
 
+    # --- Work agent (v1.12) ---
+    store_option = argparse.ArgumentParser(add_help=False)
+    store_option.add_argument(
+        "--store",
+        default=None,
+        help="Work store file (default: $ORGANISM_WORK_STORE, else .organism/work/work.sqlite)",
+    )
+    p_work = sub.add_parser("work", help="Work agent: status, tickets, attention, pause, stop, ...")
+    work_sub = p_work.add_subparsers(dest="work_action", required=True)
+    for action, text in (
+        ("status", "Counts and state, as JSON"),
+        ("tickets", "Open Tickets, with their stages"),
+        ("attention", "What needs a person"),
+        ("pause", "Pause processing; intake keeps recording"),
+        ("resume", "Resume processing"),
+    ):
+        work_sub.add_parser(action, parents=[store_option], help=text).set_defaults(func=_cmd_work)
+    p_wstop = work_sub.add_parser(
+        "stop", parents=[store_option], help="End a Ticket and drop its waiting replies"
+    )
+    p_wstop.add_argument("ticket")
+    p_wstop.set_defaults(func=_cmd_work)
+    p_wretry = work_sub.add_parser(
+        "retry", parents=[store_option], help="Make waiting or failing effects due now"
+    )
+    p_wretry.add_argument("--kind", default=None)
+    p_wretry.set_defaults(func=_cmd_work)
+    p_weval = work_sub.add_parser(
+        "evaluate", parents=[store_option], help="Decide undecided Triggers under the Policy"
+    )
+    p_weval.add_argument("--row", default="repo", help="The admission row the Triggers arrived in")
+    p_weval.set_defaults(func=_cmd_work)
+    p_wlabel = work_sub.add_parser(
+        "label", parents=[store_option], help="Record a verdict on a Decision: agree or disagree"
+    )
+    p_wlabel.add_argument("decision")
+    p_wlabel.add_argument("verdict", choices=["agree", "disagree"])
+    p_wlabel.set_defaults(func=_cmd_work)
+    p_wadopt = work_sub.add_parser(
+        "adopt", parents=[store_option], help="Adopt a Policy that an approver has signed"
+    )
+    p_wadopt.add_argument("policy_file", help="The Policy, as JSON")
+    p_wadopt.add_argument(
+        "--signature", required=True, help="File with the approver's signature, hex"
+    )
+    p_wadopt.add_argument(
+        "--trust", required=True, help="Trust store file: approver and author public keys, hex"
+    )
+    p_wadopt.set_defaults(func=_cmd_work)
+
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         return int(args.func(args))
     except Exception as e:
+        logger.warning("main failed", exc_info=True)
         _print({"ok": False, "error": f"{type(e).__name__}: {e}"})
         return 1
 

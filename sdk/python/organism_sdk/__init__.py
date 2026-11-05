@@ -44,39 +44,52 @@ from organism_sdk.trace import TraceEmitter
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 __all__ = [
-    "DegradationMachine",
-    "FaultInjector",
-    "HealthSignals",
-
     "DIM",
+    "ApoptosisService",
+    "AutonomicController",
     "BindingRecord",
     "CapabilityFilter",
     "CapabilityScopes",
+    "CircadianClock",
+    "DegradationMachine",
+    "DevelopmentalGenome",
+    "DevelopmentalStage",
     "Emission",
     "EmissionSignature",
     "FailureSignature",
+    "FaultInjector",
     "HealthEscalationPolicy",
     "HealthHttp",
     "HealthProbe",
     "HealthReport",
     "HealthServer",
+    "HealthSignals",
+    "HealthVector",
+    "HormoneBus",
+    "HormoneCoefficients",
+    "HormoneLevels",
     "Hypervector",
     "Identity",
+    "ImmuneLayer",
+    "InteroceptiveStateEstimator",
     "JustificationKind",
     "JustificationMissing",
     "JustificationSpec",
     "JustificationToken",
     "Lifecycle",
+    "MemoryExport",
     "MetabolicProfile",
     "ModalityPayload",
     "ModalityUnavailable",
     "ModuleRole",
+    "MorphogenesisTracker",
     "OrganismModule",
     "PerceptionInput",
     "PerceptionSignature",
     "RegistrationRejected",
     "RegistryClient",
     "ReliabilityTier",
+    "RouterExposedParams",
     "SDKInvariantViolation",
     "SafetyDeclaration",
     "Shape",
@@ -87,31 +100,17 @@ __all__ = [
     "ValidationIssue",
     "VerificationResult",
     "WorkspaceClient",
-    "run_handle",
-    "HormoneBus",
-    "HormoneLevels",
-    "InteroceptiveStateEstimator",
-    "HealthVector",
-    "ImmuneLayer",
-    "AutonomicController",
-    "RouterExposedParams",
-    "ApoptosisService",
-    "MemoryExport",
-    "CircadianClock",
-    "kleiber_declared_share",
-    "MorphogenesisTracker",
-    "DevelopmentalGenome",
-    "DevelopmentalStage",
     "__version__",
+    "kleiber_declared_share",
+    "run_handle",
 ]
 
-from organism_sdk.degradation import DegradationMachine, FaultInjector, HealthSignals  # noqa: E402
-
-from organism_sdk.hormone import HormoneBus, HormoneLevels, HormoneCoefficients  # noqa: E402
-from organism_sdk.interoceptive import InteroceptiveStateEstimator, HealthVector  # noqa: E402
-from organism_sdk.immune import ImmuneLayer  # noqa: E402
-from organism_sdk.autonomic import AutonomicController, RouterExposedParams  # noqa: E402
-from organism_sdk.apoptosis import ApoptosisService, MemoryExport  # noqa: E402
-from organism_sdk.circadian import CircadianClock, kleiber_declared_share  # noqa: E402
-from organism_sdk.morphogenesis import MorphogenesisTracker, DevelopmentalGenome, DevelopmentalStage  # noqa: E402
+from organism_sdk.apoptosis import ApoptosisService, MemoryExport
+from organism_sdk.autonomic import AutonomicController, RouterExposedParams
+from organism_sdk.circadian import CircadianClock, kleiber_declared_share
+from organism_sdk.degradation import DegradationMachine, FaultInjector, HealthSignals
+from organism_sdk.hormone import HormoneBus, HormoneCoefficients, HormoneLevels
+from organism_sdk.immune import ImmuneLayer
+from organism_sdk.interoceptive import HealthVector, InteroceptiveStateEstimator
+from organism_sdk.morphogenesis import DevelopmentalGenome, DevelopmentalStage, MorphogenesisTracker
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 import random
 import secrets
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
 from organism_sdk.errors import DimensionMismatch
 

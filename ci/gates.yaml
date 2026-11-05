@@ -1,101 +1,416 @@
-# E.5 CI gate definitions — Organism v0.1 + v0.2 biological extension
+# Organism pipeline gates. Read by ci/organism_ci and run by: python ci/run.py run --tier <tier>
+#
+# Fields
+#   id          unique; lowercase, colon-separated
+#   tier        precommit | fast | full | nightly. A gate runs in its tier and every tier above it.
+#   command     argv line, run without a shell. {python} and {protoc} are filled in.
+#               Leading NAME=value tokens set environment variables. PYTHONPATH may use ":".
+#   builtin     instead of command: proto | hygiene_staged | hygiene_tree |
+#               ruff_ratchet | mypy_ratchet | rustfmt_ratchet
+#   blocking    false = reported, never fails the run (default true)
+#   exclusive   true = runs alone after the parallel gates (wall-clock budgets, full suites)
+#   cacheable   false = never reuse an earlier pass (default true)
+#   retries     0 to 3. A pass on a retry is reported FLAKY, not PASS.
+#   timeout_s   per-attempt limit (default from pipeline.toml)
+#   requires    tools that must exist: python, cargo, protoc, rustfmt, clippy, git
+#   inputs      paths that key the cache (default: [defaults] inputs in pipeline.toml)
+#   env         extra environment variables for this gate
+#   note        documentation only
 
 gates:
+  # ---------------------------------------------------------------- precommit (every commit)
+  - id: hygiene:staged
+    tier: precommit
+    builtin: hygiene_staged
+    cacheable: false
+
+  - id: lint:ruff
+    tier: precommit
+    builtin: ruff_ratchet
+
+  # ---------------------------------------------------------------- fast (pre-push)
+  - id: hygiene:tree
+    tier: fast
+    builtin: hygiene_tree
+
   - id: proto:lint
-    blocking: true
-    command: "make proto PYTHON=.venv/bin/python"
+    tier: fast
+    builtin: proto
+    cacheable: false
+    note: regenerates sdk/python/organism_sdk/_proto from proto/ when stale
+
+  - id: lint:mypy
+    tier: fast
+    builtin: mypy_ratchet
+
+  - id: rust:fmt
+    tier: fast
+    builtin: rustfmt_ratchet
+
+  - id: rust:clippy
+    tier: fast
+    requires: [cargo, protoc, clippy]
+    timeout_s: 1800
+    env:
+      PROTOC: "{protoc}"
+    command: "cargo clippy --workspace --all-targets -- -D warnings"
+    note: zero warnings; the baseline stays at zero, so there is no ratchet
+
+  - id: sandbox:self_check
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m organism_sdk sandbox self-check"
+
+  - id: suite:fast
+    tier: fast
+    exclusive: true
+    cacheable: false
+    timeout_s: 1800
+    command: "{python} -m pytest -q -m 'not slow'"
+    note: the whole fast suite in one process, matching .github/workflows/ci.yml
 
   - id: contract:validate
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q tests/contract"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q tests/contract"
 
   - id: registry:api
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_m2_registry_workspace.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q sdk/python/tests/test_m2_registry_workspace.py"
 
   - id: workspace:unit
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_hypervector.py sdk/python/tests/test_m2_registry_workspace.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q sdk/python/tests/test_hypervector.py sdk/python/tests/test_m2_registry_workspace.py"
 
   - id: workspace:replay
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_workspace_m5.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q sdk/python/tests/test_workspace_m5.py"
 
   - id: router:decision
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_router_m3.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q sdk/python/tests/test_router_m3.py"
 
   - id: router:determinism
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules .venv/bin/python -m pytest -q sdk/python/tests/test_router_m3.py::test_router_determinism_byte_identical"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules {python} -m pytest -q sdk/python/tests/test_router_m3.py::test_router_determinism_byte_identical"
 
   - id: degradation:transitions
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_degradation_m6.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_degradation_m6.py"
 
   - id: trace:replay
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/integration/test_e2e_bootstrap_m7.py::test_e4_two_module_bootstrap"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q tests/integration/test_e2e_bootstrap_m7.py::test_e4_two_module_bootstrap"
 
   - id: integration:e2e
-    blocking: true
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/integration"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q tests/integration"
 
   - id: perf:slo
+    tier: fast
     blocking: false
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_wall_clock_slo.py -m 'not slow'"
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_wall_clock_slo.py -m 'not slow'"
 
   - id: perf:router
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_router_budgets"
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_router_budgets"
 
   - id: perf:workspace
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_workspace_budgets"
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_workspace_budgets"
 
   - id: perf:hormone
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_hormone_publish_budget"
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_hormone_publish_budget"
 
   - id: perf:degradation
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_degradation_confirm_budget"
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_perf.py::test_perf_degradation_confirm_budget"
 
   - id: v02:hormone
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_hormone_g.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_hormone_g.py"
 
   - id: v02:immune
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_immune_h.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_immune_h.py"
 
   - id: v02:autonomic_apoptosis
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_autonomic_apoptosis_i.py sdk/python/tests/test_v02_apoptosis_n45.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_autonomic_apoptosis_i.py sdk/python/tests/test_v02_apoptosis_n45.py"
 
   - id: v02:morphogenesis_circadian
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_morphogenesis_j.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_morphogenesis_j.py"
 
   - id: v02:harness_jo
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_harness_scenarios.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_harness_scenarios.py"
 
   - id: v02:stubs_gates
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v02_stubs_gates.py"
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v02_stubs_gates.py"
 
+  - id: v03:learned_ise
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v03_learned_ise.py"
+
+  - id: v03:metamodel
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v03_metamodel.py"
+
+  - id: v03:multinode
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v03_multinode.py"
+
+  - id: v03:snn_sentinel
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q modules/snn_sentinel/tests sdk/python/tests/test_v03_snn_sentinel.py"
+
+  - id: v04:soak
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_soak.py -m 'not slow'"
+
+  - id: v04:security_fuzz
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_security_fuzz.py"
+
+  - id: v10:substrates
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q modules/kernel_module/tests modules/hdc_module/tests modules/reservoir/tests modules/energy_hopfield/tests modules/spectral/tests modules/neurosymbolic/tests modules/physical_research/tests"
+
+  - id: v10:learned_control
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v10_learned_control.py"
+
+  - id: v10:distributed
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v10_distributed.py"
+
+  - id: v10:rust
+    tier: fast
+    requires: [cargo, protoc]
+    timeout_s: 1800
+    env:
+      PROTOC: "{protoc}"
+    command: "cargo test --workspace --lib"
+
+  - id: v12:hypervisor_drill
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q modules/bio_digital/tests/test_hypervisor_drill.py harness/scenarios/v12_hypervisor_drill.py"
+
+  - id: cpu:everywhere
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_cpu_everywhere.py modules/bio_digital/tests/test_gpu_twin.py"
+
+  - id: v14:deploy
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q tests/deploy"
+
+  - id: v14:soak_ops
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q tests/ops/test_soak_ops.py"
+
+  - id: v14:wetlab
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q modules/bio_digital/tests/test_wetlab.py"
+
+  - id: v17:generative
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v17_generative.py modules/generative/tests"
+
+  - id: v17:desktop_organism
+    tier: fast
+    exclusive: true
+    cacheable: false
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_organism_evolution.py desktop/tests/test_nav.py desktop/tests/test_v15_gate.py"
+
+  - id: v17:generative_fuzz
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v17_generative.py -k fuzz_unsafe"
+
+  - id: v18:organism_surfaces
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_v18_organism_surfaces.py desktop/tests/test_v18_organism_surfaces.py"
+
+  - id: v18:desktop_polish
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_v181_organism_polish.py desktop/tests/test_nav.py"
+
+  - id: v19:audit_closure
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_v19_audit_closure.py"
+
+  - id: v19:desktop_physiology
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_v19_physiology_ops.py"
+
+  - id: v19:generative_cli
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v19_generative_cli.py"
+
+  - id: v110:bare_sandbox
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v110_bare_sandbox.py"
+
+  - id: v110:desktop_ops_sandbox
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_v110_ops_sandbox.py"
+
+  - id: v111:moa_experts
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_experts.py"
+
+  - id: v111:moa_routing_gate
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_routing.py"
+
+  - id: v111:moa_aggregation
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_aggregate.py sdk/python/tests/test_v111_moa_tiers.py"
+
+  - id: v111:moa_pipeline_drills
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_pipeline.py"
+
+  - id: v111:moa_guardrails
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_guardrails.py"
+
+  # Non-blocking first: the red-team suite reports guardrail misses without failing the run.
+  # Flip to blocking once the xfail markers in it are resolved or accepted.
+  - id: v111:moa_redteam
+    tier: fast
+    blocking: false
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_moa_redteam.py"
+
+  # The work agent's pure domain (v1.12 W1): stage table, admission table, Policy digest and purity.
+  - id: work:domain
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_stage.py sdk/python/tests/test_v112_work_gate.py sdk/python/tests/test_v112_work_policy.py"
+
+  # The work agent's store (v1.12 W2): intake, rounds, tickets, receipts, effects, pause, codec.
+  - id: work:store
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_store.py"
+
+  # The work agent across a crash (v1.12 W2): a killed round or effect replays without loss.
+  - id: work:restart
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_restart.py"
+
+  # The GitHub source, read only (v1.12 W3): one repository through a fake gh, with no network.
+  - id: work:github_fake
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_github.py"
+
+  # The GitHub reply channel (v1.12 W6): each reply posted once, in order, and only while writes are on.
+  - id: work:channel_idempotent
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_channel.py sdk/python/tests/test_v112_work_github.py"
+
+  # The operator's surface (v1.12 W7): the view, the changes it may make, and the CLI over both.
+  - id: work:operator
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_operator.py sdk/python/tests/test_v112_work_adopt.py"
+
+  # The needs-you panel (v1.12 W7), offscreen, beside the navigation test it extends.
+  - id: work:needs_you_panel
+    tier: fast
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q desktop/tests/test_needs_you_panel.py desktop/tests/test_nav.py"
+
+  # The environment store and panel (v1.12): a secret value stays out of the masked UI, logs,
+  # error messages, status and CLI output, and sandboxed children. Test values are fake.
+  - id: env:store_and_panel
+    tier: fast
+    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. {python} -m pytest -q sdk/python/tests/test_envstore.py desktop/tests/test_envvars_panel.py desktop/tests/test_nav.py"
+
+  # The work_executor profile and its environment allowlist (v1.12 W5). Pure: runs on any host.
+  - id: work:jail_profile
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_jail_profile.py"
+
+  # The Executor (v1.12 W5): refusals, the Ticket's directory, slots, recovery, and on Linux the
+  # real jail giving the child only the allowed variable.
+  - id: work:executor_fake
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_executor.py"
+
+  # The status route of serve (v1.12 W7): answers beside the writer, and 404s without a store.
+  - id: work:serve_status
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_serve.py"
+
+  # Follow-ups (v1.12 W8): a Ticket owns its Thread, with property tests against a reference model.
+  - id: work:followups
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_followups.py"
+
+  # Policy governance (v1.12 W9): a Policy takes effect only when an approver signs it, and a change
+  # notifies only the Tickets it touches. Test keys only.
+  - id: work:policy_version
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_policy_version.py"
+
+  # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
+  - id: work:admission
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_admission.py"
+
+  # Shadow promotion (v1.12 W4): a rule graduates only on enough agreeing verdicts from its version.
+  - id: work:shadow_promote
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_shadow_promote.py"
+
+  # Eval over the store (v1.12 W4): each Trigger decided once per version, retried when unavailable.
+  - id: work:eval
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_eval.py"
+
+  # ---------------------------------------------------------------- full (before merge / on demand)
+  # The Kotlin SDK must match the language-neutral conformance vectors (K0 and K1). The launcher picks the Gradle wrapper for this OS.
+  - id: conformance:kotlin
+    tier: full
+    command: "{python} ci/kotlin_conformance.py"
+
+  - id: desktop:smoke
+    tier: full
+    command: "PYTHONPATH=sdk/python:modules:desktop:. {python} -m organism_desktop --smoke"
+
+  # ---------------------------------------------------------------- nightly (opt-in slow suites)
+  - id: slow:wall_clock_full
+    tier: nightly
+    exclusive: true
+    cacheable: false
+    timeout_s: 1500
+    env:
+      ORGANISM_WALL_CLOCK_FULL: "1"
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_wall_clock_slo.py"
+    note: about 8 minutes of wall-clock E-5 1b
+
+  - id: slow:soak_full
+    tier: nightly
+    exclusive: true
+    cacheable: false
+    timeout_s: 1800
+    env:
+      ORGANISM_SOAK_FULL: "1"
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v04_soak.py"
+
+# ---------------------------------------------------------------- documentation only (not executed)
+# Status record carried over from the v0.1 to v1.9 gate file. The loader ignores these sections.
 category_i:
   - id: e5_1b_wall_clock_fast
     status: green
@@ -171,138 +486,3 @@ category_bio:
     status: green
   - id: METAMODEL_OOS
     status: green
-
-  - id: v03:learned_ise
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_learned_ise.py"
-
-  - id: v03:metamodel
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_metamodel.py"
-
-  - id: v03:multinode
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v03_multinode.py"
-
-  - id: v03:snn_sentinel
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/snn_sentinel/tests sdk/python/tests/test_v03_snn_sentinel.py"
-
-  - id: v04:soak
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_soak.py -m 'not slow'"
-
-  - id: v04:security_fuzz
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v04_security_fuzz.py"
-
-
-  - id: v10:substrates
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/kernel_module/tests modules/hdc_module/tests modules/reservoir/tests modules/energy_hopfield/tests modules/spectral/tests modules/neurosymbolic/tests modules/physical_research/tests"
-
-  - id: v10:learned_control
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v10_learned_control.py"
-
-  - id: v10:distributed
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v10_distributed.py"
-
-  - id: v10:rust
-    blocking: true
-    status: green
-    command: "cargo test --workspace --lib"
-
-  - id: v12:hypervisor_drill
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/bio_digital/tests/test_hypervisor_drill.py harness/scenarios/v12_hypervisor_drill.py"
-
-  - id: cpu:everywhere
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_cpu_everywhere.py modules/bio_digital/tests/test_gpu_twin.py"
-
-
-  - id: v14:deploy
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/deploy"
-
-  - id: v14:soak_ops
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q tests/ops/test_soak_ops.py"
-
-  - id: v14:wetlab
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q modules/bio_digital/tests/test_wetlab.py"
-
-
-  - id: v17:generative
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v17_generative.py modules/generative/tests"
-
-  - id: v17:desktop_organism
-    blocking: true
-    status: green
-    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_organism_evolution.py desktop/tests/test_nav.py desktop/tests/test_v15_gate.py"
-
-
-  - id: v17:generative_fuzz
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v17_generative.py -k fuzz_unsafe"
-
-
-  - id: v18:organism_surfaces
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q sdk/python/tests/test_v18_organism_surfaces.py desktop/tests/test_v18_organism_surfaces.py"
-
-  - id: v18:desktop_polish
-    blocking: true
-    status: green
-    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v181_organism_polish.py desktop/tests/test_nav.py"
-
-  - id: v19:audit_closure
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q sdk/python/tests/test_v19_audit_closure.py"
-
-  - id: v19:desktop_physiology
-    blocking: true
-    status: green
-    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v19_physiology_ops.py"
-
-  - id: v19:generative_cli
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v19_generative_cli.py"
-
-
-  - id: v110:bare_sandbox
-    blocking: true
-    status: green
-    command: "PYTHONPATH=sdk/python:modules:. .venv/bin/python -m pytest -q sdk/python/tests/test_v110_bare_sandbox.py"
-
-  - id: v110:desktop_ops_sandbox
-    blocking: true
-    status: green
-    command: "QT_QPA_PLATFORM=offscreen PYTHONPATH=sdk/python:modules:desktop:. .venv/bin/python -m pytest -q desktop/tests/test_v110_ops_sandbox.py"
-
-  - id: conformance:kotlin
-    blocking: true
-    command: "cd sdk/kotlin && ./gradlew test"

@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from organism_sdk.contract import (
@@ -27,7 +28,13 @@ from organism_sdk.contract import (
     ReliabilityTier,
     UncertaintyKind,
 )
-from organism_sdk.generative.code_pipeline import CodeBundle, CodePipeline, CodeStage, PromoteRefused
+from organism_sdk.generative.budgets import EVOLVE_BUDGET_MS
+from organism_sdk.generative.code_pipeline import (
+    CodeBundle,
+    CodePipeline,
+    CodeStage,
+    PromoteRefused,
+)
 from organism_sdk.generative.skills import SkillDescriptor
 from organism_sdk.health import HealthReport
 from organism_sdk.hormone import HormoneBus, HormoneLevels
@@ -39,8 +46,11 @@ from organism_sdk.module import OrganismModule
 from organism_sdk.registry import RegistryClient, ShadowValidationRecord
 from organism_sdk.trace import EvolutionTraceEntry, LifecycleTraceEntry, TraceEmitter
 
+logger = logging.getLogger(__name__)
+
 # Wall-clock budgets (ms) for generative pipeline gates — CPU Everywhere.
-EVOLVE_P95_MS = 250.0
+# Evolve is platform-specific; see organism_sdk/generative/budgets.py.
+EVOLVE_P95_MS = EVOLVE_BUDGET_MS
 PROMOTE_P95_MS = 100.0
 HOT_REGISTER_P95_MS = 80.0
 QUARANTINE_P95_MS = 50.0
@@ -94,12 +104,10 @@ class PipelineTiming:
             return False
         if self.hot_register_ms and self.p95("hot_register") > HOT_REGISTER_P95_MS:
             return False
-        if self.quarantine_ms and self.p95("quarantine") > QUARANTINE_P95_MS:
-            return False
-        return True
+        return not (self.quarantine_ms and self.p95("quarantine") > QUARANTINE_P95_MS)
 
 
-def _make_generated_contract(module_id: str, version: str = "0.1.0"):
+def _make_generated_contract(module_id: str, version: str = "0.1.0") -> Any:
     """Build a RESEARCH-safe SubstrateContract for a promoted generative module."""
     from _common.contract_factory import make_contract
 
@@ -152,7 +160,7 @@ class GeneratedSkillModule(OrganismModule):
         self._score = min(1.0, max(0.0, shadow_score))
         self._invocations = 0
 
-    def declare_contract(self):
+    def declare_contract(self) -> Any:
         return _make_generated_contract(self._module_id, self._version)
 
     def health(self) -> HealthReport:
@@ -184,7 +192,7 @@ class GeneratedSkillModule(OrganismModule):
                 "research_tier": True,
                 "may_actuate": False,
                 "cpu_everywhere": True,
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
             },
             sort_keys=True,
         ).encode()
@@ -326,7 +334,7 @@ class EvolutionRuntime:
                 try:
                     self.registry.deregister(module_id, drain="immediate", timeout_s=1)
                 except Exception:
-                    pass
+                    logger.debug("hot_register_promoted failed", exc_info=True)
                 self.modules.pop(module_id, None)
 
             mod = GeneratedSkillModule(
@@ -507,8 +515,8 @@ class EvolutionRuntime:
         # when immune returns QUARANTINE/DEMOTE; if immune tolerated unexpectedly,
         # still demote failed-contract drafts and label as quarantine override.
         if errs and decision.decision not in ("QUARANTINE", "DEMOTE"):
-            decision.decision = "QUARANTINE"  # type: ignore[assignment]
-            decision.classification = "DANGER"  # type: ignore[assignment]
+            decision.decision = "QUARANTINE"
+            decision.classification = "DANGER"
         demoted = False
         if decision.decision in ("QUARANTINE", "DEMOTE"):
             # Ensure bundle cannot be promoted; demote if it somehow was.
@@ -527,7 +535,7 @@ class EvolutionRuntime:
                 try:
                     code_pipeline.demote(bundle.bundle_id, reason=f"immune_{decision.decision.lower()}")
                 except Exception:
-                    pass
+                    logger.warning("_quarantine_with_antigen failed", exc_info=True)
         elapsed = (time.perf_counter() - t0) * 1000.0
         self.timings.record("quarantine", elapsed)
         self.emit_evolution(
@@ -593,6 +601,7 @@ class EvolutionRuntime:
                     self.registry.deregister(module_id, drain="immediate", timeout_s=1)
                     deregistered = True
                 except Exception as exc:
+                    logger.warning("deregister_promoted failed", exc_info=True)
                     return {
                         "deregistered": False,
                         "module_id": module_id,

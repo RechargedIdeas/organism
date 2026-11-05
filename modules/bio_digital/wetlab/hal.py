@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from bio_digital.limits import BioLimits
@@ -74,7 +74,7 @@ class WetLabHAL:
             "device_status": self.device_status,
             "affects_control": False,
             "exploration_only": True,
-            "sampled_at": datetime.now(timezone.utc).isoformat(),
+            "sampled_at": datetime.now(UTC).isoformat(),
         }
 
     def set_environment(
@@ -104,7 +104,7 @@ class WetLabHAL:
 
     def try_open_device(self) -> DeviceStatus:
         """Attempt real GPIO open. Default: refuse or device_missing."""
-        allowed, reason = self.policy.may_actuate(
+        allowed, _reason = self.policy.may_actuate(
             gpio_env=gpio_env_enabled(), substrate_healthy=self.is_healthy()
         )
         if not allowed:
@@ -119,7 +119,7 @@ class WetLabHAL:
         # Placeholder: we do not open arbitrary device files in software Organism.
         # A future HAL driver may set _device_handle here under certified policy.
         self.device_status = "opened"
-        self._device_handle = {"path": path, "opened_at": datetime.now(timezone.utc).isoformat()}
+        self._device_handle = {"path": path, "opened_at": datetime.now(UTC).isoformat()}
         return self.device_status
 
     def apply_potential(self, electrode_id: str, voltage: float) -> None:

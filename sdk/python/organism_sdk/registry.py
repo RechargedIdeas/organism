@@ -4,8 +4,8 @@ from __future__ import annotations
 import hashlib
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal, Protocol
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from organism_sdk.contract import (
     ModuleRole,
@@ -16,8 +16,8 @@ from organism_sdk.contract import (
 )
 from organism_sdk.errors import RegistrationRejected
 from organism_sdk.health import HealthReport
+from organism_sdk.signing import TrustStore, promotion_payload, registration_payload, verify_any
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter
-
 
 LifecycleState = Literal[
     "PROPOSED",
@@ -44,11 +44,6 @@ _PROMOTE_ORDER = [
     "RETIRED",
 ]
 _EXTENDED_STATES = frozenset({"DEVELOPMENT", "SELF_TERMINATING", "SUCCEEDED", "DEGRADED"})
-
-
-class _Healthable(Protocol):
-    def health(self) -> HealthReport: ...
-    def on_drain(self, deadline: datetime) -> None: ...
 
 
 @dataclass
@@ -115,14 +110,42 @@ _TIER_RANK = {
 }
 
 
-class RegistryClient:
-    """In-process registry for M1. Validates contracts, stores modules, probes health."""
+def _bad_signature(field_path: str, role: str) -> ValidationIssue:
+    return ValidationIssue(
+        Severity.ERROR,
+        "signature_invalid",
+        field_path,
+        f"no trusted {role} key verifies this signature",
+    )
 
-    def __init__(self, trace: TraceEmitter | None = None) -> None:
+
+class RegistryClient:
+    """In-process registry for M1. Validates contracts, stores modules, probes health.
+
+    With a ``trust_store``, registration needs an author signature and promotion needs an approver
+    signature, each from a trusted key. Without one, signatures are not checked. That is the
+    default for local development and for the internal callers that pass placeholder bytes.
+    """
+
+    def __init__(
+        self, trace: TraceEmitter | None = None, *, trust_store: TrustStore | None = None
+    ) -> None:
         self._lock = threading.RLock()
         self._modules: dict[str, _Entry] = {}
         self._trace = trace or TraceEmitter()
         self._audit: list[dict[str, Any]] = []
+        self._trust_store = trust_store
+
+    def _note_rejected(self, role: str, module_id: str) -> None:
+        with self._lock:
+            self._audit.append(
+                {
+                    "event": "signature_rejected",
+                    "module_id": module_id,
+                    "role": role,
+                    "at": datetime.now(UTC).isoformat(),
+                }
+            )
 
     def register(
         self,
@@ -139,6 +162,16 @@ class RegistryClient:
         if errors:
             raise RegistrationRejected(errors)
 
+        if self._trust_store is not None and not verify_any(
+            self._trust_store.authors,
+            author_signature,
+            registration_payload(
+                contract.identity.module_id, contract.identity.version, artifact_digest
+            ),
+        ):
+            self._note_rejected("author", contract.identity.module_id)
+            raise RegistrationRejected([_bad_signature("author_signature", "author")])
+
         digest = hashlib.sha256(contract.identity.module_id.encode() + artifact_digest).digest()
         state: LifecycleState = test_bypass_promote or initial_state
         mid = contract.identity.module_id
@@ -151,7 +184,12 @@ class RegistryClient:
                 contract_digest=digest,
             )
             self._audit.append(
-                {"event": "register", "module_id": mid, "at": datetime.now(timezone.utc).isoformat()}
+                {
+                    "event": "register",
+                    "module_id": mid,
+                    "at": datetime.now(UTC).isoformat(),
+                    "signature_checked": self._trust_store is not None,
+                }
             )
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=mid, from_state="", to_state=state, event="register")
@@ -162,7 +200,7 @@ class RegistryClient:
         with self._lock:
             entry = self._modules.pop(module_id, None)
         if entry and entry.module is not None:
-            entry.module.on_drain(datetime.now(timezone.utc))
+            entry.module.on_drain(datetime.now(UTC))
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(
                 module_id=module_id,
@@ -178,9 +216,11 @@ class RegistryClient:
             for mid, e in self._modules.items():
                 if filter.roles and e.contract.identity.role not in filter.roles:
                     continue
-                if filter.min_reliability is not None:
-                    if _TIER_RANK[e.contract.safety.reliability_tier] > _TIER_RANK[filter.min_reliability]:
-                        continue
+                if filter.min_reliability is not None and (
+                    _TIER_RANK[e.contract.safety.reliability_tier]
+                    > _TIER_RANK[filter.min_reliability]
+                ):
+                    continue
                 if filter.min_lifecycle_state is not None:
                     def _rank(s: str) -> int:
                         if s == "DEVELOPMENT":
@@ -233,6 +273,16 @@ class RegistryClient:
     ) -> PromoteResponse:
         with self._lock:
             entry = self._modules[module_id]
+            if self._trust_store is not None and not verify_any(
+                self._trust_store.approvers,
+                approver_signature,
+                promotion_payload(module_id, from_state, to_state, shadow_records),
+            ):
+                self._note_rejected("approver", module_id)
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[_bad_signature("approver_signature", "approver")],
+                )
             if entry.state != from_state and not test_bypass_validation:
                 return PromoteResponse(
                     accepted=False,
@@ -248,19 +298,17 @@ class RegistryClient:
             fi = _PROMOTE_ORDER.index(from_state)
             ti = _PROMOTE_ORDER.index(to_state)
             if ti != fi + 1 and not test_bypass_validation:
-                if not (from_state == "SHADOW_VALIDATED" and to_state == "DELIBERATION" and test_bypass_validation):
-                    if not test_bypass_validation:
-                        return PromoteResponse(
-                            accepted=False,
-                            validation_issues=[
-                                ValidationIssue(
-                                    Severity.ERROR,
-                                    "invalid_promotion",
-                                    "to_state",
-                                    f"cannot promote {from_state} -> {to_state}",
-                                )
-                            ],
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[
+                        ValidationIssue(
+                            Severity.ERROR,
+                            "invalid_promotion",
+                            "to_state",
+                            f"cannot promote {from_state} -> {to_state}",
                         )
+                    ],
+                )
             entry.state = to_state
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=module_id, from_state=from_state, to_state=to_state, event="promote")

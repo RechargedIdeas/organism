@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from organism_desktop.panels._widgets import BasePanel, mono_text
+
+logger = logging.getLogger(__name__)
 
 
 class HomePanel(BasePanel):
@@ -52,6 +55,7 @@ class HomePanel(BasePanel):
         try:
             st = self.service.home_status()
         except Exception as exc:  # surface to MainWindow toast if wired
+            logger.warning("refresh failed", exc_info=True)
             self.view.setPlainText(f"ERROR refreshing status:\n{exc}")
             win = self.window()
             if hasattr(win, "toast"):

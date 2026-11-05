@@ -1,16 +1,22 @@
 """Process jail — rlimits + optional Linux namespaces; graceful degrade elsewhere."""
+
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import signal
 import subprocess
 import sys
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
-from organism_sdk.sandbox.policy import SHELL_ESCAPE_PATTERNS, SandboxPolicy
+from organism_sdk.envstore import without_stored
+from organism_sdk.sandbox.policy import SandboxPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class JailRefused(PermissionError):
@@ -57,6 +63,7 @@ def has_resource_module() -> bool:
 
         return True
     except Exception:
+        logger.debug("has_resource_module failed", exc_info=True)
         return False
 
 
@@ -72,6 +79,7 @@ def capabilities() -> dict[str, Any]:
             libc = ctypes.CDLL("libc.so.6", use_errno=True)
             has_unshare = hasattr(libc, "unshare")
         except Exception:
+            logger.debug("capabilities failed", exc_info=True)
             has_unshare = False
     return {
         "platform": platform.system(),
@@ -100,6 +108,8 @@ def _check_shell_escape(argv: Sequence[str], policy: SandboxPolicy) -> None:
 
 
 def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
+    # Runs in the forked child before exec. Logging there can deadlock on a lock another
+    # thread held at fork time, so a limit that cannot be applied is skipped silently.
     def _preexec() -> None:
         if ns_flags and sys.platform.startswith("linux"):
             try:
@@ -107,7 +117,7 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
 
                 libc = ctypes.CDLL("libc.so.6", use_errno=True)
                 libc.unshare(ns_flags)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if not has_resource_module():
             return
@@ -117,25 +127,25 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int) -> Any:
             try:
                 limit = int(policy.max_rss_mb) * 1024 * 1024
                 resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.cpu_time_s and policy.cpu_time_s > 0:
             try:
                 soft = int(policy.cpu_time_s)
                 resource.setrlimit(resource.RLIMIT_CPU, (soft, soft + 1))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_fds and policy.max_fds > 0:
             try:
                 n = int(policy.max_fds)
                 resource.setrlimit(resource.RLIMIT_NOFILE, (n, n))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         if policy.max_nproc and policy.max_nproc > 0 and hasattr(resource, "RLIMIT_NPROC"):
             try:
                 n = int(policy.max_nproc)
                 resource.setrlimit(resource.RLIMIT_NPROC, (n, n))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     return _preexec
@@ -171,6 +181,27 @@ def _plan_namespaces(policy: SandboxPolicy) -> tuple[int, list[str], list[str]]:
     return flags, attempted, degraded
 
 
+# What a child gets, with or without an allowlist, so programs find their tools and temp files.
+ENV_BASE = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "USERPROFILE")
+
+
+def allowlisted_env(
+    names: Sequence[str],
+    *,
+    extra: dict[str, str] | None = None,
+    source: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """A child environment with the base variables and the named ones, and nothing else inherited.
+
+    A named variable passes even when the store holds it: the allowlist is the decision to pass it.
+    """
+    keep = set(ENV_BASE) | set(names)
+    child_env = {k: v for k, v in (os.environ if source is None else source).items() if k in keep}
+    if extra:
+        child_env.update(extra)
+    return child_env
+
+
 class ProcessJail:
     """Run an argv under SandboxPolicy containment."""
 
@@ -191,13 +222,17 @@ class ProcessJail:
         except JailRefused as e:
             return JailResult(ok=False, refused=str(e), exit_code=None)
 
-        child_env = dict(os.environ)
-        if env:
-            child_env.update(env)
-        for prefix in self.policy.scrub_env_prefixes:
-            for k in list(child_env):
-                if k.startswith(prefix) or k == prefix.rstrip("_"):
-                    child_env.pop(k, None)
+        if self.policy.env_allowlist is not None:
+            child_env = allowlisted_env(self.policy.env_allowlist, extra=env)
+        else:
+            child_env = dict(os.environ)
+            if env:
+                child_env.update(env)
+            for prefix in self.policy.scrub_env_prefixes:
+                for k in list(child_env):
+                    if k.startswith(prefix) or k == prefix.rstrip("_"):
+                        child_env.pop(k, None)
+            child_env = without_stored(child_env)
         child_env["ORGANISM_IN_JAIL"] = "1"
         child_env["ORGANISM_JAIL_LABEL"] = self.policy.label
 
@@ -232,10 +267,11 @@ class ProcessJail:
                 stderr=subprocess.PIPE,
                 cwd=workdir,
                 env=child_env,
-                preexec_fn=preexec,
+                preexec_fn=preexec,  # noqa: PLW1509 -- rlimits apply before exec
                 start_new_session=True,
             )
         except Exception as e:
+            logger.warning("run failed", exc_info=True)
             return JailResult(
                 ok=False,
                 stderr=f"spawn_failed:{type(e).__name__}:{e}",
@@ -254,13 +290,15 @@ class ProcessJail:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
             except Exception:
+                logger.debug("run failed", exc_info=True)
                 try:
                     proc.kill()
                 except Exception:
-                    pass
+                    logger.debug("run failed", exc_info=True)
             try:
                 stdout_b, stderr_b = proc.communicate(timeout=2)
             except Exception:
+                logger.debug("run failed", exc_info=True)
                 stdout_b, stderr_b = b"", b""
         duration_ms = (time.perf_counter() - t0) * 1000.0
 

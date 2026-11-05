@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class ActuationDenied(PermissionError):
@@ -23,7 +23,7 @@ class SafetyPolicy:
     notes: str = ""
 
     @classmethod
-    def deny_all(cls, *, max_voltage: float = 0.0) -> "SafetyPolicy":
+    def deny_all(cls, *, max_voltage: float = 0.0) -> SafetyPolicy:
         return cls(actuation_certified=False, allow_gpio_open=False, max_voltage=max_voltage)
 
     @classmethod
@@ -35,7 +35,7 @@ class SafetyPolicy:
         max_voltage: float,
         allow_gpio_open: bool = True,
         notes: str = "",
-    ) -> "SafetyPolicy":
+    ) -> SafetyPolicy:
         if not certifier or certifier == "unset":
             raise ValueError("certifier required for certified policy")
         if not certificate_id:
@@ -48,7 +48,7 @@ class SafetyPolicy:
             max_voltage=max_voltage,
             certifier=certifier,
             certificate_id=certificate_id,
-            certified_at=datetime.now(timezone.utc).isoformat(),
+            certified_at=datetime.now(UTC).isoformat(),
             notes=notes,
         )
 

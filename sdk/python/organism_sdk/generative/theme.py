@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 DEFAULT_PALETTE: dict[str, str] = {
     "primary": "#0a7a5c",
     "accent": "#3db8ff",

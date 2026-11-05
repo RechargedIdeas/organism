@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTextEdit,
+)
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, set_json
-from PySide6.QtWidgets import QTextEdit
+
+logger = logging.getLogger(__name__)
 
 
 class CatalogPanel(BasePanel):
@@ -97,6 +106,7 @@ class CatalogPanel(BasePanel):
                 badge = result.get("research_badge") or ""
                 win.toast(f"Registered {result.get('module_id')} {badge}".strip())
         except Exception as e:
+            logger.warning("_register_selected failed", exc_info=True)
             self.detail.setPlainText(f"ERROR: {type(e).__name__}: {e}")
             win = self.window()
             if hasattr(win, "toast"):

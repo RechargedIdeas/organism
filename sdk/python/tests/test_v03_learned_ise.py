@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.interoceptive import HealthVector, viability_f
 from organism_sdk.learned_ise import LearnedISE
 from organism_sdk.workspace import WorkspaceClient
 
 
-def test_online_update_reduces_prediction_error():
+def test_online_update_reduces_prediction_error() -> None:
     ise = LearnedISE()
     h = HealthVector(thermal=0.5, energy=0.6)
     # Observed viability systematically above T0 → model should learn positive residual
@@ -20,7 +19,7 @@ def test_online_update_reduces_prediction_error():
     assert ise.last_allostatic is not None
 
 
-def test_prediction_error_drives_allostatic_and_hormone_nudge():
+def test_prediction_error_drives_allostatic_and_hormone_nudge() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     bus = HormoneBus(ws)
     ise = LearnedISE()
@@ -37,7 +36,7 @@ def test_prediction_error_drives_allostatic_and_hormone_nudge():
         ise.estimate(h, for_control=True)
 
 
-def test_shadow_vs_t0_and_failed_promotion_does_not_actuate():
+def test_shadow_vs_t0_and_failed_promotion_does_not_actuate() -> None:
     ise = LearnedISE(agree_threshold=0.1)
     h = HealthVector(thermal=0.9)
     cmp = ise.shadow_compare(h)
@@ -49,7 +48,7 @@ def test_shadow_vs_t0_and_failed_promotion_does_not_actuate():
         ise.estimate(h, for_control=True)
 
 
-def test_successful_promotion_allows_control_estimate():
+def test_successful_promotion_allows_control_estimate() -> None:
     ise = LearnedISE()
     h = HealthVector(thermal=0.8)
     for _ in range(5):

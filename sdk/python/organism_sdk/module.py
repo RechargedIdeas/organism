@@ -3,16 +3,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from organism_sdk.contract import JustificationKind, SubstrateContract
 from organism_sdk.errors import JustificationMissing
 from organism_sdk.health import HealthReport
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission, JustificationToken
-
-if TYPE_CHECKING:
-    pass
 
 
 class OrganismModule(ABC):
@@ -34,7 +30,7 @@ class OrganismModule(ABC):
 
     def on_drain(self, deadline: datetime) -> None:
         """Optional. Complete or abandon in-flight work by deadline (E-3)."""
-        return None
+        return
 
 
 def run_handle(module: OrganismModule, input: PerceptionInput) -> Emission:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
 
 from organism_desktop.panels._widgets import BasePanel, mono_text
+
+logger = logging.getLogger(__name__)
 
 
 class MetamodelPanel(BasePanel):
@@ -45,4 +48,5 @@ class MetamodelPanel(BasePanel):
                 )
             self.view.setPlainText(json.dumps(data, indent=2, default=str))
         except Exception as e:
+            logger.warning("_go failed", exc_info=True)
             self.view.setPlainText(f"ERROR: {type(e).__name__}: {e}")

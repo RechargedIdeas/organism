@@ -4,10 +4,9 @@ from __future__ import annotations
 from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
-from organism_sdk.trace import TraceEmitter
 
 
-def _reg_with_engine():
+def _reg_with_engine() -> tuple[RegistryClient, DeterministicEngine]:
     eng = DeterministicEngine()
     reg = RegistryClient()
     c = eng.declare_contract()
@@ -21,7 +20,7 @@ def _reg_with_engine():
     return reg, eng
 
 
-def test_form_mapping_control_actuation_to_t0():
+def test_form_mapping_control_actuation_to_t0() -> None:
     reg, _ = _reg_with_engine()
     policy = default_bootstrap_policy()
     router = Router(reg, policy, level="L0", plan_id_factory=lambda: "plan-fixed")
@@ -35,7 +34,7 @@ def test_form_mapping_control_actuation_to_t0():
     assert plan.cross_check_required is False  # T0 proposer
 
 
-def test_tier_lattice_critical_forbids_learned_only_t0_ok():
+def test_tier_lattice_critical_forbids_learned_only_t0_ok() -> None:
     reg, _ = _reg_with_engine()
     router = Router(reg, level="L0", plan_id_factory=lambda: "p")
     plan = router.decide(
@@ -45,7 +44,7 @@ def test_tier_lattice_critical_forbids_learned_only_t0_ok():
     assert plan.primary.tier.value == "T0_DETERMINISTIC"
 
 
-def test_level_gating_l3_never_dispatch_plan():
+def test_level_gating_l3_never_dispatch_plan() -> None:
     reg, _ = _reg_with_engine()
     router = Router(reg, level="L3", plan_id_factory=lambda: "p")
     plan = router.decide(
@@ -56,7 +55,7 @@ def test_level_gating_l3_never_dispatch_plan():
     assert plan.disposition in ("DISPATCH", "HOLD")
 
 
-def test_level_gating_l4_deterministic_only():
+def test_level_gating_l4_deterministic_only() -> None:
     reg, _ = _reg_with_engine()
     router = Router(reg, level="L4", plan_id_factory=lambda: "p")
     plan = router.decide(
@@ -67,7 +66,7 @@ def test_level_gating_l4_deterministic_only():
     assert plan.primary.module_id == "deterministic_engine"
 
 
-def test_router_determinism_byte_identical():
+def test_router_determinism_byte_identical() -> None:
     reg, _ = _reg_with_engine()
     policy = default_bootstrap_policy()
     r1 = Router(reg, policy, level="L0", plan_id_factory=lambda: "fixed")
@@ -78,7 +77,7 @@ def test_router_determinism_byte_identical():
     assert p1.to_canonical_bytes() == p2.to_canonical_bytes()
 
 
-def test_pattern_recognition_hold_without_prediction_module():
+def test_pattern_recognition_hold_without_prediction_module() -> None:
     reg, _ = _reg_with_engine()
     router = Router(reg, level="L0", plan_id_factory=lambda: "p")
     plan = router.decide(

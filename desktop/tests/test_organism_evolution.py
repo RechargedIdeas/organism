@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -21,15 +22,24 @@ def qapp():
     yield app
 
 
+def _service(tmp_path: Path) -> DesktopService:
+    """A service whose generative state lives under ``tmp_path``.
+
+    The replay log in the shared ``organism_data`` grows on every evolve, so a service on it gets
+    slower over time. The evolve budget needs the same starting state on every run.
+    """
+    return DesktopService.create(data_root=tmp_path / "organism_data")
+
+
 def test_nav_includes_organism():
     ids = panel_ids()
     assert "organism" in ids
     assert ids.index("organism") == ids.index("metamodel") + 1
 
 
-def test_service_evolution_roundtrip():
+def test_service_evolution_roundtrip(tmp_path: Path):
     assert DESKTOP_VERSION.startswith("1.")
-    svc = DesktopService.create()
+    svc = _service(tmp_path)
     snap = svc.organism_snapshot()
     assert snap["organism_id"]
     assert snap["may_actuate"] is False
@@ -52,8 +62,8 @@ def test_service_evolution_roundtrip():
     assert "sophont" not in snap["organism_id"].lower()
 
 
-def test_service_rollback_pack_dag_preview():
-    svc = DesktopService.create()
+def test_service_rollback_pack_dag_preview(tmp_path: Path):
+    svc = _service(tmp_path)
     a = svc.evolve_organism_code("rollback A", auto_promote=True)
     b = svc.evolve_organism_code("rollback B", auto_promote=True)
     assert b["bundle"]["may_control"] is True
@@ -76,8 +86,8 @@ def test_service_rollback_pack_dag_preview():
     assert "nodes" in dag and "edges" in dag
 
 
-def test_organism_panel_qt(qapp):
-    svc = DesktopService.create()
+def test_organism_panel_qt(qapp, tmp_path: Path):
+    svc = _service(tmp_path)
     win = MainWindow(svc)
     win.show()
     qapp.processEvents()
@@ -107,8 +117,8 @@ def test_organism_panel_qt(qapp):
     assert panel.skill_dag.toPlainText()
 
 
-def test_catalog_generative_register():
-    svc = DesktopService.create()
+def test_catalog_generative_register(tmp_path: Path):
+    svc = _service(tmp_path)
     cat = svc.module_catalog()
     assert any(c["catalog_id"] == "generative_organism" for c in cat)
     result = svc.register_catalog_module("generative_organism")
@@ -118,10 +128,10 @@ def test_catalog_generative_register():
     assert entry.get("may_actuate") in (False, None) or entry["may_actuate"] is False
 
 
-def test_e2e_evolve_improve_promote_appears_in_catalog():
+def test_e2e_evolve_improve_promote_appears_in_catalog(tmp_path: Path):
     """v1.7.2: evolve skill → improve from trace → promote → appear in catalog."""
     assert DESKTOP_VERSION.startswith("1.")
-    svc = DesktopService.create()
+    svc = _service(tmp_path)
     # 1. Evolve skill (shadow scored, not auto-promoted)
     gen = svc.evolve_organism_skill(
         "catalog_evolver",
@@ -131,6 +141,8 @@ def test_e2e_evolve_improve_promote_appears_in_catalog():
     assert gen["ok"]
     skill_id = gen["skill"]["skill_id"]
     assert gen["bundle"]["stage"] == "SHADOW_SCORED"
+    # The evolve budget (budgets.py) is checked here too. This file runs in the exclusive
+    # v17:desktop_organism gate, so no other gate competes with the timing.
     assert gen.get("within_budgets") is True
 
     # 2. Improve from evolution_log / traces
@@ -176,8 +188,8 @@ def test_e2e_evolve_improve_promote_appears_in_catalog():
     assert hot["module_id"] in svc.stack.registry.list_module_ids()
 
 
-def test_immune_quarantine_via_desktop_reject():
-    svc = DesktopService.create()
+def test_immune_quarantine_via_desktop_reject(tmp_path: Path):
+    svc = _service(tmp_path)
     assert svc.evolution_runtime is not None
     assert svc.immune is not None
 

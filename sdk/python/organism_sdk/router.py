@@ -8,14 +8,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from organism_sdk.contract import ModuleRole, ReliabilityTier
-from organism_sdk.registry import ModuleHandle, RegistryClient
 from organism_sdk.autonomic import RouterExposedParams
 from organism_sdk.hormone import HormoneBus, HormoneReading
+from organism_sdk.registry import ModuleHandle, RegistryClient
 from organism_sdk.trace import RoutingTraceEntry, TraceEmitter
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
@@ -104,7 +103,7 @@ class RouterTask:
     requires_uncertainty: bool = False
     requires_interpretability: bool = False
     requires_determinism: bool = False
-    submitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    submitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, str] = field(default_factory=dict)
 
 
@@ -208,7 +207,7 @@ class Router:
         # IMP-17: no neuromorphic on this box by default
         from organism_sdk.neuro_sim import hardware_caps_with_sim
         self._available_hardware = hardware_caps_with_sim(available_hardware or {"NONE"})
-        self._last_sentinel_escalation: dict | None = None
+        self._last_sentinel_escalation: dict[str, Any] | None = None
 
     def set_level(self, level: Level) -> None:
         self._level = level
@@ -236,7 +235,7 @@ class Router:
         }
 
     @property
-    def last_sentinel_escalation(self) -> dict | None:
+    def last_sentinel_escalation(self) -> dict[str, Any] | None:
         return self._last_sentinel_escalation
 
     @property
@@ -339,7 +338,7 @@ class Router:
         # Step 5 re-rank
         ranking_trace: list[str] = []
 
-        def sort_key(h: ModuleHandle) -> tuple:
+        def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
             tier = h.tier.value if hasattr(h.tier, "value") else str(h.tier)
             hs = self._health.get(h.module_id, "HEALTHY")
             health_rank = 0 if hs == "HEALTHY" else 1

@@ -95,8 +95,8 @@ def test_sim_loop_applies_when_certified(monkeypatch):
 
 
 def test_bio_modules_still_may_actuate_false():
-    from bio_digital.slime_mold import SlimeMoldModule
     from bio_digital.mycelium import MyceliumModule
+    from bio_digital.slime_mold import SlimeMoldModule
 
     for mod in (SlimeMoldModule(), MyceliumModule()):
         assert mod.declare_contract().safety.may_actuate is False

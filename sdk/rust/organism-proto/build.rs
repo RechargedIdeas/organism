@@ -1,6 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let proto_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../proto");
+    let proto_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../proto");
     let protos = [
         "organism/v1/common.proto",
         "organism/v1/contract.proto",
@@ -12,10 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "organism/v1/rule.proto",
         "organism/v1/calibration.proto",
     ];
-    let outs: Vec<_> = protos
-        .iter()
-        .map(|p| proto_root.join(p))
-        .collect();
+    let outs: Vec<_> = protos.iter().map(|p| proto_root.join(p)).collect();
     // Ensure OUT_DIR-style gen path used by Makefile exists alongside include!.
     let gen = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/gen");
     std::fs::create_dir_all(&gen)?;

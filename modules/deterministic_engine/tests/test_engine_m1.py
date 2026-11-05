@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from deterministic_engine.engine import DeterministicEngine
-from organism_sdk.contract import Severity
+from organism_sdk.contract import DataType, Modality, Severity
 from organism_sdk.health import HealthServer
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
-from organism_sdk.contract import DataType, Modality
 from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.workspace import WorkspaceClient
+
+from deterministic_engine.engine import DeterministicEngine
 
 
 def test_contract_validate_green():
@@ -66,7 +66,7 @@ def test_handle_justify_control_actuation():
             form="control_actuation",
             safety_tier="high",
             deadline_ms=1000,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=900.0,
@@ -92,7 +92,7 @@ def test_critical_holds():
             form="control_actuation",
             safety_tier="critical",
             deadline_ms=1000,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=900.0,

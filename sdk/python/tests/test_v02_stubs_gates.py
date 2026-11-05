@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.interoceptive import HealthVector
@@ -11,7 +10,7 @@ from organism_sdk.metamodel import MetamodelDisabled, MetamodelTracker
 from organism_sdk.workspace import WorkspaceClient
 
 
-def test_learned_ise_blocked_until_promotion():
+def test_learned_ise_blocked_until_promotion() -> None:
     ise = LearnedISE()
     h = HealthVector(thermal=0.7)
     ise.update(h, 0.75)
@@ -22,7 +21,7 @@ def test_learned_ise_blocked_until_promotion():
     assert ise.estimate(h, for_control=True).model_version.startswith("0.3.0-learned")
 
 
-def test_federated_oxytocin_fail_closed_records_event():
+def test_federated_oxytocin_fail_closed_records_event() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     gate = FederationGate(ws)
     with pytest.raises(FederationUnsupported) as ei:
@@ -31,7 +30,7 @@ def test_federated_oxytocin_fail_closed_records_event():
     assert ws.read_by_tag(["federation_unsupported"])
 
 
-def test_multi_node_mirror_lag_oos():
+def test_multi_node_mirror_lag_oos() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     gate = FederationGate(ws)
     with pytest.raises(FederationUnsupported) as ei:
@@ -40,7 +39,7 @@ def test_multi_node_mirror_lag_oos():
     assert not gate.is_distributed_supported()
 
 
-def test_metamodel_reproductive_disabled():
+def test_metamodel_reproductive_disabled() -> None:
     t = MetamodelTracker()
     assert not t.reproductive_path_enabled()
     with pytest.raises(MetamodelDisabled):

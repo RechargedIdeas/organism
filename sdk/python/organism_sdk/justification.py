@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal, Protocol
+from datetime import datetime
+from typing import Literal, Protocol
 
 from organism_sdk.contract import JustificationKind
-from organism_sdk.errors import JustificationMissing  # re-export
 
 
 @dataclass(frozen=True)
@@ -26,7 +25,7 @@ class VerifierRole(Protocol):
 
     def verifier_id(self) -> str: ...
     def contract_digest(self) -> bytes: ...
-    def verify_token(self, token: "JustificationToken") -> VerificationResult: ...
+    def verify_token(self, token: JustificationToken) -> VerificationResult: ...
 
 
 @dataclass(frozen=True)

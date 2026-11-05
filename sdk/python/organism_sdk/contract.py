@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum, IntEnum
-from typing import Any, Literal
+from enum import Enum
+from typing import Any
 
 from organism_sdk.errors import RegistrationRejected
 

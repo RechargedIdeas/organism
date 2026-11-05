@@ -1,0 +1,44 @@
+# Settings for the local pipeline (ci/run.py). Gate definitions live in ci/gates.yaml.
+
+[defaults]
+timeout_s = 900
+jobs = 2
+# Paths whose content keys the cache for gates that do not list their own inputs.
+# Entries are directories (matched by prefix) or single files. Generated and ignored paths are excluded.
+inputs = [
+    "sdk", "modules", "desktop", "tests", "harness", "proto", "runtime", "ci",
+    "Cargo.toml", "Cargo.lock", "pyproject.toml", "Makefile",
+]
+
+# Environment for every gate. A gate's own env overrides these.
+[env]
+PYTHONUTF8 = "1"
+PYTHONHASHSEED = "0"
+QT_QPA_PLATFORM = "offscreen"
+ORGANISM_SANDBOX_ISOLATE = "1"
+
+[preflight]
+min_python = [3, 11]
+# Imported from the venv before any gate runs. Missing ones fail preflight with an install hint.
+modules = [
+    "pytest", "ruff", "mypy", "grpc_tools", "yaml", "numpy", "cryptography", "google.protobuf",
+    "PySide6",
+]
+min_free_gib = 2.0
+collect_timeout_s = 300
+# Preflight collects tests with this marker, so import errors surface before gates start.
+collect_marker = "not slow"
+
+[hygiene]
+max_file_mib = 5.0
+# A trailing "/" matches a directory prefix. Other entries match the full path or the file name.
+forbidden = ["chat_archive/", "organism-chats/", "*.trace", ".env", "*.pem", "*.key"]
+
+[lint]
+ruff_paths = ["sdk/python", "modules", "desktop/organism_desktop", "ci", "tests/ci"]
+mypy_paths = ["sdk/python"]
+
+[proto]
+# Must end in organism/v1 so the include root (proto/) can be derived from it.
+source = "proto/organism/v1"
+output = "sdk/python/organism_sdk/_proto"

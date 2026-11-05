@@ -6,14 +6,12 @@ import os
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.cli import main
 from organism_sdk.deploy.config import load_deploy_config, validate_deploy_config
 from organism_sdk.deploy.stack import build_minimal_stack
 from organism_sdk.deploy.status_facts import enrich_cli_status
 from organism_sdk.host import HOST_KINDS, detect_host
 from organism_sdk.sandbox import (
-    JailRefused,
     OrganismSandbox,
     ProcessJail,
     SandboxPolicy,
@@ -28,21 +26,21 @@ CFG_DIR = ROOT / "deploy" / "config"
     "name",
     ["bare_metal", "vm", "container_generic", "cpu_only"],
 )
-def test_deploy_profiles_validate(name: str):
+def test_deploy_profiles_validate(name: str) -> None:
     cfg = load_deploy_config(CFG_DIR / f"{name}.yaml")
     assert cfg.profile == name
     assert validate_deploy_config(cfg) == []
     assert cfg.host_kind in {"bare_metal", "vm", "container"}
 
 
-def test_host_detect_forced_kinds():
+def test_host_detect_forced_kinds() -> None:
     for kind in HOST_KINDS:
         facts = detect_host(force_kind=kind)
         assert facts.kind == kind
         assert facts.as_dict()["kind"] == kind
 
 
-def test_host_detect_default_no_docker_assumption():
+def test_host_detect_default_no_docker_assumption() -> None:
     facts = detect_host()
     assert facts.kind in HOST_KINDS
     d = facts.as_dict()
@@ -55,7 +53,7 @@ def test_host_detect_default_no_docker_assumption():
     }
 
 
-def test_status_reports_host_kind_and_no_docker_required():
+def test_status_reports_host_kind_and_no_docker_required() -> None:
     cfg = load_deploy_config(CFG_DIR / "bare_metal.yaml")
     stack = build_minimal_stack(cfg)
     st = enrich_cli_status(stack)
@@ -68,7 +66,7 @@ def test_status_reports_host_kind_and_no_docker_required():
     assert st["cpu_everywhere"] is True
 
 
-def test_sandbox_capabilities_cpu_everywhere():
+def test_sandbox_capabilities_cpu_everywhere() -> None:
     caps = capabilities()
     assert caps["docker_required"] is False
     assert caps["cpu_everywhere"] is True
@@ -76,14 +74,14 @@ def test_sandbox_capabilities_cpu_everywhere():
     assert caps["native_sandbox"] is True
 
 
-def test_sandbox_self_check():
+def test_sandbox_self_check() -> None:
     result = OrganismSandbox().self_check()
     assert result.ok, result.as_dict()
     ids = {c["id"] for c in result.checks}
     assert {"capabilities", "spawn_python", "refuse_shell", "timeout"} <= ids
 
 
-def test_sandbox_refuses_shell_escape():
+def test_sandbox_refuses_shell_escape() -> None:
     r = ProcessJail(SandboxPolicy(deny_shell_escape=True, label="t")).run(
         ["/bin/bash", "-c", "echo pwned"]
     )
@@ -91,7 +89,7 @@ def test_sandbox_refuses_shell_escape():
     assert r.refused and "shell escape" in r.refused
 
 
-def test_sandbox_run_python_ok():
+def test_sandbox_run_python_ok() -> None:
     r = OrganismSandbox().run_python(
         "print(2+2)",
         policy=SandboxPolicy(
@@ -102,7 +100,7 @@ def test_sandbox_run_python_ok():
     assert "4" in r.stdout
 
 
-def test_fuzz_unsafe_escapes_refused():
+def test_fuzz_unsafe_escapes_refused() -> None:
     sb = OrganismSandbox()
     attacks = [
         ["/bin/sh", "-c", "id"],
@@ -114,7 +112,7 @@ def test_fuzz_unsafe_escapes_refused():
         assert r.refused, argv
 
 
-def test_cli_sandbox_status(capsys):
+def test_cli_sandbox_status(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["sandbox", "status"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
@@ -123,14 +121,14 @@ def test_cli_sandbox_status(capsys):
     assert out["native"] is True
 
 
-def test_cli_sandbox_self_check(capsys):
+def test_cli_sandbox_self_check(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["sandbox", "self-check"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is True
 
 
-def test_cli_status_includes_host(capsys):
+def test_cli_status_includes_host(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["status", "-c", str(CFG_DIR / "bare_metal.yaml")])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
@@ -138,7 +136,7 @@ def test_cli_status_includes_host(capsys):
     assert "host_kind" in out
 
 
-def test_containerfile_and_bare_install_exist():
+def test_containerfile_and_bare_install_exist() -> None:
     assert (ROOT / "deploy" / "container" / "Containerfile").is_file()
     assert (ROOT / "deploy" / "bare" / "install.sh").is_file()
     assert (ROOT / "deploy" / "systemd" / "organism.service").is_file()
@@ -146,7 +144,7 @@ def test_containerfile_and_bare_install_exist():
     assert "Docker is not required" in readme or "Docker is NOT required" in readme or "not required" in readme.lower()
 
 
-def test_generative_compose_with_native_jail():
+def test_generative_compose_with_native_jail() -> None:
     from organism_sdk.generative.sandbox import run_under_organism_jail
 
     r = run_under_organism_jail(
@@ -158,7 +156,7 @@ def test_generative_compose_with_native_jail():
     assert "compose" in r.stdout or r.ok
 
 
-def test_ci_docker_not_required_for_gates():
+def test_ci_docker_not_required_for_gates() -> None:
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "docker_optional" in ci or "continue-on-error: true" in ci
     assert "sandbox self-check" in ci.lower() or "Native sandbox" in ci

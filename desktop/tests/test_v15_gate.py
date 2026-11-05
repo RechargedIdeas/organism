@@ -6,9 +6,10 @@ from organism_desktop.service import ActuationRefused, DESKTOP_VERSION, DesktopS
 
 
 def test_v15_desktop_gate():
-    """Gate: twelve panels, CPU home, catalog, pipeline inspector, contracts, bio refuse."""
+    """Gate: fifteen panels, CPU home, catalog, pipeline inspector, contracts, bio refuse."""
     assert panel_ids() == [
         "home",
+        "needs_you",
         "registry",
         "catalog",
         "workspace",
@@ -20,6 +21,7 @@ def test_v15_desktop_gate():
         "traces",
         "contracts",
         "ops",
+        "envvars",
         "docs",
     ]
     assert DESKTOP_VERSION == "1.10.0"

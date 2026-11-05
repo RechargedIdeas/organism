@@ -1,10 +1,7 @@
 """v1.3 — CPU-everywhere product guarantee (cpu:everywhere gate)."""
 from __future__ import annotations
 
-import os
-
 import pytest
-
 from organism_sdk.device import (
     CPU_HOSTABLE_HARDWARE,
     RuntimeId,
@@ -18,12 +15,12 @@ from organism_sdk.device import (
 from organism_sdk.neuro_sim import (
     CPU_RESEARCH_SIM_BACKEND,
     hardware_caps_with_sim,
-    neuromorphic_cpu_backend,
     neuro_sim_enabled,
+    neuromorphic_cpu_backend,
 )
 
 
-def test_default_selection_is_cpu(monkeypatch):
+def test_default_selection_is_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ORGANISM_BIO_GPU_TWIN", raising=False)
     monkeypatch.delenv("ORGANISM_PREFER_GPU", raising=False)
     sel = select_compute_backend()
@@ -32,7 +29,7 @@ def test_default_selection_is_cpu(monkeypatch):
     assert sel.backend in {"numpy_cpu", "research_sim_cpu"}
 
 
-def test_prefer_gpu_falls_back_to_cpu_without_cuda(monkeypatch):
+def test_prefer_gpu_falls_back_to_cpu_without_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
     monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: False)
     monkeypatch.setattr("organism_sdk.device.probe_accelerators", lambda: set())
@@ -43,14 +40,14 @@ def test_prefer_gpu_falls_back_to_cpu_without_cuda(monkeypatch):
     assert sel.backend in {"numpy_cpu", "torch_cpu"}
 
 
-def test_requires_gpu_never_raises():
+def test_requires_gpu_never_raises() -> None:
     sel = resolve_requires_gpu(True)
     assert sel.runtime in {RuntimeId.CPU_GENERAL, RuntimeId.GPU_CUDA}
     # Must be a successful selection object, not an exception
     assert sel.backend
 
 
-def test_cpu_can_host_all_research_hardware():
+def test_cpu_can_host_all_research_hardware() -> None:
     for hw in CPU_HOSTABLE_HARDWARE:
         assert cpu_can_host(hw), hw
     assert cpu_can_host("NONE")
@@ -58,13 +55,13 @@ def test_cpu_can_host_all_research_hardware():
     assert cpu_can_host("HW_NEUROMORPHIC")
 
 
-def test_neuromorphic_research_sim_is_cpu():
+def test_neuromorphic_research_sim_is_cpu() -> None:
     sel = neuromorphic_cpu_backend()
     assert sel.runtime == RuntimeId.CPU_GENERAL
     assert sel.backend == CPU_RESEARCH_SIM_BACKEND or sel.backend == "research_sim_cpu"
 
 
-def test_neuro_sim_caps_additive(monkeypatch):
+def test_neuro_sim_caps_additive(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ORGANISM_NEURO_SIM", raising=False)
     assert "NEUROMORPHIC" not in hardware_caps_with_sim({"NONE"})
     monkeypatch.setenv("ORGANISM_NEURO_SIM", "1")
@@ -72,9 +69,9 @@ def test_neuro_sim_caps_additive(monkeypatch):
     assert neuro_sim_enabled()
 
 
-def test_snn_spike_sim_runs_on_cpu_without_hw():
-    from snn_sentinel.module import SNNSentinel
+def test_snn_spike_sim_runs_on_cpu_without_hw() -> None:
     from organism_sdk.workspace import WorkspaceClient
+    from snn_sentinel.module import SNNSentinel
 
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     snn = SNNSentinel(workspace=ws, hardware_present=False)
@@ -85,7 +82,7 @@ def test_snn_spike_sim_runs_on_cpu_without_hw():
     assert "rate_hz" in result
 
 
-def test_gpu_twin_wave_on_cpu_under_prefer(monkeypatch):
+def test_gpu_twin_wave_on_cpu_under_prefer(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_BIO_DIGITAL_SIM", "1")
     monkeypatch.setenv("ORGANISM_BIO_GPU_TWIN", "1")
     from bio_digital.gpu_twin import GpuTwinSimulator
@@ -98,22 +95,22 @@ def test_gpu_twin_wave_on_cpu_under_prefer(monkeypatch):
         assert r.runtime_id == "CPU_GENERAL"
 
 
-def test_bio_modules_may_actuate_false():
-    from bio_digital.slime_mold import SlimeMoldModule
+def test_bio_modules_may_actuate_false() -> None:
     from bio_digital.mycelium import MyceliumModule
+    from bio_digital.slime_mold import SlimeMoldModule
 
     for mod in (SlimeMoldModule(), MyceliumModule()):
         c = mod.declare_contract()
         assert c.safety.may_actuate is False
 
 
-def test_missing_gpu_is_not_process_failure():
+def test_missing_gpu_is_not_process_failure() -> None:
     assert_never_hard_fail_missing_gpu(None)
     sel = select_compute_backend(prefer=RuntimeId.GPU_CUDA, prefer_gpu=True)
     assert sel is not None
 
 
-def test_prefer_accelerator_env(monkeypatch):
+def test_prefer_accelerator_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ORGANISM_BIO_GPU_TWIN", raising=False)
     monkeypatch.delenv("ORGANISM_PREFER_GPU", raising=False)
     assert prefer_accelerator() is False
@@ -121,11 +118,11 @@ def test_prefer_accelerator_env(monkeypatch):
     assert prefer_accelerator() is True
 
 
-def test_torch_probe_is_bool():
+def test_torch_probe_is_bool() -> None:
     assert isinstance(torch_available(), bool)
 
 
-def test_organism_torch_zero_forces_numpy(monkeypatch):
+def test_organism_torch_zero_forces_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_TORCH", "0")
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
     from organism_sdk import device as dev
@@ -137,7 +134,7 @@ def test_organism_torch_zero_forces_numpy(monkeypatch):
     assert sel.backend == "numpy_cpu"
 
 
-def test_prefer_gpu_with_mocked_no_cuda(monkeypatch):
+def test_prefer_gpu_with_mocked_no_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
     """Never skip: mock cuda absent even if box has GPU."""
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
     monkeypatch.setenv("ORGANISM_TORCH", "1")
@@ -150,7 +147,7 @@ def test_prefer_gpu_with_mocked_no_cuda(monkeypatch):
     assert sel.backend == "torch_cpu"
 
 
-def test_prefer_gpu_with_mocked_cuda(monkeypatch):
+def test_prefer_gpu_with_mocked_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
     monkeypatch.setenv("ORGANISM_TORCH", "1")
     monkeypatch.setattr("organism_sdk.device.torch_available", lambda: True)
@@ -165,7 +162,7 @@ def test_prefer_gpu_with_mocked_cuda(monkeypatch):
     assert sel.accelerator_present is True
 
 
-def test_no_torch_mocked_stays_numpy(monkeypatch):
+def test_no_torch_mocked_stays_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORGANISM_PREFER_GPU", "1")
     monkeypatch.setattr("organism_sdk.device.torch_available", lambda: False)
     monkeypatch.setattr("organism_sdk.device.cuda_available", lambda: False)
@@ -175,7 +172,7 @@ def test_no_torch_mocked_stays_numpy(monkeypatch):
     assert sel.runtime == RuntimeId.CPU_GENERAL
 
 
-def test_accelerator_selection_summary_keys():
+def test_accelerator_selection_summary_keys() -> None:
     from organism_sdk.device import accelerator_selection_summary
 
     s = accelerator_selection_summary()

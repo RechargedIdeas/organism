@@ -12,17 +12,17 @@ MATRIX_IDS = [
 STUB_IDS = ["LEARNED_ISE", "FED_OXYTOCIN", "MIRROR_LAG_OOS", "METAMODEL_OOS"]
 
 
-def test_all_matrix_ids_registered():
+def test_all_matrix_ids_registered() -> None:
     for sid in MATRIX_IDS + STUB_IDS:
         assert sid in SCENARIOS, f"missing scenario {sid}"
 
 
-def test_all_v02_scenarios_green():
+def test_all_v02_scenarios_green() -> None:
     for sid in MATRIX_IDS + STUB_IDS:
         SCENARIOS[sid]()
 
 
-def test_each_matrix_id_individually():
+def test_each_matrix_id_individually() -> None:
     """Param-style loop so a single failure names the ID clearly."""
     failures = []
     for sid in MATRIX_IDS + STUB_IDS:

@@ -12,7 +12,7 @@ import math
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from organism_sdk.hypervector import Hypervector
@@ -55,7 +55,7 @@ class HormoneLevels:
     dopamine: float = 0.0
     oxytocin: float = 0.0
     melatonin: float = 0.0
-    released_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    released_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     source: str = HORMONE_MODULE_ID
     window_id: str = ""
 
@@ -186,7 +186,7 @@ class HormoneBus:
             self._last_diagnosis = {
                 "code": "hormone_bus_mirror_killed",
                 "fallback": "workspace_hormone_state",
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
             }
 
     @property
@@ -232,7 +232,7 @@ class HormoneBus:
                 dopamine=d,
                 oxytocin=o,
                 melatonin=m,
-                released_at=datetime.now(timezone.utc),
+                released_at=datetime.now(UTC),
                 source=source,
                 window_id=f"w{self._window_seq}",
             ).clamp()
@@ -292,7 +292,7 @@ class HormoneBus:
 
     def read_mirror(self, *, now: datetime | None = None, consumer: str = "router") -> HormoneReading:
         """Low-latency mirror read. Falls back to workspace if mirror killed."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         with self._lock:
             if self._alive and self._mirror_written_at is not None:
                 levels = self._mirror
@@ -306,7 +306,7 @@ class HormoneBus:
                     self._last_diagnosis = {
                         "code": "hormone_bus_mirror_unavailable",
                         "fallback": "workspace_hormone_state",
-                        "at": datetime.now(timezone.utc).isoformat(),
+                        "at": datetime.now(UTC).isoformat(),
                     }
         staleness_ms = max(0.0, (now - written).total_seconds() * 1000.0)
         reading = HormoneReading(
@@ -338,7 +338,7 @@ def _parse_dt(value: Any) -> datetime:
             return datetime.fromisoformat(value)
         except ValueError:
             pass
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def modulate_parameter(

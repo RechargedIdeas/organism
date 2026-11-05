@@ -5,7 +5,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from organism_sdk.contract import ReliabilityTier, SubstrateContract
@@ -28,7 +28,7 @@ class DeathCertificate:
     memory_export_digest: str
     successor_spec: dict[str, Any] | None = None
     decisions_sample: list[dict[str, Any]] = field(default_factory=list)
-    issued_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    issued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -185,7 +185,7 @@ class ApoptosisService:
                 "on_drain_outcome": "killed",
                 "cause": cause,
                 "synthetic": True,
-                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                "recorded_at": datetime.now(UTC).isoformat(),
             }
             self._write_synthetic(synth)
             self._synthetic_records.append(synth)

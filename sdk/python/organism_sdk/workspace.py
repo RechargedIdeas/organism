@@ -5,7 +5,7 @@ import hashlib
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -24,7 +24,7 @@ class BindingRecord:
     module_id: str = ""
     salience: float = 1.0
     fidelity: str = "FULL"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: bytes = b""
     # IMP-8 (v0.2): optional semantic payload for hormone_state / immune_decision / etc.
     payload: dict[str, Any] | None = None
@@ -68,18 +68,22 @@ class BindingWriteResult:
 class WorkspaceReader:
     """Capability-scoped read view handed to PerceptionInput."""
 
-    def __init__(self, client: "WorkspaceClient", *, read_roles: tuple[str, ...], read_tags: tuple[str, ...]) -> None:
+    def __init__(self, client: WorkspaceClient, *, read_roles: tuple[str, ...], read_tags: tuple[str, ...]) -> None:
         self._client = client
         self._read_roles = set(read_roles)
         self._read_tags = set(read_tags)
 
     def read_by_tag(self, tags: list[str]) -> list[BindingRecord]:
         # IMP-21: requesting tags entirely outside capability scope is a violation
-        if self._read_tags and self._read_tags != {"*"}:
-            if tags and not (set(tags) & self._read_tags):
-                raise CapabilityScopeMissing(
-                    f"read tags {tags} not in capability scope {sorted(self._read_tags)}"
-                )
+        if (
+            self._read_tags
+            and self._read_tags != {"*"}
+            and tags
+            and not (set(tags) & self._read_tags)
+        ):
+            raise CapabilityScopeMissing(
+                f"read tags {tags} not in capability scope {sorted(self._read_tags)}"
+            )
         return self._client.read_by_tag(tags, _scoped_tags=self._read_tags)
 
     def read_by_binding_id(self, binding_id: UUID) -> BindingRecord | None:
@@ -115,22 +119,25 @@ class WorkspaceClient:
 
     def _check_write(self, binding: BindingRecord) -> None:
         # Role cue check is soft in M1: require write_roles non-empty permission if declared
-        if self._write_tags and binding.tags:
-            if not set(binding.tags) & self._write_tags and self._write_tags != {"*"}:
-                raise CapabilityScopeMissing(f"write tags {binding.tags} not in {self._write_tags}")
+        if (
+            self._write_tags
+            and binding.tags
+            and not set(binding.tags) & self._write_tags
+            and self._write_tags != {"*"}
+        ):
+            raise CapabilityScopeMissing(f"write tags {binding.tags} not in {self._write_tags}")
         # IMP-21: immune_decision quarantine/control bindings cannot be forged
         immune_tags = [t for t in binding.tags if t == "immune_decision" or t.startswith("immune_decision/")]
-        if immune_tags:
-            if (
-                binding.fidelity != "FULL"
-                or not binding.affects_control
-                or binding.module_id != "immune_layer"
-                or binding.salience < 1.0
-            ):
-                raise CapabilityScopeMissing(
-                    "immune_forgery: immune_decision requires module_id=immune_layer, "
-                    "fidelity=FULL, affects_control=True, salience>=1.0"
-                )
+        if immune_tags and (
+            binding.fidelity != "FULL"
+            or not binding.affects_control
+            or binding.module_id != "immune_layer"
+            or binding.salience < 1.0
+        ):
+            raise CapabilityScopeMissing(
+                "immune_forgery: immune_decision requires module_id=immune_layer, "
+                "fidelity=FULL, affects_control=True, salience>=1.0"
+            )
 
     def write(self, binding: BindingRecord) -> BindingWriteResult:
         return self.write_batch([binding])[0]
@@ -278,7 +285,9 @@ class WorkspaceClient:
         with self._lock:
             for b in self._bindings.values():
                 scored.append((b, b.hypervector.similarity(hv)))
-        scored.sort(key=lambda x: x[1], reverse=True)
+        # Similarity is quantized to 1/DIM, so ties are common. Break them by id so the order does not
+        # depend on insertion history: a replayed workspace inserts its bindings in another order.
+        scored.sort(key=lambda x: (-x[1], str(x[0].binding_id)))
         return scored[:k]
 
     def read_by_provenance(

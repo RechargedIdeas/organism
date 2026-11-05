@@ -6,11 +6,11 @@ import time
 from dataclasses import replace
 
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
-from organism_sdk.autonomic import AutonomicController, AutonomicConfig, RouterExposedParams
+from organism_sdk.autonomic import AutonomicConfig, AutonomicController, RouterExposedParams
 from organism_sdk.circadian import CircadianClock, kleiber_declared_share, metabolic_inefficiency
 from organism_sdk.contract import ReliabilityTier as RT
+from organism_sdk.contract import SubstrateContract
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import (
     HormoneBus,
@@ -30,13 +30,13 @@ from organism_sdk.trace import HormoneTraceEntry, ImmuneTraceEntry, TraceEmitter
 from organism_sdk.workspace import WorkspaceClient
 
 
-def _tr():
+def _tr() -> TraceEmitter:
     tr = TraceEmitter()
     tr.attach_v02_sink(V02TraceSink())
     return tr
 
 
-def _t2_contract(module_id: str = "learned_apoptosis_t2"):
+def _t2_contract(module_id: str = "learned_apoptosis_t2") -> SubstrateContract:
     c = DeterministicEngine().declare_contract()
     return replace(
         c,
@@ -49,7 +49,7 @@ def _t2_contract(module_id: str = "learned_apoptosis_t2"):
 # ── Category J ──────────────────────────────────────────────────────────────
 
 
-def scenario_j1_ise_crisis_precursor():
+def scenario_j1_ise_crisis_precursor() -> None:
     ise = InteroceptiveStateEstimator(viability_floor=0.3)
     st = None
     for v in [0.95, 0.7, 0.5, 0.36]:
@@ -57,7 +57,7 @@ def scenario_j1_ise_crisis_precursor():
     assert st and (st.crisis_precursor or st.request_setpoint_adaptation)
 
 
-def scenario_j2_ise_offline_fallback():
+def scenario_j2_ise_offline_fallback() -> None:
     ise = InteroceptiveStateEstimator()
     ise.set_offline(True)
     st = ise.estimate(HealthVector())
@@ -69,7 +69,7 @@ def scenario_j2_ise_offline_fallback():
     assert ac.mode in ("PARASYMPATHETIC", "SYMPATHETIC", "CRISIS", "RECOVERY")
 
 
-def scenario_j3_replay_interoceptive():
+def scenario_j3_replay_interoceptive() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     ise = InteroceptiveStateEstimator(ws)
     st = ise.estimate(HealthVector(thermal=0.8, energy=0.9))
@@ -79,7 +79,7 @@ def scenario_j3_replay_interoceptive():
     assert got.payload["predicted_trajectory"]["viability_at_horizon"] == st.predicted_trajectory.viability_at_horizon
 
 
-def scenario_j4_false_high_probe():
+def scenario_j4_false_high_probe() -> None:
     ise = InteroceptiveStateEstimator(viability_floor=0.3)
     # Reported components look healthy but probe failed / h_m cliff
     st = ise.estimate(
@@ -96,7 +96,7 @@ def scenario_j4_false_high_probe():
 # ── Category K ──────────────────────────────────────────────────────────────
 
 
-def scenario_k1_cortisol_release():
+def scenario_k1_cortisol_release() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     bus = HormoneBus(ws, trace=_tr())
     levels = bus.compute_release(stress_load=0.9, viability_score=0.2, crisis_precursor_count=2)
@@ -104,7 +104,7 @@ def scenario_k1_cortisol_release():
     assert bus.read_workspace_hormone_state().cortisol > 0.3
 
 
-def scenario_k2_staleness_trace():
+def scenario_k2_staleness_trace() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     tr = _tr()
     bus = HormoneBus(ws, trace=tr)
@@ -116,7 +116,7 @@ def scenario_k2_staleness_trace():
     assert he and he[-1].staleness_ms == reading.staleness_ms
 
 
-def scenario_k3_cortisol_modulation_shield():
+def scenario_k3_cortisol_modulation_shield() -> None:
     levels = HormoneLevels(cortisol=0.9)
     receptors = [
         HormoneReceptor("CORTISOL", "THRESHOLD_GATE", threshold=0.8, target_parameter="inference_enabled"),
@@ -128,7 +128,7 @@ def scenario_k3_cortisol_modulation_shield():
     assert out["inference_enabled"] is True and out["leak_rate"] > 1.0 and out["bypass_safety"] is False
 
 
-def scenario_k4_hormone_shield_reject():
+def scenario_k4_hormone_shield_reject() -> None:
     try:
         apply_hormone_to_module_params(
             [HormoneReceptor("CORTISOL", "BINARY_SWITCH", threshold=0.1, target_parameter="bypass_safety")],
@@ -140,7 +140,7 @@ def scenario_k4_hormone_shield_reject():
         pass
 
 
-def scenario_k5_kill_mirror_fallback():
+def scenario_k5_kill_mirror_fallback() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     bus = HormoneBus(ws, trace=_tr())
     bus.write_telemetry_window(HormoneLevels(cortisol=0.4, window_id="w"))
@@ -151,7 +151,7 @@ def scenario_k5_kill_mirror_fallback():
     assert bus.last_diagnosis["code"] == "hormone_bus_mirror_killed"
 
 
-def scenario_k6_replay_high_cortisol_vs_baseline():
+def scenario_k6_replay_high_cortisol_vs_baseline() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     tr = _tr()
     bus = HormoneBus(ws, trace=tr)
@@ -173,7 +173,7 @@ def scenario_k6_replay_high_cortisol_vs_baseline():
 # ── Category L ──────────────────────────────────────────────────────────────
 
 
-def scenario_l1_danger_surveil():
+def scenario_l1_danger_surveil() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     immune = ImmuneLayer(ws, trace=_tr())
     antigen = Hypervector.random(seed=42)
@@ -182,7 +182,7 @@ def scenario_l1_danger_surveil():
     assert d.decision in ("SURVEIL", "QUARANTINE") and ws.read_by_tag(["immune_decision"])
 
 
-def scenario_l2_pamp_memory_hit():
+def scenario_l2_pamp_memory_hit() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     immune = ImmuneLayer(ws, trace=_tr())
     antigen = Hypervector.random(seed=123)
@@ -193,7 +193,7 @@ def scenario_l2_pamp_memory_hit():
     assert second.latency_ms <= first.latency_ms + 50.0
 
 
-def scenario_l3_safe_novelty_low_cortisol():
+def scenario_l3_safe_novelty_low_cortisol() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     immune = ImmuneLayer(ws, trace=_tr())
     self_hv = Hypervector.random(seed=7)
@@ -202,7 +202,7 @@ def scenario_l3_safe_novelty_low_cortisol():
     assert d.classification in ("SELF", "SAFE") and d.decision in ("PASS", "TOLERATE")
 
 
-def scenario_l4_high_cortisol_quarantine():
+def scenario_l4_high_cortisol_quarantine() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     immune = ImmuneLayer(ws, trace=_tr())
     antigen = Hypervector.random(seed=55)
@@ -210,7 +210,7 @@ def scenario_l4_high_cortisol_quarantine():
     assert immune.ingress(antigen, cortisol=0.8).decision == "QUARANTINE"
 
 
-def scenario_l5_immune_no_deregister():
+def scenario_l5_immune_no_deregister() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     immune = ImmuneLayer(ws, trace=_tr())
     try:
@@ -221,7 +221,7 @@ def scenario_l5_immune_no_deregister():
     assert immune.direct_lifecycle_calls == 1
 
 
-def scenario_l6_replay_immune():
+def scenario_l6_replay_immune() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     tr = _tr()
     immune = ImmuneLayer(ws, trace=tr)
@@ -235,14 +235,14 @@ def scenario_l6_replay_immune():
 # ── Category M ──────────────────────────────────────────────────────────────
 
 
-def scenario_m1_crisis_mode():
+def scenario_m1_crisis_mode() -> None:
     t = [0.0]
     ac = AutonomicController(trace=_tr(), clock=lambda: t[0], config=AutonomicConfig())
     ac.tick(viability=0.1, crisis_precursor=True)
     assert ac.mode == "CRISIS"
 
 
-def scenario_m2_recovery_hysteresis():
+def scenario_m2_recovery_hysteresis() -> None:
     t = [0.0]
     ac = AutonomicController(
         config=AutonomicConfig(t_down_s=0.05, t_up_s=0.3, t_recovery_dwell_s=0.2),
@@ -261,7 +261,7 @@ def scenario_m2_recovery_hysteresis():
     assert ac.mode in ("RECOVERY", "PARASYMPATHETIC")
 
 
-def scenario_m3_autonomic_not_dispatcher():
+def scenario_m3_autonomic_not_dispatcher() -> None:
     ac = AutonomicController()
     try:
         ac.select_module_for_task("task")
@@ -279,7 +279,7 @@ def scenario_m3_autonomic_not_dispatcher():
     assert plan.disposition == "DISPATCH"
 
 
-def scenario_m4_oscillation_bounded():
+def scenario_m4_oscillation_bounded() -> None:
     t = [0.0]
     ac = AutonomicController(config=AutonomicConfig(t_down_s=0.1, t_up_s=0.5), clock=lambda: t[0])
     before = len(ac.transitions)
@@ -292,7 +292,7 @@ def scenario_m4_oscillation_bounded():
 # ── Category N ──────────────────────────────────────────────────────────────
 
 
-def scenario_n1_self_terminate_successor_exploration():
+def scenario_n1_self_terminate_successor_exploration() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws, trace=_tr())
     c2 = _t2_contract("n1_t2")
@@ -309,7 +309,7 @@ def scenario_n1_self_terminate_successor_exploration():
     assert ws.read_by_tag(["death_certificate"])
 
 
-def scenario_n2_t0_reject():
+def scenario_n2_t0_reject() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws)
     c = DeterministicEngine().declare_contract()
@@ -320,7 +320,7 @@ def scenario_n2_t0_reject():
     assert not r.accepted and r.reason == "AP-2"
 
 
-def scenario_n3_control_no_successor_degraded():
+def scenario_n3_control_no_successor_degraded() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws)
     c2 = _t2_contract("ctrl_t2")
@@ -334,7 +334,7 @@ def scenario_n3_control_no_successor_degraded():
     assert not result.accepted and result.state == "DEGRADED" and result.reason == "AP-3"
 
 
-def scenario_n4_drain_killed_mid_export():
+def scenario_n4_drain_killed_mid_export() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws, trace=_tr())
     c2 = _t2_contract("n4_t2")
@@ -356,7 +356,7 @@ def scenario_n4_drain_killed_mid_export():
     assert result.state != "SUCCEEDED"
 
 
-def scenario_n5_shadow_validate_blocks_promotion():
+def scenario_n5_shadow_validate_blocks_promotion() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     svc = ApoptosisService(ws, trace=_tr())
     c2 = _t2_contract("n5_t2")
@@ -387,7 +387,7 @@ def scenario_n5_shadow_validate_blocks_promotion():
 # ── Category O ──────────────────────────────────────────────────────────────
 
 
-def scenario_o1_stage_fail():
+def scenario_o1_stage_fail() -> None:
     tr = MorphogenesisTracker()
     g = DevelopmentalGenome(
         "g",
@@ -404,7 +404,7 @@ def scenario_o1_stage_fail():
     assert g.stages[0].status == "PASSED" and g.mutation_locus == "c"
 
 
-def scenario_o2_development_control_held():
+def scenario_o2_development_control_held() -> None:
     tr = MorphogenesisTracker()
     g = DevelopmentalGenome("g2", [DevelopmentalStage(1, "a", locus="a")])
     tr.register_genome("baby", g)
@@ -413,7 +413,7 @@ def scenario_o2_development_control_held():
     assert tr.exploration_restrictions_apply("baby")
 
 
-def scenario_o3_leave_development():
+def scenario_o3_leave_development() -> None:
     tr = MorphogenesisTracker()
     g = DevelopmentalGenome(
         "g3",
@@ -426,13 +426,13 @@ def scenario_o3_leave_development():
     assert tr.leave_development("grown") and tr.may_enter_deliberation("grown")
 
 
-def scenario_o4_circadian_crisis():
+def scenario_o4_circadian_crisis() -> None:
     clock = CircadianClock(rest_start=0.0, rest_end=1.0)
     st = clock.advance(0.0, crisis=True)
     assert st.melatonin_baseline == 0.0 and not st.in_rest
 
 
-def scenario_o5_kleiber_inefficiency():
+def scenario_o5_kleiber_inefficiency() -> None:
     share = kleiber_declared_share(10.0, beta=0.75)
     assert metabolic_inefficiency(share * 2.0, share)
     assert not metabolic_inefficiency(share, share)
@@ -441,7 +441,7 @@ def scenario_o5_kleiber_inefficiency():
 # ── Stubs / gates (priorities 3–6) ───────────────────────────────────────────
 
 
-def scenario_learned_ise_promotion_gate():
+def scenario_learned_ise_promotion_gate() -> None:
     learned = LearnedISE()
     h = HealthVector(thermal=0.8, energy=0.9)
     learned.update(h, 0.85)
@@ -458,7 +458,7 @@ def scenario_learned_ise_promotion_gate():
     assert "learned" in st.model_version
 
 
-def scenario_federated_oxytocin_fail_closed():
+def scenario_federated_oxytocin_fail_closed() -> None:
     gate = FederationGate(WorkspaceClient(write_tags=("*",), read_tags=("*",)))
     try:
         gate.federated_oxytocin_release(adapter_acceptance_rate=0.9, peer_nodes=["node-b"])
@@ -469,7 +469,7 @@ def scenario_federated_oxytocin_fail_closed():
     assert not gate.is_distributed_supported()
 
 
-def scenario_multi_node_mirror_lag_oos():
+def scenario_multi_node_mirror_lag_oos() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     bus = HormoneBus(ws)
     gate = FederationGate(ws)
@@ -481,7 +481,7 @@ def scenario_multi_node_mirror_lag_oos():
     assert any(e.kind == "MULTI_NODE_MIRROR_LAG" for e in gate.events)
 
 
-def scenario_metamodel_reproductive_disabled():
+def scenario_metamodel_reproductive_disabled() -> None:
     tracker = MetamodelTracker()
     assert not tracker.reproductive_path_enabled()
     try:

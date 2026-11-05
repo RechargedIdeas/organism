@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import struct
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from organism_sdk.contract import DataType, Modality, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.workspace import WorkspaceClient
+
 from energy_hopfield.module import EnergyHopfieldModule
 
 
@@ -16,7 +17,7 @@ def test_energy_minimize_and_cert():
     mod = EnergyHopfieldModule()
     assert not [i for i in mod.declare_contract().validate() if i.severity == Severity.ERROR]
     mod.store_pattern([1, 1, -1, -1, 1, -1, 1, -1])
-    x, e, ok = mod.minimize([0.5] * 8)
+    x, _e, _ok = mod.minimize([0.5] * 8)
     assert len(x) == 8
     data = struct.pack("<" + "f" * 8, *([0.6] * 8))
     ws = WorkspaceClient()
@@ -28,7 +29,7 @@ def test_energy_minimize_and_cert():
         },
         task_descriptor=TaskDescriptor(
             task_id="e1", form="assignment", safety_tier="medium",
-            deadline_ms=500, submitted_at=datetime.now(timezone.utc),
+            deadline_ms=500, submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,

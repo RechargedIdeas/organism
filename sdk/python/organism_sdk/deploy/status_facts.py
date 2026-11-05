@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 from organism_sdk import __version__ as organism_version
-from organism_sdk.device import accelerator_selection_summary, select_compute_backend
 from organism_sdk.deploy.stack import MinimalStack
+from organism_sdk.device import accelerator_selection_summary, select_compute_backend
 
 # Keys that CLI status and Desktop home_status must share (same values
 # for the same DeployConfig before Desktop-only bio registration).

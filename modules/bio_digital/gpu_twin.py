@@ -14,19 +14,20 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 import numpy as np
-
-from bio_digital.hal import BioDigitalHAL, research_sim_enabled
-from bio_digital.limits import PHYSARUM_LIMITS
 from organism_sdk.device import (
     RuntimeId,
     cuda_available,
     select_compute_backend,
     torch_available,
 )
+
+from bio_digital.hal import BioDigitalHAL, research_sim_enabled
+from bio_digital.limits import PHYSARUM_LIMITS
 
 # 3x3 diffusion kernel (center 0.2, neighbors 0.1) — shared by numpy + torch
 DIFFUSION_KERNEL = np.array(

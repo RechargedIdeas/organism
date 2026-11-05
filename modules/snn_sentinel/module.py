@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from organism_sdk.contract import (
@@ -52,8 +52,8 @@ from organism_sdk.hypervector import Hypervector
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
-from organism_sdk.workspace import BindingRecord, WorkspaceClient
 from organism_sdk.neuro_sim import neuro_sim_enabled
+from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 MODULE_ID = "snn_sentinel"
 MODULE_VERSION = "0.3.0"
@@ -178,7 +178,7 @@ class SNNSentinel(OrganismModule):
         }
         if woke:
             self._spikes.wake_count += 1
-            self._spikes.last_wake_at = datetime.now(timezone.utc)
+            self._spikes.last_wake_at = datetime.now(UTC)
             binding = self.emit_wake(rate_hz)
             result["binding_id"] = str(binding.binding_id) if binding else None
         return result
@@ -200,7 +200,7 @@ class SNNSentinel(OrganismModule):
             payload={
                 "rate_hz": rate_hz,
                 "threshold_hz": self._spikes.threshold_hz,
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
                 "simulated": True,
                 "hardware_present": self.hardware_present,
                 "research_sim": self.research_sim,

@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from organism_sdk.contract import DataType, Modality, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.workspace import WorkspaceClient
+
 from neurosymbolic.module import NeurosymbolicVerifier
 
 
@@ -31,7 +32,7 @@ def test_three_level_pass_and_cert():
         },
         task_descriptor=TaskDescriptor(
             task_id="n1", form="verify", safety_tier="high",
-            deadline_ms=500, submitted_at=datetime.now(timezone.utc),
+            deadline_ms=500, submitted_at=datetime.now(UTC),
             metadata={"action_node": "actuation", "action_value": "0.5"},
         ),
         workspace_reader=ws.reader(),

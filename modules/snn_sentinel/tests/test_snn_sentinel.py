@@ -5,6 +5,7 @@ from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.registry import CapabilityFilter, RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
 from organism_sdk.workspace import WorkspaceClient
+
 from snn_sentinel.module import MODULE_ID, SPIKE_WAKE_TAG, SNNSentinel
 
 

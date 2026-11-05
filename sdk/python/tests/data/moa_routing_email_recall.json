@@ -1,0 +1,15 @@
+[
+  {"query": "Pull the email address out of this signature: jo@park.dev", "form": null, "label": "extractor"},
+  {"query": "Which email address appears in this note: kim@lab.org", "form": null, "label": "extractor"},
+  {"query": "Get the email address from this header: ana@corp.com", "form": null, "label": "extractor"},
+  {"query": "Extract the email address from the invoice text: billing@shop.io", "form": "feature_extraction", "label": "extractor"},
+  {"query": "List every email address mentioned in this thread: lee@mail.net and ray@mail.net", "form": null, "label": "extractor"},
+  {"query": "Find the email address in the memo: sam@firm.co", "form": null, "label": "extractor"},
+  {"query": "Pull out the email address from this form: pat@home.org", "form": null, "label": "extractor"},
+  {"query": "Send an email address change request to the help desk", "form": null, "label": "unsure"},
+  {"query": "What is the best email address format for a company", "form": null, "label": "unsure"},
+  {"query": "Set up a new email address for the new hire", "form": null, "label": "unsure"},
+  {"query": "My email address changed, so update my profile", "form": null, "label": "unsure"},
+  {"query": "Remind me to email the report at five", "form": null, "label": "intent_classifier"},
+  {"query": "Summarize the email address policy for new staff", "form": null, "label": "intent_classifier"}
+]

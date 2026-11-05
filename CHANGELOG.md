@@ -13,6 +13,75 @@
 - `docs/AI_MODEL_GAPS.md`: 40 gaps for KotMoE, Lightspeed and future models, with evidence and priorities.
 - `docs/LIGHTSPEED_ON_ORGANISM.md`: system design for the KotMoE Lightspeed model on this substrate.
 - `docs/HANDOVER.md`: start-here note for the next agent.
+## [Unreleased] - v1.11 MoA layer (in progress)
+
+### Added
+- **Work agent decisions adopted** (2026-11-04): W-D1a, the executor is Claude Code in non-interactive print mode, the one CLI in the argv template. W-D2, rules first, with no hosted LLM yet. W-D5 and S1, the approver holds the signing key and the agent verifies only. See `docs/SUPERAGENT_COMPARISON.md`, section 6.
+- **Work agent design record and pure domain** (v1.12, W0 and W1): `docs/v1.12/WORK_AGENT.md` records the decisions and the
+  principles. `organism_sdk.work` holds the domain types, the admission gate (`admit`), the Ticket stage table
+  (`stage_of`) and the versioned Policy (`policy_version`). The domain modules do no I/O. Gate `work:domain`. The comparison
+  with dsh-superagent and the build-out plan are in `docs/SUPERAGENT_COMPARISON.md`.
+- **Work agent store** (v1.12, W2): `organism_sdk.work.store` (`WorkStore`) keeps the work agent's state in SQLite WAL mode. A round of intake (its Triggers, the Source cursor and its effects) is one transaction, and a Trigger is stored once by id. Receipts are queued once and settled as sent or dropped. The effects queue retries with backoff from 5 s to 300 s and can be paused. Opening a store takes an OS writer lock, so a second writer is refused at once with `StoreInUse`, and a crash releases the lock. Effects run at least once, so handlers must be idempotent. Only `store.py` does I/O; `codec.py` is pure. Gates `work:store` and `work:restart`, where a process killed mid-round or mid-effect is restarted and its replay is checked.
+- **GitHub source, read only** (v1.12, W3): `organism_sdk.work.sources.github` reads one repository's notifications and the comments they name, through `gh api` with argv only, and turns new comments into Triggers. It never writes to GitHub. A failed item keeps its own error, and the cursor holds before it until it recovers. Gate `work:github_fake`, against a fake `gh`, with no network.
+- **Eval and shadow promotion** (v1.12, W4): `organism_sdk.work.decide` decides each Trigger once per Policy version, from the gate's admission and a deterministic `RuleAssessor` whose rules match by pattern (200 characters at most). An inferred candidate is accepted only in auto mode, for a graduated rule. Otherwise a candidate that matched a rule is recorded as a would-accept. `promote.graduate` marks a rule auto only after 20 verdicts on its would-accepts, at least 90% agreeing. A Trigger older than an hour is ignored, so a new Policy version cannot start work on old requests. The store moves to schema 2. Gates `work:admission`, `work:shadow_promote` and `work:eval`. No model is consulted; the LLM assessor is not built (W-D2).
+- **GitHub reply channel** (v1.12, W6): `organism_sdk.work.channels` queues replies per Ticket, sent in order. Each reply carries a hidden receipt marker, and the channel checks the thread for it before posting, so a crash between the post and the store does not post twice. Only HTTP 410 means the thread is gone, and that reply is dropped. Replies are off: no command enables the handler yet. Gate `work:channel_idempotent`.
+- **Operator surface** (v1.12, W7): `organism work` (`status`, `tickets`, `attention`, `pause`, `resume`, `stop`, `retry`, `evaluate`) reads the store beside the writer and changes it under the writer lock. `organism serve` answers `GET /work/status`. The `needs_you` desktop panel lists what needs a person, with the healthy state in one line. Gates `work:operator`, `work:serve_status` and `work:needs_you_panel`.
+- **Thread ownership routing** (v1.12, W8): `organism_sdk.work.routing.route` sends a human message to the open Ticket that owns its Thread, and refuses a Thread owned by two open Tickets. Nothing calls it yet. Hand-back, release and pull-request following are not built. Gate `work:followups`.
+- **Signed Policy adoption** (v1.12, W9): `organism_sdk.work.governance.adopt` makes a Policy the one in force only when an approver in the TrustStore signed it, and queues a notice for each open Ticket it touches. It never cancels a Ticket. The instruction artifacts and the "default updated" flag are not built. Gate `work:policy_version`.
+- **Executor and jail profile** (v1.12, W5): `organism_sdk.work.executors` runs the configured CLI argv for one Ticket, in the Ticket's own directory, inside the jail under the `work_executor` profile. That profile passes only `ANTHROPIC_API_KEY`, through a new environment allowlist on the jail. The executor refuses blocked programs, unsafe Ticket ids, and hosts without Linux containment, which Windows is in this jail. It holds worker slots with one kept for a person (D4), and a restart ends running assignments with a recovery note. The network allowlist is recorded and not enforced, and the Ticket driver that calls the executor is not built. Gates `work:jail_profile` and `work:executor_fake`.
+- **Label and adopt commands** (v1.12, W7 and W9): `organism work label` records a person's verdict on a Decision. `organism work adopt` adopts a Policy file that an approver signed, checked against a trust store file. Gate `work:operator`.
+- **Environment panel and secret store** (`organism_sdk.envstore`): secret variables live in the OS credential store (Windows Credential Manager) or, elsewhere, in a per-user file readable by its owner only, never in the repository. The `Environment` desktop panel adds, edits, removes and reveals them. A value shows as a mask until an explicit reveal, which ends after 10 seconds. `serve` and the desktop app apply the store at start, and a sandboxed child never receives a stored name. Errors and logs name a variable, never its value. Gate `env:store_and_panel`.
+- **MoA layer** (`organism_sdk.moa`): experts with capability descriptors that register as
+  `SubstrateContract`s, a capability scorer with a shadow precision gate, VSA-backed
+  aggregation with clean-up recovery, tiers T0 to T4 with recovery hysteresis, and a per-query pipeline.
+- **Reference experts**: `intent_classifier` and `extractor`. Rule-based, CPU-only, deterministic.
+- **Synthetic routing set** (`sdk/python/tests/data/moa_routing_synthetic.json`) and four `v111:moa_*` gates in `ci/gates.yaml`.
+- **Design record**: `docs/v1.11/MOA_LAYER.md`. Records corrections to the upgrade plan.
+- **Local CI pipeline** (`ci/`, run with `python ci/run.py`): tiers `precommit`, `fast`, `full` and `nightly`; preflight checks;
+  parallel gates with a serial `exclusive` phase; per-gate timeouts that kill the process tree; a content-addressed result cache;
+  lint and format ratchets for ruff, mypy and rustfmt; hygiene scans; a single-run lock; git hooks in `ci/hooks`; and a Windows
+  nightly schedule script, `ci/schedule/windows_nightly.ps1`. Documented in `ci/README.md`.
+- **Runner tests**: `tests/ci/` covers config, preflight, ratchets, hygiene, cache, executor, lock, environment and CLI.
+- **Clippy gate** `rust:clippy` (fast tier): `cargo clippy --workspace --all-targets -- -D warnings`. The Rust workspace has zero clippy findings.
+- **Signed registry actions** (`organism_sdk.signing`): Ed25519 signatures, a `TrustStore` with separate author and approver keys, and domain-tagged payloads. The registration payload binds the module id, version and artifact digest. The promotion payload binds the states and the shadow evidence. `RegistryClient(trust_store=...)` enforces the check. With no trust store, behaviour is unchanged.
+- **MoA guardrails** (`organism_sdk.moa.guardrails`, Phase 5, rule-based): an input guard that blocks prompt-injection queries before routing, and an output guard that rejects an answer whose extracted entities do not occur in the query. Each guard declares its measured false-positive and false-negative rates. `MoAResult.guarded` records which guards fired.
+- **Red-team suite** (`test_v111_moa_redteam.py`, gate `v111:moa_redteam`, non-blocking): variants that must be blocked, three known misses as strict xfails, and a seeded fuzz that checks invariants.
+- **Scheduled CI on GitHub** (`.github/workflows/nightly.yml`): the nightly tier at 02:00 UTC, and an advisory job running `pip-audit` and `cargo audit`.
+- **Tests**: version alignment across the packages and the Rust workspace; every name in the frozen Python API is exported; container and VM detection evidence; the `python -m organism_sdk` entry point.
+- **Docs**: `docs/GAP_ANALYSIS.md` lists what the review fixed, what is open, and the decisions still needed.
+
+### Changed
+- `tests/ops/test_soak_ops.py`: the executable-bit check reads the git index mode (`100755`) on every platform. On Linux it also checks the file's mode bit.
+- **Versions** are aligned to 1.10.0. `sdk/python/pyproject.toml` was 1.4.0 and the Rust workspace was 1.3.0.
+- **Dependencies**: removed `pydantic`, `blake3` and `structlog` from the root project, and `pydantic` and `numpy` from the SDK package, because nothing imported them. The SDK package now declares `cryptography`, which signing uses.
+- **Typing**: mypy excludes the generated protobuf code. The in-repo packages under `modules/` are typed `Any` at the import boundary. Public SDK helpers, test fixtures, and the test and harness helpers are annotated. The hand-written mypy ratchet goes from 527 to 59.
+- **Logging**: 24 modules that caught exceptions silently now log them with the standard `logging` module.
+- `EVOLVE_BUDGET_MS` (`organism_sdk/generative/budgets.py`): the evolve wall-clock budget is per platform, 2000 ms on Windows and 1000 ms elsewhere. Windows `spawn` start-up dominates the measured cost.
+- **Rust clean-up**: `cargo fmt` applied to four files (formatting only), so the rustfmt baseline is zero. Clippy fixes in `organism-client` (index loops rewritten as iterators, same output) and `organism-workspace` (`is_empty` added beside `len`). Removed the unused `registered_at` field from `organism-registry`. `runtime/registry` no longer depends on `chrono`. The crate is still used by `runtime/workspace` and `organism-client`.
+
+### Fixed
+- **Routing false positive**: the bare verb `find` is no longer an extractor keyword. It sent generic queries such as
+  "Find a good recipe for dinner" to the extractor, with held-out precision 0.78. Held-out set added (`moa_routing_heldout.json`).
+- **Mirror-lag flake on Windows**: `test_mirror_lag_slo` waits 25 ms, not 8 ms. The Windows clock ticks about every 15.6 ms,
+  so the 8 ms wait missed the delivery in 25 of 60 runs.
+- **Preflight protobuf check**: it reported stale modules on every run because it looked for the generated files at the wrong
+  path. It now matches the path protoc writes to.
+- **Gate environment placeholders**: `env` values such as `PROTOC: "{protoc}"` reached the child process unexpanded, so `build.rs` received the literal text. The runner now fills them as it does commands. Cargo's build-script cache hid the bug until a formatting change to `build.rs` forced a rerun.
+- **Workspace replay determinism**: bindings with equal similarity are ordered by binding id, so replay no longer depends on insertion order.
+- **Desktop evolve budget gate** (`v17:desktop_organism`): its tests run on a temp data root through `DesktopService.create(data_root=...)`. The budget no longer depends on the replay log that earlier runs grew in the repo's `organism_data`. See `docs/GAP_ANALYSIS.md`, item O11.
+
+### Known issues
+- Evolve budgets were measured on Windows and WSL only: 2000 ms on Windows, 1000 ms elsewhere. See `docs/v1.11/MOA_LAYER.md`, section 8.
+- Registry signatures are checked only when a `TrustStore` is passed. Internal callers still pass placeholder bytes, and where production keys live is not decided. See `docs/GAP_ANALYSIS.md`, item S1.
+- Three guardrail misses are recorded as strict xfails in `test_v111_moa_redteam.py`. See `docs/v1.11/MOA_LAYER.md`, section 10.
+- Routing recall gap: extraction queries built around "email address" route unsure. Adding the phrases lost precision (7/11), so the fix waits for a context rule. See `docs/v1.11/MOA_LAYER.md`, section 4.
+- Rust workspace tests need `protoc`. The local pipeline resolves it from `PROTOC`, then `.venv`, then `PATH`.
+### Test baseline
+- `pytest -m 'not slow'` collects 591 tests (584 passed, 3 skipped, 4 xfailed). The `suite:fast` gate passes in the full tier on Windows and WSL.
+- Full tier of the local pipeline on Windows (`77e110c`): 61 of 61 gates pass. 49 of them were served from the content-addressed cache.
+- Full tier on WSL Ubuntu (`77e110c`): 61 of 61 gates pass. The first WSL run failed `lint:mypy` on a stale `.mypy_cache` left from before the protobuf modules were regenerated. Clearing the cache fixed it with no code change.
+- At `edd2924`, the head of this unreleased work, the full tier passes on Windows (61 of 61) and on WSL (61 of 61).
+- Fast tier (pre-push): 60 of 60 gates pass.
 
 ## [1.10.0] — 2026-10-25
 

@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import pytest
-
 from organism_sdk.federation import FederationGate, FederationUnsupported
 from organism_sdk.hormone import HormoneBus
 from organism_sdk.multinode import MultiNodeCluster
 from organism_sdk.workspace import WorkspaceClient
 
 
-def test_default_gate_still_fail_closed():
+def test_default_gate_still_fail_closed() -> None:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     gate = FederationGate(ws, enable_multi_node=False)
     with pytest.raises(FederationUnsupported):
@@ -19,17 +18,19 @@ def test_default_gate_still_fail_closed():
     assert not gate.is_distributed_supported()
 
 
-def test_mirror_lag_slo():
+def test_mirror_lag_slo() -> None:
     cluster = MultiNodeCluster(["a", "b"], default_lag_ms=5.0, lag_slo_ms=40.0)
     cluster.release_and_mirror("a", lag_ms=5.0, stress_load=0.7, viability_score=0.5)
-    applied = cluster.advance(wait_ms=8.0)
+    # 25 ms, not 8. The lag is 5 ms, but Windows clocks tick about every 15.6 ms, so an 8 ms wait
+    # missed the delivery in 25 of 60 runs. 25 ms missed none. It stays under the 40 ms SLO.
+    applied = cluster.advance(wait_ms=25.0)
     assert applied >= 1
     cluster.assert_lag_slo()
     assert cluster.max_observed_lag_ms() >= 4.0  # roughly configured lag
     assert any(r["from"] == "a" for r in cluster.nodes["b"].mirror_receipts)
 
 
-def test_oxytocin_quorum_agreement():
+def test_oxytocin_quorum_agreement() -> None:
     cluster = MultiNodeCluster(["a", "b", "c"], default_lag_ms=1.0)
     result = cluster.federated_oxytocin(
         votes={"a": 0.9, "b": 0.85, "c": 0.8}, accept_threshold=0.5
@@ -39,7 +40,7 @@ def test_oxytocin_quorum_agreement():
     assert len(result.votes) == 3
 
 
-def test_oxytocin_quorum_reject():
+def test_oxytocin_quorum_reject() -> None:
     cluster = MultiNodeCluster(["a", "b", "c"])
     result = cluster.federated_oxytocin(
         votes={"a": 0.9, "b": 0.1, "c": 0.1}, accept_threshold=0.5
@@ -48,7 +49,7 @@ def test_oxytocin_quorum_reject():
     assert result.reason == "quorum_failed"
 
 
-def test_partition_safe_degrade():
+def test_partition_safe_degrade() -> None:
     cluster = MultiNodeCluster(["a", "b"])
     cluster.partition("b")
     result = cluster.federated_oxytocin(votes={"a": 1.0, "b": 1.0})
@@ -60,7 +61,7 @@ def test_partition_safe_degrade():
     assert cluster.nodes["b"].degrade in ("PARTITION_SAFE", "QUORUM_LOST")
 
 
-def test_enabled_gate_mirror_and_oxytocin():
+def test_enabled_gate_mirror_and_oxytocin() -> None:
     gate = FederationGate(enable_multi_node=True, default_lag_ms=3.0, lag_slo_ms=30.0)
     assert gate.is_distributed_supported()
     info = gate.simulate_multi_node_mirror_lag(
@@ -69,7 +70,9 @@ def test_enabled_gate_mirror_and_oxytocin():
         lag_ms=3.0,
     )
     assert info["supported"] is True
+    cluster = gate.cluster
+    assert cluster is not None  # enable_multi_node=True builds the cluster
     levels = gate.federated_oxytocin_release(
-        adapter_acceptance_rate=0.95, peer_nodes=list(gate.cluster.nodes.keys())
+        adapter_acceptance_rate=0.95, peer_nodes=list(cluster.nodes.keys())
     )
     assert levels.oxytocin >= 0.0

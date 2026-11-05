@@ -1,2 +1,3 @@
-from energy_hopfield.module import EnergyHopfieldModule, MODULE_ID, MODULE_VERSION
-__all__ = ["EnergyHopfieldModule", "MODULE_ID", "MODULE_VERSION"]
+from energy_hopfield.module import MODULE_ID, MODULE_VERSION, EnergyHopfieldModule
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "EnergyHopfieldModule"]

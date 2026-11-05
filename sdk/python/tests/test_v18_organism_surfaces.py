@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.deploy.config import default_cpu_only_config
 from organism_sdk.deploy.stack import build_minimal_stack
 from organism_sdk.generative import (
@@ -29,7 +28,7 @@ def art(tmp_path: Path) -> ArtifactStore:
     return ArtifactStore(tmp_path / "art")
 
 
-def test_theme_qss_and_payload():
+def test_theme_qss_and_payload() -> None:
     p = normalize_palette({"primary": "#112233", "accent": "#aabbcc"})
     assert p["primary"] == "#112233"
     assert p["foreground"]  # default filled
@@ -43,7 +42,7 @@ def test_theme_qss_and_payload():
     assert "qss" in payload
 
 
-def test_multi_organism_store_switch(tmp_path: Path):
+def test_multi_organism_store_switch(tmp_path: Path) -> None:
     store = OrganismStore(tmp_path / "orgs")
     a = store.ensure_default()
     assert store.active_id() == a.organism_id
@@ -59,7 +58,7 @@ def test_multi_organism_store_switch(tmp_path: Path):
     assert store2.active_id() == a.organism_id
 
 
-def test_rollback_deregisters_generated_module(art: ArtifactStore, tmp_path: Path):
+def test_rollback_deregisters_generated_module(art: ArtifactStore, tmp_path: Path) -> None:
     stack = build_minimal_stack(default_cpu_only_config())
     stack.trace.attach_v02_sink(V02TraceSink())
     runtime = EvolutionRuntime(
@@ -82,7 +81,7 @@ def test_rollback_deregisters_generated_module(art: ArtifactStore, tmp_path: Pat
     assert mid not in stack.registry.list_module_ids()
 
 
-def test_export_import_bundle_roundtrip(art: ArtifactStore, tmp_path: Path):
+def test_export_import_bundle_roundtrip(art: ArtifactStore, tmp_path: Path) -> None:
     store = OrganismStore(tmp_path / "orgs")
     profile = store.ensure_default()
     skills = SkillRegistry(art)

@@ -1,2 +1,3 @@
-from hdc_module.module import HDCModule, MODULE_ID, MODULE_VERSION
-__all__ = ["HDCModule", "MODULE_ID", "MODULE_VERSION"]
+from hdc_module.module import MODULE_ID, MODULE_VERSION, HDCModule
+
+__all__ = ["MODULE_ID", "MODULE_VERSION", "HDCModule"]

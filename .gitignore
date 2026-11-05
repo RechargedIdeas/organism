@@ -47,6 +47,10 @@ desktop/screenshots/*.png
 # Desktop harness artifacts (soak/fuzz JSON)
 desktop/artifacts/*.json
 
+# Local CI pipeline: run reports, logs, and the result cache (see ci/README.md)
+ci/runs/
+ci/cache/
+
 # Generative evolution runtime artifacts (keep trees via .gitkeep)
 organism_data/artifacts/**
 !organism_data/artifacts/.gitkeep
@@ -60,3 +64,5 @@ organism_data/organisms/**
 .gradle/
 build/
 .kotlin/
+# Harness lock file written by the desktop app
+.claude/scheduled_tasks.lock

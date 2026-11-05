@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from organism_sdk.hypervector import Hypervector
@@ -31,7 +31,7 @@ class PredictedTrajectory:
 
 @dataclass
 class InteroceptiveState:
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     viability_score: float = 1.0
     allostatic_setpoints: AllostaticSetpoints = field(default_factory=AllostaticSetpoints)
     predicted_trajectory: PredictedTrajectory = field(default_factory=PredictedTrajectory)

@@ -1,8 +1,9 @@
 """contract:validate gate — A.2 / FailureSignature escalation invariants."""
 from __future__ import annotations
 
-import pytest
+from typing import Any
 
+import pytest
 from organism_sdk.contract import (
     CapabilityScopes,
     DataType,
@@ -36,7 +37,7 @@ from organism_sdk.contract import (
 from organism_sdk.errors import RegistrationRejected
 
 
-def _base_contract(**fail_kw) -> SubstrateContract:
+def _base_contract(**fail_kw: Any) -> SubstrateContract:
     failure = fail_kw.pop("failure", None)
     if failure is None:
         failure = FailureSignature(
@@ -91,7 +92,7 @@ def _base_contract(**fail_kw) -> SubstrateContract:
     )
 
 
-def test_contract_validate_green():
+def test_contract_validate_green() -> None:
     c = _base_contract()
     issues = c.validate()
     errors = [i for i in issues if i.severity == Severity.ERROR]
@@ -99,7 +100,7 @@ def test_contract_validate_green():
     c.require_valid()
 
 
-def test_reg8_timeout_vs_degraded():
+def test_reg8_timeout_vs_degraded() -> None:
     failure = FailureSignature(
         modes=(),
         probe=HealthProbe(HealthHttp(url="http://x/h", timeout_ms=20000)),
@@ -115,7 +116,7 @@ def test_reg8_timeout_vs_degraded():
     assert "escalation_policy_inconsistent" in codes
 
 
-def test_reg9_degraded_vs_cadence():
+def test_reg9_degraded_vs_cadence() -> None:
     failure = FailureSignature(
         modes=(),
         probe=HealthProbe(HealthHttp(url="http://x/h", timeout_ms=100)),
@@ -130,7 +131,7 @@ def test_reg9_degraded_vs_cadence():
         c.require_valid()
 
 
-def test_to_proto_roundtrip_fields():
+def test_to_proto_roundtrip_fields() -> None:
     c = _base_contract()
     proto = c.to_proto()
     assert proto.identity.module_id == "test.mod"

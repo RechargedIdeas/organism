@@ -5,7 +5,14 @@ import json
 from typing import Any
 
 from PySide6.QtGui import QColor, QFont
-from PySide6.QtWidgets import QLabel, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QLabel,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 def mono_text(text: str = "", *, read_only: bool = True) -> QTextEdit:

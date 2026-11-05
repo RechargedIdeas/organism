@@ -1,9 +1,12 @@
 """Sandbox audit log — optional TraceEmitter integration."""
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 class TraceLike(Protocol):
@@ -23,7 +26,7 @@ class SandboxAuditEvent:
     degraded: list[str] = field(default_factory=list)
     duration_ms: float | None = None
     emitted_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def as_dict(self) -> dict[str, Any]:
@@ -60,7 +63,7 @@ class SandboxAuditLog:
                     )
                 )
             except Exception:
-                pass
+                logger.warning("record failed", exc_info=True)
         return event
 
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:

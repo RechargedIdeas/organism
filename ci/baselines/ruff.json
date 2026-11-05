@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "tool": "ruff",
+  "generated": "2026-11-04T19:04:37Z",
+  "total": 1,
+  "counts": {
+    "sdk/python/organism_sdk/generative/sandbox.py::S102": 1
+  }
+}

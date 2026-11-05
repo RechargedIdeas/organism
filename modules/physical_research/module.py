@@ -8,9 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+from _common.contract_factory import make_contract
 from organism_sdk.contract import (
     BudgetClass,
     Determinism,
@@ -27,7 +28,6 @@ from organism_sdk.health import HealthReport
 from organism_sdk.inputs import PerceptionInput
 from organism_sdk.justification import Emission
 from organism_sdk.module import OrganismModule
-from _common.contract_factory import make_contract
 
 MODULE_ID = "physical_research"
 MODULE_VERSION = "1.0.0"
@@ -40,7 +40,7 @@ class DigitalTwinTelemetry:
     reset_cost_j: float = 1.0
     plasticity: float = 0.1
     observability: float = 0.4
-    last_sample_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    last_sample_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -89,7 +89,7 @@ class PhysicalResearchModule(OrganismModule):
         return HealthReport(module_id=MODULE_ID, status=self._status, score=self._score)
 
     def sample_twin(self) -> dict[str, Any]:
-        self.twin.last_sample_at = datetime.now(timezone.utc).isoformat()
+        self.twin.last_sample_at = datetime.now(UTC).isoformat()
         return self.twin.as_dict()
 
     def handle(self, input: PerceptionInput) -> Emission:

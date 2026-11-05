@@ -1,14 +1,16 @@
 """Navigation registry integrity."""
+
 from __future__ import annotations
 
 from organism_desktop.nav import PANELS, panel_ids
 from organism_desktop.panels import PANEL_CLASSES
 
 
-def test_thirteen_panels():
+def test_fifteen_panels():
     ids = panel_ids()
     assert ids == [
         "home",
+        "needs_you",
         "registry",
         "catalog",
         "workspace",
@@ -20,9 +22,10 @@ def test_thirteen_panels():
         "traces",
         "contracts",
         "ops",
+        "envvars",
         "docs",
     ]
-    assert len(PANELS) == 13
+    assert len(PANELS) == 15
     assert set(PANEL_CLASSES) == set(ids)
 
 

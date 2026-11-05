@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from organism_sdk.contract import DataType, MaxSafetyTier, Modality
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.workspace import WorkspaceClient
-from datetime import datetime, timezone
 
-from bio_digital.slime_mold import MODULE_ID as SLIME_ID, SlimeMoldModule
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
+from bio_digital.slime_mold import MODULE_ID as SLIME_ID
+from bio_digital.slime_mold import SlimeMoldModule
 
 
 def _perception(form: str = "exploration") -> PerceptionInput:
@@ -36,7 +37,7 @@ def _perception(form: str = "exploration") -> PerceptionInput:
             form=form,
             safety_tier="research",
             deadline_ms=500,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,

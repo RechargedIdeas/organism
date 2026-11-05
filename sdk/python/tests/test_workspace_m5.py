@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 
 import pytest
-
 from organism_sdk.errors import DimensionMismatch
 from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.snapshot import DurableWorkspace, query_digest
+from organism_sdk.workspace import WorkspaceClient
 
 
-def test_snapshot_and_replay(tmp_path: Path):
+def test_snapshot_and_replay(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws")
     role = Hypervector.random()
     filler = Hypervector.random()
@@ -26,7 +26,7 @@ def test_snapshot_and_replay(tmp_path: Path):
     # Mutate after snapshot
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     # Replay snapshot only (without post-snap ops) by using seq_end
-    rebuilt = dw.replay_from_snapshot(snap.path, ops_from=snap.seq_end + 1)
+    _rebuilt = dw.replay_from_snapshot(snap.path, ops_from=snap.seq_end + 1)
     # Wait — ops_from = seq_end+1 means apply ops after snapshot; snapshot already has state
     # So rebuilt should match post-snapshot if we include later ops.
     # For zero-mismatch with pre-mutation digest, replay snapshot with no further ops:
@@ -35,7 +35,7 @@ def test_snapshot_and_replay(tmp_path: Path):
     assert dig_before == dig_after
 
 
-def test_dimension_mismatch(tmp_path: Path):
+def test_dimension_mismatch(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws2")
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     snap = dw.snapshot()
@@ -48,7 +48,7 @@ def test_dimension_mismatch(tmp_path: Path):
         dw.load_snapshot(bad)
 
 
-def test_crash_recovery(tmp_path: Path):
+def test_crash_recovery(tmp_path: Path) -> None:
     root = tmp_path / "ws3"
     dw = DurableWorkspace(root)
     ids = []
@@ -63,9 +63,20 @@ def test_crash_recovery(tmp_path: Path):
     assert recovered.read_by_binding_id(ids[1]) is not None
 
 
-def test_snapshot_integrity_merkle(tmp_path: Path):
+def test_snapshot_integrity_merkle(tmp_path: Path) -> None:
     dw = DurableWorkspace(tmp_path / "ws4")
     dw.bind_exact(Hypervector.random(), Hypervector.random(), tags=("t",), module_id="m")
     snap = dw.snapshot()
     obj = json.loads(snap.path.read_bytes())
     assert obj["merkle_root"] == snap.merkle_root.hex()
+
+
+def test_tied_similarities_come_back_in_binding_id_order() -> None:
+    # Similarity is quantized to 1/DIM, so ties are common. The order of tied hits must not depend
+    # on insertion history, or a replayed workspace answers differently from the original.
+    ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
+    role, filler = Hypervector.random(), Hypervector.random()
+    recs = [ws.bind_exact(role, filler, tags=(f"t{i}",), module_id="m") for i in range(8)]
+    hits = [rec.binding_id for rec, _ in ws.read_similar(recs[0].hypervector, k=8)]
+    assert len(hits) == 8
+    assert hits == sorted(hits, key=str)

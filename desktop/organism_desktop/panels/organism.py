@@ -1,6 +1,8 @@
 """Organism Evolution panel — skills, looks, code, multi-Organism, bundles (v1.8)."""
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -8,13 +10,15 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QTableWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from organism_desktop.panels._widgets import BasePanel, fill_table, mono_text, set_json
-from PySide6.QtWidgets import QTableWidget
+
+logger = logging.getLogger(__name__)
 
 
 class OrganismPanel(BasePanel):
@@ -247,7 +251,7 @@ class OrganismPanel(BasePanel):
                 try:
                     win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
                 except Exception:
-                    pass
+                    logger.warning("refresh failed", exc_info=True)
         skills = snap.get("skills") or []
         fill_table(
             self.skills_table,
@@ -324,6 +328,7 @@ class OrganismPanel(BasePanel):
         try:
             prog = self.service.code_stage_progress(bundle_id)
         except Exception:
+            logger.warning("_update_stage_progress failed", exc_info=True)
             return
         n = len(prog.get("progress") or [])
         self.stage_bar.setValue(min(6, n))
@@ -344,7 +349,7 @@ class OrganismPanel(BasePanel):
             try:
                 win.update_organism_badge()
             except Exception:
-                pass
+                logger.warning("_sync_shell_organism_badge failed", exc_info=True)
 
     def _set_bundle_feedback(self, path: str | None, *, action: str, ok: bool = True, extra: str = "") -> None:
         if path:
@@ -391,6 +396,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Promoted skill {item.text()}")
         except Exception as e:
+            logger.warning("_promote_skill failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
             set_json(self.view, {"error": str(e)})
 
@@ -408,6 +414,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Improved from trace {item.text()}", error=not result.get("ok"))
         except Exception as e:
+            logger.warning("_improve_from_trace failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _evolve_looks(self) -> None:
@@ -426,7 +433,7 @@ class OrganismPanel(BasePanel):
                 try:
                     win.apply_organism_theme(theme.get("palette"), qss=theme.get("qss"))
                 except Exception:
-                    pass
+                    logger.warning("_evolve_looks failed", exc_info=True)
         self.refresh()
         self._refresh_asset_preview()
         self._toast(
@@ -450,6 +457,7 @@ class OrganismPanel(BasePanel):
             prev = self.service.organism_asset_preview(aid)
             set_json(self.asset_preview, prev)
         except Exception as e:
+            logger.warning("_refresh_asset_preview failed", exc_info=True)
             set_json(self.asset_preview, {"error": str(e)})
 
     def _code_draft(self) -> None:
@@ -485,6 +493,7 @@ class OrganismPanel(BasePanel):
             self._update_stage_progress(bid)
             self._toast(f"Promoted {bid}")
         except Exception as e:
+            logger.warning("_code_promote failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _code_demote(self) -> None:
@@ -507,6 +516,7 @@ class OrganismPanel(BasePanel):
             self._update_stage_progress(bid)
             self._toast(f"Rolled back {bid}")
         except Exception as e:
+            logger.warning("_code_rollback failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _fill_organism_combo(self, snap: dict | None = None) -> None:
@@ -540,6 +550,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Created {result.get('organism', {}).get('display_name')}")
         except Exception as e:
+            logger.warning("_create_organism failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _switch_organism(self) -> None:
@@ -558,6 +569,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Switched to {oid}")
         except Exception as e:
+            logger.warning("_switch_organism failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
     def _export_bundle(self) -> None:
@@ -575,6 +587,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Exported {path}")
         except Exception as e:
+            logger.warning("_export_bundle failed", exc_info=True)
             self._set_bundle_feedback(self.bundle_path_edit.text().strip() or None, action="export", ok=False, extra=str(e))
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
@@ -611,6 +624,7 @@ class OrganismPanel(BasePanel):
             self.refresh()
             self._toast(f"Imported {result.get('organism_id')}", error=not result.get("ok"))
         except Exception as e:
+            logger.warning("_import_last_bundle failed", exc_info=True)
             self._set_bundle_feedback(path, action="import", ok=False, extra=str(e))
             self._toast(f"{type(e).__name__}: {e}", error=True)
 
@@ -618,6 +632,7 @@ class OrganismPanel(BasePanel):
         try:
             entries = self.service.list_draft_replays()
         except Exception as e:
+            logger.warning("_refresh_replays failed", exc_info=True)
             fill_table(self.replay_table, ["error"], [[str(e)]])
             return
         fill_table(
@@ -649,4 +664,5 @@ class OrganismPanel(BasePanel):
             set_json(self.view, result)
             self._toast(f"Replayed {item.text()}")
         except Exception as e:
+            logger.warning("_replay_selected failed", exc_info=True)
             self._toast(f"{type(e).__name__}: {e}", error=True)

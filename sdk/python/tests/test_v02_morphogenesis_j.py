@@ -7,7 +7,7 @@ from organism_sdk.morphogenesis import DevelopmentalGenome, DevelopmentalStage, 
 from organism_sdk.trace import TraceEmitter, V02TraceSink
 
 
-def test_o1_stage_fail_retains_prior():
+def test_o1_stage_fail_retains_prior() -> None:
     tr = MorphogenesisTracker()
     g = DevelopmentalGenome("g1", [DevelopmentalStage(1, "scaffold", locus="s1"), DevelopmentalStage(2, "wiring", locus="s2"), DevelopmentalStage(3, "calibrate", locus="s3")])
     tr.register_genome("dev_mod", g)
@@ -16,7 +16,7 @@ def test_o1_stage_fail_retains_prior():
     assert failed.status == "FAILED" and g.stages[0].status == "PASSED" and g.stages[1].status == "PASSED" and g.mutation_locus == "s3"
 
 
-def test_o2_development_blocks_deliberation_and_control():
+def test_o2_development_blocks_deliberation_and_control() -> None:
     tr = MorphogenesisTracker()
     g = DevelopmentalGenome("g2", [DevelopmentalStage(1, "a", locus="a")])
     tr.register_genome("baby", g)
@@ -25,7 +25,7 @@ def test_o2_development_blocks_deliberation_and_control():
     assert tr.may_enter_deliberation("baby") and not tr.exploration_restrictions_apply("baby")
 
 
-def test_o4_circadian_rest_suppressed_in_crisis_and_gates_exploration():
+def test_o4_circadian_rest_suppressed_in_crisis_and_gates_exploration() -> None:
     clock = CircadianClock(rest_start=0.0, rest_end=1.0)
     st = clock.advance(0.0, crisis=False)
     assert st.in_rest and st.melatonin_baseline > 0.5
@@ -35,13 +35,13 @@ def test_o4_circadian_rest_suppressed_in_crisis_and_gates_exploration():
     assert not st2.in_rest and st2.melatonin_baseline == 0.0
 
 
-def test_o5_metabolic_kleiber_inefficiency_flag():
+def test_o5_metabolic_kleiber_inefficiency_flag() -> None:
     share = kleiber_declared_share(10.0, beta=0.75)
     assert abs(share - (10.0 ** 0.75)) < 1e-9
     assert metabolic_inefficiency(share * 2.0, share) and not metabolic_inefficiency(share, share)
 
 
-def test_circadian_to_autonomic_auditable():
+def test_circadian_to_autonomic_auditable() -> None:
     tr = TraceEmitter(); tr.attach_v02_sink(V02TraceSink())
     ac = AutonomicController(trace=tr)
     clock = CircadianClock(rest_start=0.0, rest_end=1.0)

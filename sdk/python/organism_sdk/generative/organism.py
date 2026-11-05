@@ -2,16 +2,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from organism_sdk.generative.assets import AppearanceProfile
 from organism_sdk.generative.skills import SkillDescriptor
 
+logger = logging.getLogger(__name__)
 
 EvolutionKind = Literal[
     "code_draft",
@@ -62,8 +64,8 @@ class OrganismProfile:
     appearance: dict[str, Any] = field(default_factory=dict)
     code_revisions: list[dict[str, Any]] = field(default_factory=list)
     evolution_log: list[dict[str, Any]] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -106,7 +108,7 @@ class OrganismStore:
                     self._active_id = aid
                     return
             except Exception:
-                pass
+                logger.warning("_load_active failed", exc_info=True)
         if self._profiles and self._active_id is None:
             self._active_id = next(iter(self._profiles))
             self._persist_active()
@@ -127,6 +129,7 @@ class OrganismStore:
                 p = OrganismProfile(**{k: raw[k] for k in OrganismProfile.__dataclass_fields__ if k in raw})
                 self._profiles[p.organism_id] = p
             except Exception:
+                logger.warning("_load_all failed", exc_info=True)
                 continue
 
     def create(self, *, display_name: str = "Organism", organism_id: str | None = None, make_active: bool = False) -> OrganismProfile:
@@ -213,7 +216,7 @@ class OrganismStore:
                 event_id=uuid.uuid4().hex[:12],
                 kind=kind,
                 summary=summary,
-                at=datetime.now(timezone.utc).isoformat(),
+                at=datetime.now(UTC).isoformat(),
                 payload=payload or {},
             )
             p.evolution_log.append(ev.as_dict())
@@ -225,7 +228,7 @@ class OrganismStore:
         with self._lock:
             p = self._require(organism_id)
             p.skills = [s.as_dict() if hasattr(s, "as_dict") else dict(s) for s in skills]
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 
@@ -233,7 +236,7 @@ class OrganismStore:
         with self._lock:
             p = self._require(organism_id)
             p.appearance = appearance.as_dict() if hasattr(appearance, "as_dict") else dict(appearance)
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 
@@ -249,10 +252,10 @@ class OrganismStore:
                     "shadow_metrics": bundle.get("shadow_metrics"),
                     "backend": bundle.get("backend"),
                     "stage_progress": bundle.get("stage_progress"),
-                    "at": datetime.now(timezone.utc).isoformat(),
+                    "at": datetime.now(UTC).isoformat(),
                 }
             )
-            p.updated_at = datetime.now(timezone.utc).isoformat()
+            p.updated_at = datetime.now(UTC).isoformat()
             self._save(p)
             return p
 

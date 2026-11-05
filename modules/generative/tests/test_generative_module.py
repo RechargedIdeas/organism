@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from generative.module import MODULE_ID, MODULE_VERSION, GenerativeOrganismModule
 from organism_sdk.contract import DataType, Modality
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.workspace import WorkspaceClient
+
+from generative.module import MODULE_ID, MODULE_VERSION, GenerativeOrganismModule
 
 
 def test_contract_may_actuate_false():
@@ -15,7 +16,7 @@ def test_contract_may_actuate_false():
     c = mod.declare_contract()
     assert c.identity.module_id == MODULE_ID
     assert c.safety.may_actuate is False
-    assert MODULE_VERSION.startswith("1.9") or MODULE_VERSION.startswith("1.")
+    assert MODULE_VERSION.startswith(("1.9", "1."))
     c.validate()
 
 
@@ -33,7 +34,7 @@ def test_handle_refuses_control_actuation():
             form="control_actuation",
             safety_tier="research",
             deadline_ms=500,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,
@@ -61,7 +62,7 @@ def test_health_and_non_control_handle():
             form="generative_evolve",
             safety_tier="research",
             deadline_ms=500,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,

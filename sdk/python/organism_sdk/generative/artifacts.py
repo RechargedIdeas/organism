@@ -6,14 +6,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+logger = logging.getLogger(__name__)
 
 ArtifactKind = Literal["code", "asset", "skill", "manifest", "pack"]
 
@@ -90,6 +92,7 @@ class ArtifactStore:
             for aid, rows in raw.items():
                 self._index[aid] = [ProvenanceRecord(**r) for r in rows]
         except Exception:
+            logger.warning("_load_index failed", exc_info=True)
             self._index = {}
 
     def _save_index(self) -> None:
@@ -132,7 +135,7 @@ class ArtifactStore:
                 parent_digest=parent_digest,
                 backend=backend,
                 stage=stage,
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
                 metadata={**(metadata or {}), "path": str(path), "content_hash": digest},
             )
             self._index.setdefault(aid, []).append(rec)

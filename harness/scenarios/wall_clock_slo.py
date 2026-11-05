@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from organism_sdk.degradation import (
@@ -52,7 +53,7 @@ def _fresh(t_down: dict[str, float], t_up: dict[str, float]) -> tuple[Degradatio
 
 def _wait_until(
     m: DegradationMachine,
-    predicate,
+    predicate: Callable[[DegradationMachine], bool],
     *,
     timeout_s: float,
     t0: float,

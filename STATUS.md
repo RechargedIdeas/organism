@@ -1,10 +1,11 @@
 # Organism — Implementation Status
 
-**Date:** 2026-10-25 (America/New_York)  
-**Release:** **v1.10.0 — Bare metal first + native sandbox**  
+**Date:** 2026-11-04 (America/New_York)  
+**Release:** **v1.10.0 — Bare metal first + native sandbox** (latest tag). v1.11 is in progress and unreleased.  
 **Corpus:** closed v0.1–v1.9.0 + v1.10.0 host portability / native sandbox  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
 **Tag:** [v1.10.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.10.0)  
+**Gap review:** [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) lists what is fixed, what is open, and the decisions still needed.
 
 ## Verdict
 
@@ -25,14 +26,45 @@ See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md)
 - **Private publish:** the Kotlin SDK publishes to a private repository. Decision made 2026-11-04.
 - **Next:** K1b, then K2. Start with [docs/HANDOVER.md](docs/HANDOVER.md).
 - **Gaps:** [docs/AI_MODEL_GAPS.md](docs/AI_MODEL_GAPS.md) lists 40 gaps for KotMoE, Lightspeed and future models.
-- **Branch note:** `main` has the v1.11 MoA layer (Phases 0 to 3), and this branch is 12 commits behind it. Merge or
-  rebase before any PR.
+- **Branch note:** this branch includes `main` (the v1.11 MoA layer and the v1.12 work agent) through the merge
+  commit. Review that merge before any PR.
+## v1.11 in progress: MoA layer
+
+Phases 0 to 3 of the [upgrade plan](docs/UPGRADE_AND_EXPANSION_PLAN.md) are implemented
+and tested, and Phase 5 has its rule-based part. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
+
+| Phase | Status | Notes |
+|---|---|---|
+| 0 Design record | done | Corrections to the plan recorded |
+| 1 Experts and registration | done | Two reference experts; registry health works |
+| 2 Capability scorer and shadow gate | done | Gate passes on the synthetic set (extraction 12/13, one known false positive) |
+| 3 VSA aggregation, tiers T0 to T4, drills | done | Hysteresis and failure drills tested |
+| 4 Synthesizer and router evolution | not started | Needs a routing-policy artifact and a learned backend (D1) |
+| 5 Judge | not started | Needs a calibrated learned backend (D1) |
+| 5 Guardrails and red team | done (rule-based) | Input and output guardrails with measured error rates. Red-team suite runs non-blocking, with three known misses |
+| 6 Lifecycle and provenance | optional | Decision D4 |
+
+Signed registration is available. Pass a `TrustStore` to `RegistryClient` to require an author
+signature on registration and an approver signature on promotion. Without one, signatures are not
+checked, which is the default. Production keys live with the approver, never in the repo or the agent's environment (decision S1, adopted 2026-11-04). Wiring the trust store into the deploy stack and the desktop app is still to do.
 
 ## Soak / wall-clock cadence
 
 - Default CI / pytest: `-m 'not slow'` (fast soak + budgets).
 - Full soak: `ORGANISM_SOAK_FULL=1` on a target box per [docs/ops/SOAK_RUNBOOK.md](docs/ops/SOAK_RUNBOOK.md).
 - Category I ~480s: `ORGANISM_WALL_CLOCK_FULL=1` (opt-in only).
+- Nightly: the local `nightly` tier (Windows Task Scheduler, 02:00), and a scheduled
+  [`nightly.yml`](.github/workflows/nightly.yml) workflow on GitHub with an advisory dependency audit.
+
+## Quality ratchets
+
+| Ratchet | Count | Baseline |
+|---|---|---|
+| ruff | 1 | `ci/baselines/ruff.json` (intentional `exec` in the generative sandbox) |
+| mypy (hand-written) | 59 | `ci/baselines/mypy.json` (breakdown in [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)) |
+| rustfmt | 0 | enforced |
+
+`pytest -m 'not slow'` collects 591 tests. The pre-push fast tier runs 60 gates.
 
 ## v1.10.0 phase table
 

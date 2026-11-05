@@ -2,26 +2,27 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
+from deterministic_engine.engine import DeterministicEngine
 from organism_sdk.contract import DataType, MaxSafetyTier, Modality, Severity
+from organism_sdk.hormone import HORMONE_STATE_TAG, HormoneBus
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.router import Router, RouterTask, default_bootstrap_policy
 from organism_sdk.workspace import WorkspaceClient
-from organism_sdk.hormone import HormoneBus, HORMONE_STATE_TAG
-from deterministic_engine.engine import DeterministicEngine
 
-from bio_digital.slime_mold import SlimeMoldModule, MODULE_ID as SLIME_ID
-from bio_digital.mycelium import MyceliumModule, MODULE_ID as MYCELIUM_ID
-from bio_digital.hal import BioDigitalHAL, research_sim_enabled, RUNTIME_RESEARCH_SIM
-from bio_digital.limits import PHYSARUM_LIMITS, MYCELIUM_LIMITS
 from bio_digital.bus_adapter import BioDigitalBusAdapter, ClusterMessageView
-from bio_digital.twin_bridge import TwinBridge, BIO_TWIN_TAG
+from bio_digital.hal import RUNTIME_RESEARCH_SIM, BioDigitalHAL, research_sim_enabled
 from bio_digital.hypervisor_map import DrainPolicy, HypervisorMapper
+from bio_digital.limits import MYCELIUM_LIMITS, PHYSARUM_LIMITS
+from bio_digital.mycelium import MODULE_ID as MYCELIUM_ID
+from bio_digital.mycelium import MyceliumModule
+from bio_digital.slime_mold import MODULE_ID as SLIME_ID
+from bio_digital.slime_mold import SlimeMoldModule
+from bio_digital.twin_bridge import BIO_TWIN_TAG, TwinBridge
 
 
 def _perception(form: str, data: bytes = b"\x01\x00") -> PerceptionInput:
@@ -46,7 +47,7 @@ def _perception(form: str, data: bytes = b"\x01\x00") -> PerceptionInput:
             form=form,
             safety_tier="research",
             deadline_ms=500,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=400.0,
@@ -181,7 +182,7 @@ def test_twin_bridge_to_workspace_and_hormone():
 def test_hypervisor_hot_swap_after_drain():
     reg = RegistryClient()
     active = SlimeMoldModule(node_id="active")
-    standby = SlimeMoldModule(node_id="standby")
+    _standby = SlimeMoldModule(node_id="standby")
     ca = active.declare_contract()
     # Distinct module ids for roles
     # register under distinct ids by mutating identity via fresh modules with patched ids

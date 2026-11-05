@@ -12,13 +12,13 @@ from harness.scenarios.wall_clock_slo import (
 )
 
 
-def test_wall_clock_l0_l1_fast():
+def test_wall_clock_l0_l1_fast() -> None:
     r = scenario_fast_l0_l1_wall()
     assert r.level == "L1"
     assert r.elapsed_s > 0.3
 
 
-def test_wall_clock_e5_1b_fast_physiology():
+def test_wall_clock_e5_1b_fast_physiology() -> None:
     """Scaled E-5 1b under time.monotonic(); proves hysteresis + no flapping."""
     r = scenario_fast_no_flapping_and_recovery()
     assert r.level == "L0"
@@ -30,7 +30,7 @@ def test_wall_clock_e5_1b_fast_physiology():
 
 
 @pytest.mark.slow
-def test_e5_1b_wall_clock_480s():
+def test_e5_1b_wall_clock_480s() -> None:
     """Full B.4 hysteresis E-5 1b (~480s). Skip unless ORGANISM_WALL_CLOCK_FULL=1."""
     if os.environ.get("ORGANISM_WALL_CLOCK_FULL") != "1":
         pytest.skip("opt-in: ORGANISM_WALL_CLOCK_FULL=1 (≈8 min wall clock)")

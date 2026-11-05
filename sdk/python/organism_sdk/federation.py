@@ -7,11 +7,14 @@ When enabled, delegates to ``MultiNodeCluster``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal
 
 from organism_sdk.hormone import HormoneBus, HormoneLevels
 from organism_sdk.workspace import WorkspaceClient
+
+if TYPE_CHECKING:
+    from organism_sdk.multinode import MultiNodeCluster
 
 UnsupportedKind = Literal[
     "FEDERATED_OXYTOCIN",
@@ -30,7 +33,7 @@ class FederationUnsupported(Exception):
 class UnsupportedEvent:
     kind: UnsupportedKind
     detail: str
-    recorded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    recorded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -73,8 +76,9 @@ class FederationGate:
         ev = UnsupportedEvent(kind, detail)
         self.events.append(ev)
         if self._ws is not None:
-            from organism_sdk.hypervector import Hypervector
             import uuid
+
+            from organism_sdk.hypervector import Hypervector
             from organism_sdk.workspace import BindingRecord
 
             role = Hypervector.random(seed=0x46454400)
@@ -95,7 +99,7 @@ class FederationGate:
         return ev
 
     @property
-    def cluster(self):
+    def cluster(self) -> MultiNodeCluster | None:
         return self._cluster
 
     def federated_oxytocin_release(

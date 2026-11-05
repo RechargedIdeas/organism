@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from organism_sdk.contract import (
@@ -353,7 +353,7 @@ class DeterministicEngine(OrganismModule):
 
     def justify(self, emission: Emission) -> JustificationToken | None:
         rb = self._rulebook
-        emitted_at = datetime.now(timezone.utc).isoformat()
+        emitted_at = datetime.now(UTC).isoformat()
         body_obj: dict[str, Any] = {
             "format": RULE_TRACE_FORMAT,
             "engine": {

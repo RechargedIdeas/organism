@@ -4,21 +4,21 @@ from __future__ import annotations
 from dataclasses import replace
 
 from deterministic_engine.engine import DeterministicEngine
-
 from organism_sdk.apoptosis import ApoptosisService, MemoryExport
 from organism_sdk.contract import ReliabilityTier as RT
+from organism_sdk.contract import SubstrateContract
 from organism_sdk.trace import TraceEmitter, V02TraceSink
 from organism_sdk.workspace import WorkspaceClient
 
 
-def _svc():
+def _svc() -> tuple[ApoptosisService, WorkspaceClient]:
     ws = WorkspaceClient(write_tags=("*",), read_tags=("*",))
     tr = TraceEmitter()
     tr.attach_v02_sink(V02TraceSink())
     return ApoptosisService(ws, trace=tr), ws
 
 
-def _t2(mid: str):
+def _t2(mid: str) -> SubstrateContract:
     c = DeterministicEngine().declare_contract()
     return replace(
         c,
@@ -28,7 +28,7 @@ def _t2(mid: str):
     )
 
 
-def test_n4_drain_killed_synthetic_no_succeeded():
+def test_n4_drain_killed_synthetic_no_succeeded() -> None:
     svc, ws = _svc()
     r = svc.begin_self_terminate(
         _t2("drain_mod"),
@@ -40,11 +40,12 @@ def test_n4_drain_killed_synthetic_no_succeeded():
     )
     assert r.state == "SELF_TERMINATING" and r.drain_outcome == "killed"
     assert r.synthetic_lifecycle_recorded
-    assert ws.read_by_tag(["lifecycle_synthetic"])[-1].payload["on_drain_outcome"] == "killed"
+    record = ws.read_by_tag(["lifecycle_synthetic"])[-1]
+    assert record.payload is not None and record.payload["on_drain_outcome"] == "killed"
 
 
-def test_n5_fail_blocks_then_pass_promotes():
-    svc, ws = _svc()
+def test_n5_fail_blocks_then_pass_promotes() -> None:
+    svc, _ws = _svc()
     assert svc.begin_self_terminate(
         _t2("parent"),
         cause="entropy",

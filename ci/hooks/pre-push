@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed by: python ci/run.py hooks install. Runs the fast tier before any push.
+# Bypass for one push only: git push --no-verify (use sparingly).
+exec sh "$(git rev-parse --show-toplevel)/ci/hooks/_resolve.sh" fast pre-push "$@"

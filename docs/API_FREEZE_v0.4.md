@@ -23,7 +23,7 @@ This document freezes the **public API surface** for the v0.4.0 release. SemVer 
 2. **Proto package `organism.v1`** remains the wire source of truth. Field numbers and existing enum values are immutable; new fields/enums are additive only.
 3. **Default single-box control path** (registry → workspace → router → degradation → deterministic/learned modules) stays green under the default pytest suite (`-m 'not slow'`).
 4. **Experimental APIs** (biology, multi-node sim, SNN, learned ISE/metamodel) may change shape in `0.5+` without a major bump, but must remain fail-closed when disabled.
-5. **CI gates** listed as `blocking: true` in `ci/gates.yaml` for v0.1–v0.4 remain blocking on this release line.
+5. **CI gates** in `ci/gates.yaml` for v0.1–v0.4 remain blocking on this release line. A gate is blocking unless it sets `blocking: false`; only `perf:slo` does.
 
 ## Frozen: proto `organism.v1`
 

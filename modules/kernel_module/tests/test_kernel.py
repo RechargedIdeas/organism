@@ -3,14 +3,15 @@ from __future__ import annotations
 
 import json
 import struct
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from organism_sdk.contract import DataType, Modality, Severity
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.module import run_handle
 from organism_sdk.registry import RegistryClient
 from organism_sdk.workspace import WorkspaceClient
-from kernel_module.module import KernelModule, MODULE_ID
+
+from kernel_module.module import MODULE_ID, KernelModule
 
 
 def _inp(form: str = "pattern_recognition") -> PerceptionInput:
@@ -27,7 +28,7 @@ def _inp(form: str = "pattern_recognition") -> PerceptionInput:
             form=form,
             safety_tier="medium",
             deadline_ms=1000,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         ),
         workspace_reader=ws.reader(),
         deadline_remaining_ms=800.0,

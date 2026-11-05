@@ -11,13 +11,12 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from organism_sdk.hormone import HormoneBus, HormoneLevels, HORMONE_STATE_TAG
+from organism_sdk.hormone import HORMONE_STATE_TAG, HormoneBus, HormoneLevels
 from organism_sdk.hypervector import Hypervector
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
-
 
 DegradeMode = Literal["NONE", "PARTITION_SAFE", "QUORUM_LOST"]
 
@@ -36,7 +35,7 @@ class OxytocinVote:
     node_id: str
     accept: bool
     adapter_acceptance_rate: float
-    at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class OrganismNode:
@@ -110,13 +109,13 @@ class OrganismNode:
                     window_id=env.levels.window_id,
                 )
                 self.bus._mirror = merged.clamp()
-                self.bus._mirror_written_at = datetime.now(timezone.utc)
+                self.bus._mirror_written_at = datetime.now(UTC)
                 lag_obs = max(0.0, (now - env.emitted_at_mono) * 1000.0)
                 self.mirror_receipts.append(
                     {
                         "from": env.source_node,
                         "lag_ms": lag_obs,
-                        "at": datetime.now(timezone.utc).isoformat(),
+                        "at": datetime.now(UTC).isoformat(),
                     }
                 )
                 applied += 1
@@ -244,9 +243,8 @@ class MultiNodeCluster:
         live = [n for n in self.nodes.values() if not n.partitioned]
         if len(live) < 2:
             for n in self.nodes.values():
-                if n.partitioned or True:
-                    # All nodes enter quorum-lost safe degrade; partitioned stay isolated
-                    n.degrade = "QUORUM_LOST" if not n.partitioned else "PARTITION_SAFE"
+                # All nodes enter quorum-lost safe degrade; partitioned stay isolated
+                n.degrade = "QUORUM_LOST" if not n.partitioned else "PARTITION_SAFE"
             return OxytocinQuorumResult(
                 agreed=False,
                 oxytocin=0.0,
