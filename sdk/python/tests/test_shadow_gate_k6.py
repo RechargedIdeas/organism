@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 import pytest
 from deterministic_engine.engine import DeterministicEngine
 from organism_sdk import signing
 from organism_sdk.registry import (
     CapabilityFilter,
+    LifecycleState,
     RegistryClient,
     ShadowThreshold,
     ShadowValidationRecord,
@@ -29,7 +31,7 @@ def _good(invocations: int = 200) -> ShadowValidationRecord:
     )
 
 
-def _registry_with(initial: str, **kwargs) -> tuple[RegistryClient, str]:
+def _registry_with(initial: LifecycleState, **kwargs: Any) -> tuple[RegistryClient, str]:
     reg = RegistryClient(**kwargs)
     c = DeterministicEngine().declare_contract()
     reg.register(c, artifact_digest=c.identity.artifact_digest, author_signature=b"s", initial_state=initial)
@@ -51,8 +53,12 @@ def test_ungated_promotion_needs_no_evidence() -> None:
 
 def test_evidence_that_meets_the_threshold_passes_each_gated_step() -> None:
     reg, mid = _registry_with("SANDBOXED")
-    for frm, to in (("SANDBOXED", "SHADOW_VALIDATED"), ("SHADOW_VALIDATED", "EXPLORATION"),
-                    ("EXPLORATION", "DELIBERATION")):
+    steps: tuple[tuple[LifecycleState, LifecycleState], ...] = (
+        ("SANDBOXED", "SHADOW_VALIDATED"),
+        ("SHADOW_VALIDATED", "EXPLORATION"),
+        ("EXPLORATION", "DELIBERATION"),
+    )
+    for frm, to in steps:
         assert reg.promote(mid, frm, to, [_good()], b"").accepted, (frm, to)
 
 
@@ -127,7 +133,7 @@ def test_payload_has_no_float_text_and_binds_the_evidence() -> None:
 # ---- ShadowRunner (H1) -------------------------------------------------------------------------------------------
 
 
-def _runner(rows, ticks=None):
+def _runner(rows: list[tuple[int, int, int, int]], ticks: list[int] | None = None) -> ShadowRunner:
     """rows: (incumbent loss, candidate loss, candidate fails, latency ns). The clock is scripted, two reads a row."""
     clock_ticks: list[int] = []
     t = 0
@@ -136,15 +142,15 @@ def _runner(rows, ticks=None):
         t += lat + 1000
     feed = iter(ticks if ticks is not None else clock_ticks)
 
-    def incumbent(i):
+    def incumbent(i: int) -> tuple[str, int]:
         return ("inc", i)
 
-    def candidate(i):
+    def candidate(i: int) -> tuple[str, int]:
         if rows[i][2]:
             raise RuntimeError("candidate failed")
         return ("cand", i)
 
-    def loss(request, output):
+    def loss(request: int, output: tuple[str, int]) -> int:
         return rows[request][0] if output[0] == "inc" else rows[request][1]
 
     return ShadowRunner(incumbent=incumbent, candidate=candidate, loss=loss,

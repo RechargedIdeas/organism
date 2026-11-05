@@ -5,7 +5,6 @@ import json
 from dataclasses import replace
 
 import pytest
-
 from organism_sdk.canonical import canonical_bytes
 from organism_sdk.contract import ModuleRole, ReliabilityTier
 from organism_sdk.registry import ModuleHandle, RegistryClient
@@ -14,7 +13,9 @@ from organism_sdk.router import (
     DEFAULT_FORM_TO_ROLES,
     EXCLUSION_CODES,
     DispatchPlan,
+    Eligibility,
     Excluded,
+    Level,
     Router,
     RouterPolicyArtifact,
     RouterTask,
@@ -52,8 +53,16 @@ def _h(
     )
 
 
-def _mask(handles, *, form="pattern_recognition", tier="medium", level="L0", health=None,
-          hardware=None, interpretability=False):
+def _mask(
+    handles: list[ModuleHandle],
+    *,
+    form: str = "pattern_recognition",
+    tier: str = "medium",
+    level: Level = "L0",
+    health: dict[str, str] | None = None,
+    hardware: set[str] | None = None,
+    interpretability: bool = False,
+) -> Eligibility:
     task = RouterTask(
         task_id="t1", form=form, safety_tier=tier, requires_interpretability=interpretability
     )
