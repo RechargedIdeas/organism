@@ -75,6 +75,7 @@ def scenario_j3_replay_interoceptive() -> None:
     st = ise.estimate(HealthVector(thermal=0.8, energy=0.9))
     rec = ise.write_state(st)
     got = ws.read_by_tag(["interoceptive_state"])[0]
+    assert got.payload is not None and rec.payload is not None
     assert got.payload["viability_score"] == st.viability_score == rec.payload["viability_score"]
     assert got.payload["predicted_trajectory"]["viability_at_horizon"] == st.predicted_trajectory.viability_at_horizon
 
@@ -230,7 +231,9 @@ def scenario_l6_replay_immune() -> None:
     antigen = Hypervector.random(seed=3)
     immune._detectors.insert(0, antigen)
     d = immune.ingress(antigen)
-    assert ws.read_by_tag(["immune_decision"])[-1].payload["decision"] == d.decision
+    last = ws.read_by_tag(["immune_decision"])[-1]
+    assert last.payload is not None
+    assert last.payload["decision"] == d.decision
     assert [e for e in tr.entries if isinstance(e, ImmuneTraceEntry)][-1].decision == d.decision
 
 

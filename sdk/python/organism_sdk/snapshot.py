@@ -163,7 +163,6 @@ class DurableWorkspace:
 
     def snapshot(self, *, parent: bytes | None = None) -> SnapshotMeta:
         # Content-addressed: merkle over binding checksums sorted by id
-        _bindings = []
         # Access internal store via similar scan of all — use ops rebuild view
         # For M5: read from in-memory via ops max
         # Collect by re-querying known ids from ops

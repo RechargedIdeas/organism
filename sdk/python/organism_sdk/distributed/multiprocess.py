@@ -10,6 +10,7 @@ import multiprocessing as mp
 import os
 import time
 from dataclasses import dataclass, field
+from multiprocessing.process import BaseProcess
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -163,14 +164,14 @@ class ProcessCluster:
         mirror_q: mp.Queue[Any] = ctx.Queue()
         result_q: mp.Queue[Any] = ctx.Queue()
         ctrls: list[mp.Queue[Any]] = []
-        procs: list[mp.Process] = []
+        procs: list[BaseProcess] = []
         for i, nid in enumerate(self.node_ids):
             cq: mp.Queue[Any] = ctx.Queue()
             ctrls.append(cq)
             accept = self.accept_map.get(nid, True)
             # Inject skew on odd nodes if cluster-level skew set
             skew = self.clock_skew_ms if (i % 2 == 1 and self.clock_skew_ms) else 0.0
-            p = ctx.Process(
+            p: BaseProcess = ctx.Process(
                 target=_worker,
                 args=(nid, vote_q, mirror_q, cq, result_q),
                 kwargs={
@@ -206,7 +207,7 @@ class ProcessCluster:
 
         # Measure lag
         _now = time.monotonic()
-        lags = []
+        lags: list[float] = []
         for m in mirrors:
             # observed lag ≈ max(0, now - emitted) but delivery intended at deliver_at
             lags.append(max(0.0, (m["deliver_at"] - m["emitted_at"]) * 1000.0))

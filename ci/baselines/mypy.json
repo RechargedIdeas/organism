@@ -1,28 +1,21 @@
 {
   "version": 1,
   "tool": "mypy",
-  "generated": "2026-11-05T10:30:31Z",
-  "total": 35,
+  "generated": "2026-11-05T11:01:09Z",
+  "total": 24,
   "counts": {
-    "harness/scenarios/v02_biological.py::index": 3,
     "harness/scenarios/v04_security_fuzz.py::arg-type": 1,
     "harness/scenarios/v04_security_fuzz.py::call-arg": 1,
     "sdk/python/organism_sdk/circadian.py::no-any-return": 1,
-    "sdk/python/organism_sdk/cli.py::assignment": 1,
     "sdk/python/organism_sdk/deploy/stack.py::arg-type": 1,
-    "sdk/python/organism_sdk/distributed/multiprocess.py::arg-type": 1,
-    "sdk/python/organism_sdk/distributed/multiprocess.py::assignment": 1,
-    "sdk/python/organism_sdk/distributed/multiprocess.py::no-any-return": 1,
     "sdk/python/organism_sdk/generative/bundle.py::arg-type": 2,
     "sdk/python/organism_sdk/generative/bundle.py::assignment": 1,
     "sdk/python/organism_sdk/generative/bundle.py::index": 1,
-    "sdk/python/organism_sdk/generative/code_pipeline.py::misc": 3,
     "sdk/python/organism_sdk/generative/runtime.py::no-any-return": 1,
     "sdk/python/organism_sdk/generative/sandbox.py::attr-defined": 2,
     "sdk/python/organism_sdk/registry.py::no-any-return": 1,
     "sdk/python/organism_sdk/sandbox/jail.py::attr-defined": 9,
     "sdk/python/organism_sdk/snapshot.py::arg-type": 2,
-    "sdk/python/organism_sdk/snapshot.py::no-any-return": 1,
-    "sdk/python/organism_sdk/snapshot.py::var-annotated": 1
+    "sdk/python/organism_sdk/snapshot.py::no-any-return": 1
   }
 }

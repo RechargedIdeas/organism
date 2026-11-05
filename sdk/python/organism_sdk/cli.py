@@ -365,9 +365,9 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
             policy.timeout_s = float(args.timeout)
         if args.no_namespaces:
             policy.use_namespaces = False
-        result = sb.run(argv, policy=policy)
-        _print({"ok": result.ok, **result.as_dict()})
-        return 0 if result.ok else 1
+        run_result = sb.run(argv, policy=policy)
+        _print({"ok": run_result.ok, **run_result.as_dict()})
+        return 0 if run_result.ok else 1
     _print({"ok": False, "error": f"unknown sandbox action: {action}"})
     return 2
 

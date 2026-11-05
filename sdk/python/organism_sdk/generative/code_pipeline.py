@@ -161,10 +161,10 @@ def _static_check(source: str) -> list[str]:
     # de-dupe while preserving order
     seen: set[str] = set()
     out: list[str] = []
-    for e in errs:
-        if e not in seen:
-            seen.add(e)
-            out.append(e)
+    for err in errs:
+        if err not in seen:
+            seen.add(err)
+            out.append(err)
     return out
 
 
