@@ -61,11 +61,11 @@ done without one, but were not done in this review, with the reason given.
 | O2 | Roadmap | The MoA judge (Phase 5 remainder). Calibration needs a learned backend. | **blocked** on D1 |
 | O3 | Roadmap | MoA Phase 6 (lifecycle and provenance). | **blocked** on D4 |
 | O4 | Routing | Extraction queries built around "email address" route to unsure. The xfail is `test_v111_moa_routing.py::test_known_recall_gap_singular_email_is_routed_to_extractor`. Adding the phrases lost precision (7 of 11), so a context rule is needed. | **blocked** on S2 (a fresh labeled set, written before the rule) |
-| O5 | Guardrails | Three known misses, recorded as strict xfails in `test_v111_moa_redteam.py`: a Cyrillic homoglyph, a prompt-disclosure paraphrase, and a persona request without "you are now". | open. Each rule adds false-positive risk, so each needs a measured change against the labeled set. |
+| O5 | Guardrails | Three known misses, recorded as strict xfails in `test_v111_moa_redteam.py`: a Cyrillic homoglyph, a prompt-disclosure paraphrase, and a persona request without "you are now". | **fixed**. Each has a rule or a letter fold, and each is now a plain test. The labeled FP and FN counts are unchanged (2 of 25, 2 of 26), and 13 benign near-misses pass. See `docs/v1.11/MOA_LAYER.md` §10. |
 | O6 | Signing | The trust store is not configured in any production entry point. The deploy stack, the generative runtime, and the MoA experts still pass placeholder bytes such as `b"deploy"` and `b"reference-unsigned"`. | **unblocked** by S1 (decided 2026-11-04). Wiring is still to do. The default stays unchecked, so existing behaviour is unchanged. |
 | O7 | Guardrails | Aggregation picks the highest-confidence answer. A grounded but wrong answer passes the guards, and a compromised expert reporting confidence 1.0 wins. The guards bound fabricated values, not correctness. | open, documented in `MOA_LAYER.md` §10. Calibration belongs to the judge, so it is covered by O2. |
 | O8 | Dependencies | No Python lock or constraints file. Installs resolve fresh every time. | open. A lock file adds a tool and an upkeep cost, so it is a choice, not a gap to close silently. |
-| O9 | Typing | 59 hand-written mypy findings remain. See the breakdown below. | open. The annotation work is done (F14). The rest need the code read first, starting with `arg-type` and `attr-defined`. |
+| O9 | Typing | 35 hand-written mypy findings remain, down from 59 at F14. The breakdown below is from the 59-finding run. | open. The annotation work is done (F14). The rest need the code read first, starting with `arg-type` and `attr-defined`. |
 | O10 | Docs | `STATUS.md` was dated 2026-10-25 and listed MoA Phases 4 and 5 as not started. | fixed in this review. The CHANGELOG's chrono note was also wrong: `runtime/registry` no longer depends on chrono, but `runtime/workspace` and `organism-client` still do. |
 | O11 | Tests | The desktop evolve budget gate (`v17:desktop_organism`) asserts that one evolve call finishes within 2000 ms on Windows. `DesktopService` keeps its state in `organism_data/`, and `DraftReplayLog` appends to `organism_data/artifacts/draft_replay.json` on every evolve. That file reached about 0.9 MB. The gate failed on the main checkout's state. A copy of that state passed in 47.7 s, and fresh state passed in 6.3 s. | **resolved** in `edd2924`. The evolve tests use `DesktopService.create(data_root=...)` on a temp directory. The replay log still grows in normal use, so bounding it (rotation or compaction) is an open runtime change. |
 
@@ -81,7 +81,7 @@ These are the user's to make. Nothing above was decided on your behalf.
 - **S2 (new).** Approve a fresh labeled set for the email recall gap (O4). It has to be written before the context rule, so the rule is not tuned on the test that checks it.
 - **N1 (new).** The GitHub nightly workflow uses Actions minutes. The nightly tier took 589 s locally when it was last measured, and the job is capped at 120 minutes. Keep it, or leave only the Windows task (`OrganismNightlyCI`, which is registered and runs at 02:00)?
 
-## Mypy backlog (59 findings)
+## Mypy backlog (35 findings now, 59 at F14)
 
 Measured by the ratchet at 59 after F14. The two annotation codes are gone. This is the breakdown by
 error code, from the same run:

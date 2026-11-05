@@ -34,6 +34,27 @@ ENTITY_KEYS: tuple[str, ...] = ("dates", "emails", "numbers")
 # the word joiner, the byte-order mark, and the soft hyphen.
 _INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"), None)
 
+# Cyrillic and Greek letters that look like Latin ones. Only the injection rules fold them. The
+# groundedness check compares values exactly, so folding there would make a homoglyph of a query
+# entity count as grounded.
+_CONFUSABLES = str.maketrans(
+    {
+        "\u0430": "a",  # Cyrillic a
+        "\u0435": "e",  # Cyrillic ie
+        "\u043e": "o",  # Cyrillic o
+        "\u0440": "p",  # Cyrillic er
+        "\u0441": "c",  # Cyrillic es
+        "\u0443": "y",  # Cyrillic u
+        "\u0445": "x",  # Cyrillic ha
+        "\u0456": "i",  # Cyrillic Ukrainian i
+        "\u0458": "j",  # Cyrillic je
+        "\u0455": "s",  # Cyrillic dze
+        "\u03bf": "o",  # Greek omicron
+        "\u03b9": "i",  # Greek iota
+        "\u03c1": "p",  # Greek rho
+    }
+)
+
 # Each rule runs on normalized text (see ``normalize``). The name is returned as the reason.
 INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -54,9 +75,26 @@ INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        # "your" is what makes it the assistant's own first message, not the user's.
+        "reveal_first_message",
+        re.compile(
+            r"\b(?:tell|show|repeat|quote|recite|reveal|print|say|write)\b(?: \w+){0,6}? "
+            r"your (?:first|initial|opening|original) (?:message|prompt|input)\b"
+        ),
+    ),
+    (
         "persona_override",
         re.compile(
             r"\byou are (?:now|in) (?:an? )?(?:dan|unrestricted|jailbroken|developer mode)\b"
+        ),
+    ),
+    (
+        "persona_without_policy",
+        re.compile(
+            r"\b(?:answer|act|respond|behave|speak|reply)\b(?: \w+){0,6}? as (?:an? |the )?"
+            r"(?:\w+ ){0,2}?(?:assistant|model|ai|bot|chatbot|persona|character)\b"
+            r"(?: \w+){0,6}? (?:that|who|which) (?:has|have|with) no "
+            r"(?:safety|rules|restrictions|guidelines|filters|limits|policy|policies)\b"
         ),
     ),
     (
@@ -77,6 +115,10 @@ def normalize(text: str) -> str:
     """Fold width and case, drop invisible characters, and collapse whitespace."""
     folded = unicodedata.normalize("NFKC", text).translate(_INVISIBLE).casefold()
     return " ".join(folded.split())
+
+
+def _fold_confusables(text: str) -> str:
+    return text.translate(_CONFUSABLES)
 
 
 @dataclass(frozen=True)
@@ -124,15 +166,16 @@ class InjectionGuard:
         guard_id="prompt_injection",
         checkpoint="input",
         rule=(
-            "block queries that ask to ignore instructions, reveal the system prompt, adopt an "
-            "unrestricted persona, or disable rules"
+            "block queries that ask to ignore instructions, reveal the system prompt or the "
+            "assistant's first message, adopt an unrestricted persona or one with no policy, or "
+            "disable rules"
         ),
         false_positive_rate=0.08,
         false_negative_rate=0.08,
     )
 
     def check_input(self, query: str) -> GuardVerdict:
-        text = normalize(query)
+        text = _fold_confusables(normalize(query))
         for name, pattern in INJECTION_RULES:
             if pattern.search(text):
                 return GuardVerdict(passed=False, guard_id=self.spec.guard_id, reason=name)
