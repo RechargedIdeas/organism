@@ -62,15 +62,18 @@ HEALTH_METHOD_FQN = "organism.moa.Expert/Health"
 
 @dataclass(frozen=True)
 class CuedKeyword:
-    """A phrase that counts for an expert only when the query also has one of its cue words (O4).
+    """A phrase that counts for an expert only beside one of its cues (O4).
 
     "email address" alone is ambiguous. "Set up an email address" is not an extraction request,
-    but "pull the email address out of this" is. The phrase counts only beside a verb of retrieval,
-    so a cue word with no phrase has no effect, and "find" cannot pull in a query that has no phrase.
+    but "pull the email address out of this" is. A cue opens the request, so it is read in command
+    position: "pull" leads, or follows "please". A question opener counts only with a reference to
+    supplied text, as in "which email addresses are in this export". A cue with no phrase has no effect.
     """
 
     phrase: str
     cues: tuple[str, ...]
+    questions: tuple[str, ...] = ()
+    references: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
