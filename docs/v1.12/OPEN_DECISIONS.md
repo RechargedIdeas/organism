@@ -150,8 +150,8 @@ host that lacks Linux containment, so it cannot run on Windows at all.
   need a privileged step.
 - C. Leave it unenforced, and say so in the profile. This is the state today.
 
-**Recommendation:** A. Its groundwork (the proxy and an opt-in namespace) is built and tested here
-under WSL. The bridge is the one piece left.
+**Recommendation:** A. Its groundwork is built: the proxy (`sandbox/egress.py`, any host) and the
+namespace opt-in (`ORGANISM_JAIL_FULL_NS`, tested under WSL). The bridge is the one piece left.
 
 **Blocked until chosen:** whether an in-tree bridge is acceptable, or whether the user prefers a
 separate tool for it.

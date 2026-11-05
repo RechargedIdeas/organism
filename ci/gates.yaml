@@ -342,6 +342,17 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_jail_profile.py"
 
+  # Network groundwork (v1.12 W5): the allowlist CONNECT proxy, on loopback, and on Linux a child
+  # in its own network namespace that cannot reach host loopback. Not yet enforced for the executor.
+  - id: work:egress
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_egress.py sdk/python/tests/test_v112_work_netns.py"
+
+  # Error and edge paths the other work suites do not reach in-process (v1.12 hardening).
+  - id: work:hardening
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_hardening.py"
+
   # The Executor (v1.12 W5): refusals, the Ticket's directory, slots, recovery, and on Linux the
   # real jail giving the child only the allowed variable.
   - id: work:executor_fake
