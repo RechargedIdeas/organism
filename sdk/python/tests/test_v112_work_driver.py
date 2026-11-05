@@ -897,6 +897,31 @@ def test_a_work_listen_that_is_not_a_map_of_row_lists_is_refused(tmp_path: Path)
         load_deploy_config(path)
 
 
+def test_external_writes_are_off_unless_a_deploy_config_names_a_mode(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {}}), encoding="utf-8")
+    assert load_deploy_config(path).work.external_writes == {}
+    path.write_text(
+        json.dumps({"work": {"external_writes": {"github": "dry_run"}}}), encoding="utf-8"
+    )
+    cfg = load_deploy_config(path)
+    assert cfg.work.external_writes == {"github": "dry_run"}
+    assert cfg.as_dict()["work"]["external_writes"] == {"github": "dry_run"}
+
+
+def test_an_unknown_write_mode_or_source_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "deploy.json"
+    path.write_text(json.dumps({"work": {"external_writes": {"github": "yes"}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="work.external_writes.github must be one of off"):
+        load_deploy_config(path)
+    path.write_text(json.dumps({"work": {"external_writes": {"slack": "on"}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown source 'slack'"):
+        load_deploy_config(path)
+    path.write_text(json.dumps({"work": {"external_writes": ["github"]}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="work.external_writes must map"):
+        load_deploy_config(path)
+
+
 class ChildExecutor:
     """Runs a real child in its own session, as the jail does, and makes a stop while it is alive.
     With `stop_first`, the stop comes before the driver has the child's process group."""

@@ -66,6 +66,13 @@ class WorkDeployConfig:
     # (source, row) pairs Eval listens to. None listens to every Trigger, which is what a config
     # without `work.listen` does. A present `work.listen` lists the pairs and nothing else.
     listen: tuple[tuple[str, str], ...] | None = None
+    # The mode each Source's external writes run in: "off" (also what an unnamed Source gets),
+    # "dry_run" (each reply is recorded, nothing is posted), or "on". OPEN_DECISIONS item 2.
+    external_writes: dict[str, str] = field(default_factory=dict)
+
+
+WRITE_SOURCES = frozenset({"github"})
+WRITE_MODES = ("off", "dry_run", "on")
 
 
 @dataclass
@@ -115,7 +122,11 @@ class DeployConfig:
                 "timeout_s": self.sandbox.timeout_s,
                 "max_rss_mb": self.sandbox.max_rss_mb,
             },
-            "work": {"executor": self.work.executor, "listen": _listen_map(self.work.listen)},
+            "work": {
+                "executor": self.work.executor,
+                "listen": _listen_map(self.work.listen),
+                "external_writes": dict(self.work.external_writes),
+            },
             "source_path": self.source_path,
         }
 
@@ -276,6 +287,7 @@ def _from_mapping(data: dict[str, Any], *, source_path: str | None = None) -> De
         work=WorkDeployConfig(
             executor=_executor_section(work_raw.get("executor")),
             listen=_listen_section(work_raw["listen"]) if "listen" in work_raw else None,
+            external_writes=_external_writes_section(work_raw.get("external_writes")),
         ),
         source_path=source_path,
     )
@@ -315,6 +327,25 @@ def _listen_section(value: Any) -> tuple[tuple[str, str], ...]:
             raise DeployConfigError(f"work.listen.{source} must be a list of row names")
         pairs.update((str(source), row) for row in rows)
     return tuple(sorted(pairs))
+
+
+def _external_writes_section(value: Any) -> dict[str, str]:
+    """`work.external_writes`: the mode of each Source's writes. A Source not named stays off."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise DeployConfigError("work.external_writes must map each source to a mode")
+    modes: dict[str, str] = {}
+    for source, mode in value.items():
+        if source not in WRITE_SOURCES:
+            raise DeployConfigError(f"work.external_writes has an unknown source {source!r}")
+        if mode not in WRITE_MODES:
+            allowed = ", ".join(WRITE_MODES)
+            raise DeployConfigError(
+                f"work.external_writes.{source} must be one of {allowed}, not {mode!r}"
+            )
+        modes[str(source)] = str(mode)
+    return modes
 
 
 def default_cpu_only_config() -> DeployConfig:

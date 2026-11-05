@@ -128,6 +128,8 @@ class ReceiptStatus(str, Enum):
     PENDING = "pending"
     SENT = "sent"
     DROPPED = "dropped"
+    # A dry run recorded the reply it would have posted, and posted nothing (OPEN_DECISIONS item 2).
+    DRY_RUN = "dry_run"
 
 
 @dataclass(frozen=True)
@@ -472,6 +474,16 @@ class WorkStore:
                 (receipt_id,),
             ).fetchone()
         return None if row is None else _receipt(row)
+
+    def dry_run_receipts(self) -> list[Receipt]:
+        """The replies a dry run recorded instead of posting, in the order they were recorded."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ticket_id, conversation, text, status, reason FROM receipts "
+                "WHERE status = ? ORDER BY rowid",
+                (ReceiptStatus.DRY_RUN.value,),
+            ).fetchall()
+        return [_receipt(row) for row in rows]
 
     def pending_receipts(self, ticket_id: str) -> list[Receipt]:
         """The Ticket's receipts still pending, in the order they were added."""

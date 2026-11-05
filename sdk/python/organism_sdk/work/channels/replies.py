@@ -5,8 +5,9 @@ by the Ticket id, and it carries the oldest pending receipt of that Ticket. When
 settles, the next pending one is queued. So a Ticket's replies leave in the order they were
 written, and a reply that fails holds the ones behind it.
 
-The handler exists only while external writes are enabled. Without it, `reply_handlers` is
-empty, the effects wait in the queue, and nothing reaches GitHub.
+The handler exists only while external writes are on or in a dry run. Off, `reply_handlers` is
+empty, the effects wait in the queue, and nothing reaches GitHub. A dry run settles each reply as
+`DRY_RUN` with the conversation it would have posted to, and posts nothing.
 """
 
 from __future__ import annotations
@@ -49,24 +50,30 @@ def queue_next_reply(store: WorkStore, ticket_id: str) -> None:
 
 
 def reply_handlers(
-    store: WorkStore, channel: GitHubChannel, *, enabled: bool
+    store: WorkStore, channel: GitHubChannel, *, enabled: bool, dry_run: bool = False
 ) -> dict[str, Handler]:
-    """The handler for queued replies. Empty while external writes are off, so none is sent."""
-    if not enabled:
+    """The handler for queued replies. `enabled` posts them. `dry_run` records each one as the
+    reply it would have posted and posts nothing. Neither is empty, so no reply is handled.
+
+    The deployment's `work.external_writes` chooses between these (OPEN_DECISIONS item 2).
+    """
+    if enabled and dry_run:
+        raise ValueError("a reply handler either posts or records a dry run, not both")
+    if not enabled and not dry_run:
         return {}
 
     def deliver(payload: Mapping[str, Any]) -> None:
         receipt = str(payload["receipt"])
-        try:
-            channel.send(
-                receipt=receipt,
-                conversation=str(payload["conversation"]),
-                text=str(payload["text"]),
-            )
-        except ChannelGone:
-            store.settle_receipt(receipt, ReceiptStatus.DROPPED, "gone")
+        conversation = str(payload["conversation"])
+        if dry_run:
+            store.settle_receipt(receipt, ReceiptStatus.DRY_RUN, f"would post to {conversation}")
         else:
-            store.settle_receipt(receipt, ReceiptStatus.SENT)
+            try:
+                channel.send(receipt=receipt, conversation=conversation, text=str(payload["text"]))
+            except ChannelGone:
+                store.settle_receipt(receipt, ReceiptStatus.DROPPED, "gone")
+            else:
+                store.settle_receipt(receipt, ReceiptStatus.SENT)
         queue_next_reply(store, str(payload["ticket"]))
 
     return {REPLY: deliver}

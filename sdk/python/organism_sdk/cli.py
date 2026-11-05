@@ -373,7 +373,7 @@ def _cmd_sandbox(args: argparse.Namespace) -> int:
 
 
 def _cmd_work(args: argparse.Namespace) -> int:
-    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt|drive|runs|rerun"""
+    """organism work status|tickets|attention|pause|resume|stop|retry|evaluate|label|adopt|drive|replies|runs|rerun"""
     from organism_sdk.work import operator
     from organism_sdk.work.store import WorkStore, default_store_path
 
@@ -381,6 +381,8 @@ def _cmd_work(args: argparse.Namespace) -> int:
     action = args.work_action
     if action == "drive":
         return _work_drive(args, path)
+    if action == "replies":
+        return _work_replies(args, path)
     reads_only = action in ("status", "tickets", "attention", "runs")
     if reads_only and not path.exists():
         _print({"ok": False, "error": f"no work store at {path}"})
@@ -502,6 +504,46 @@ def _work_drive(args: argparse.Namespace, path: Path) -> int:
         _print({"ok": False, "error": report.halted})
         return 1
     _print({"ok": True, **asdict(report)})
+    return 0
+
+
+def _work_replies(args: argparse.Namespace, path: Path) -> int:
+    """Post the queued GitHub replies, or record them as a dry run, as `work.external_writes` sets.
+
+    Off, the default, posts nothing and leaves the replies queued. A dry run records each reply as
+    the one it would have posted, so a person can read them before the mode is changed to on.
+    """
+    from organism_sdk.deploy.config import load_deploy_config
+    from organism_sdk.work.channels.github import GitHubChannel
+    from organism_sdk.work.channels.replies import reply_handlers
+    from organism_sdk.work.store import WorkStore
+
+    try:
+        mode = load_deploy_config(args.config).work.external_writes.get("github", "off")
+    except (OSError, ValueError) as error:  # a DeployConfigError is a ValueError
+        _print({"ok": False, "error": str(error)})
+        return 1
+    if not path.exists():
+        _print({"ok": False, "error": f"no work store at {path}"})
+        return 1
+    with WorkStore(path) as store:
+        handlers = reply_handlers(
+            store, GitHubChannel(), enabled=mode == "on", dry_run=mode == "dry_run"
+        )
+        report = store.run_due(handlers, limit=args.limit)
+        would_post = [
+            {"receipt": r.id, "conversation": r.conversation, "text": r.text}
+            for r in store.dry_run_receipts()
+        ]
+    _print(
+        {
+            "ok": True,
+            "mode": mode,
+            "completed": report.completed,
+            "failed": report.failed,
+            "would_post": would_post,
+        }
+    )
     return 0
 
 
@@ -654,7 +696,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_weval.add_argument("--row", default="repo", help="The admission row the Triggers arrived in")
     p_weval.add_argument(
-        "--config", "-c", default=None, help="Deploy config with work.listen (default: $ORGANISM_CONFIG)"
+        "--config",
+        "-c",
+        default=None,
+        help="Deploy config with work.listen (default: $ORGANISM_CONFIG)",
     )
     p_weval.set_defaults(func=_cmd_work)
     p_wlabel = work_sub.add_parser(
@@ -690,6 +735,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_wdrive.add_argument("--limit", type=int, default=10, help="Most Tickets to run in one pass")
     p_wdrive.set_defaults(func=_cmd_work)
+    p_wreplies = work_sub.add_parser(
+        "replies",
+        parents=[store_option],
+        help="Post queued GitHub replies, or record them as a dry run, per work.external_writes",
+    )
+    p_wreplies.add_argument(
+        "--config", "-c", default=None, help="Deploy config (default: $ORGANISM_CONFIG)"
+    )
+    p_wreplies.add_argument(
+        "--limit", type=int, default=50, help="Most replies to handle in one pass"
+    )
+    p_wreplies.set_defaults(func=_cmd_work)
     p_wruns = work_sub.add_parser(
         "runs", parents=[store_option], help="Each run of a Ticket, with the tail of its output"
     )

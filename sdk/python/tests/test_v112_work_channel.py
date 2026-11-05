@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from organism_sdk import cli
 from organism_sdk.work.channels import (
     ChannelGone,
     GitHubChannel,
@@ -171,6 +172,70 @@ def test_writes_are_off_by_default_and_no_call_reaches_gh(
     assert store.run_due(reply_handlers(store, channel, enabled=False)).completed == 0
     assert fake.calls() == []
     assert status_of(store, "r1") is ReceiptStatus.PENDING
+
+
+def test_a_dry_run_records_each_reply_and_posts_nothing(
+    store: WorkStore, fake: FakeGh, channel: GitHubChannel
+) -> None:
+    queue_reply(store, ticket_id="t1", receipt_id="r1", conversation=THREAD_ONE, text="first")
+    queue_reply(store, ticket_id="t1", receipt_id="r2", conversation=THREAD_TWO, text="second")
+    handlers = reply_handlers(store, channel, enabled=False, dry_run=True)
+    assert store.run_due(handlers).completed == 1  # only the first is queued to send
+    assert store.run_due(handlers).completed == 1
+    assert fake.calls() == []
+    assert status_of(store, "r1") is ReceiptStatus.DRY_RUN
+    assert status_of(store, "r2") is ReceiptStatus.DRY_RUN
+    assert [(r.id, r.reason) for r in store.dry_run_receipts()] == [
+        ("r1", f"would post to {THREAD_ONE}"),
+        ("r2", f"would post to {THREAD_TWO}"),
+    ]
+
+
+def test_a_handler_posts_or_records_a_dry_run_but_not_both(
+    store: WorkStore, channel: GitHubChannel
+) -> None:
+    with pytest.raises(ValueError, match="either posts or records"):
+        reply_handlers(store, channel, enabled=True, dry_run=True)
+
+
+def _deploy(tmp_path: Path, external_writes: dict[str, str] | None) -> Path:
+    path = tmp_path / "deploy.json"
+    work: dict[str, Any] = {} if external_writes is None else {"external_writes": external_writes}
+    path.write_text(json.dumps({"work": work}), encoding="utf-8")
+    return path
+
+
+def test_the_replies_action_records_a_dry_run_and_says_what_it_would_post(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "work.sqlite"
+    with WorkStore(path) as store:
+        queue_reply(store, ticket_id="t1", receipt_id="r1", conversation=THREAD_ONE, text="done")
+    deploy = _deploy(tmp_path, {"github": "dry_run"})
+    assert cli.main(["work", "replies", "--store", str(path), "--config", str(deploy)]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": True,
+        "mode": "dry_run",
+        "completed": 1,
+        "failed": 0,
+        "would_post": [{"receipt": "r1", "conversation": THREAD_ONE, "text": "done"}],
+    }
+    with WorkStore(path) as store:
+        assert status_of(store, "r1") is ReceiptStatus.DRY_RUN
+
+
+def test_the_replies_action_is_off_unless_the_config_turns_writes_on(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "work.sqlite"
+    with WorkStore(path) as store:
+        queue_reply(store, ticket_id="t1", receipt_id="r1", conversation=THREAD_ONE, text="held")
+    deploy = _deploy(tmp_path, None)
+    assert cli.main(["work", "replies", "--store", str(path), "--config", str(deploy)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert (out["mode"], out["completed"], out["would_post"]) == ("off", 0, [])
+    with WorkStore(path) as store:
+        assert status_of(store, "r1") is ReceiptStatus.PENDING
 
 
 @pytest.mark.parametrize(
