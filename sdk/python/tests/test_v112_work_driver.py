@@ -7,7 +7,9 @@ Linux only, where containment exists.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -44,6 +46,7 @@ from organism_sdk.work.executors import (
     SLOT_BUSY,
     Execution,
     ProcessExecutor,
+    end_process_group,
     load_executor,
     recover,
 )
@@ -118,7 +121,14 @@ class FakeExecutor:
     def blocked_reason(self) -> str | None:
         return self.halt
 
-    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution:
         self.runs.append((ticket_id, task))
         if self.during is not None:
             self.during(ticket_id)
@@ -130,7 +140,14 @@ class FakeExecutor:
 class ExplodingExecutor(FakeExecutor):
     """Raises for the first Ticket it is asked to run, and succeeds for the rest."""
 
-    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution:
         self.runs.append((ticket_id, task))
         if len(self.runs) == 1:
             raise RuntimeError("the runner broke")
@@ -378,7 +395,14 @@ class Crash(BaseException):
 
 
 class CrashingExecutor(FakeExecutor):
-    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution:
         raise Crash()
 
 
@@ -840,3 +864,81 @@ def test_a_deploy_config_whose_executor_is_not_a_mapping_is_refused(tmp_path: Pa
     path.write_text(json.dumps({"work": {"executor": "claude"}}), encoding="utf-8")
     with pytest.raises(ValueError):
         load_deploy_config(path)
+
+
+class ChildExecutor:
+    """Runs a real child in its own session, as the jail does, and makes a stop while it is alive.
+    With `stop_first`, the stop comes before the driver has the child's process group."""
+
+    def __init__(self, stop: Callable[[str], None], *, stop_first: bool = False) -> None:
+        self.stop = stop
+        self.stop_first = stop_first
+        self.child: subprocess.Popen[bytes] | None = None
+
+    def blocked_reason(self) -> str | None:
+        return None
+
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution:
+        assert on_start is not None
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True
+        )
+        self.child = child
+        # `wait` reaps the child, so a stop that waits for it to exit runs beside that wait.
+        if self.stop_first:
+            self.stop(ticket_id)
+            starter = threading.Thread(target=on_start, args=(child.pid,))
+            starter.start()
+            child.wait(timeout=30)
+            starter.join(timeout=30)
+        else:
+            on_start(child.pid)
+            stopper = threading.Thread(target=self.stop, args=(ticket_id,))
+            stopper.start()
+            child.wait(timeout=30)
+            stopper.join(timeout=30)
+        return Execution(ticket_id, ok=False, exit_code=child.returncode)
+
+
+def stop_run(path: Path, ticket_id: str) -> None:
+    """A stop from another process: it opens the store itself, then ends the run's process group."""
+    with WorkStore(path) as other:
+        pid = operator.stop(other, ticket_id)
+    if pid is not None:
+        end_process_group(pid)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process groups are Linux here")
+@pytest.mark.parametrize("stop_first", [False, True])
+def test_a_stop_ends_the_running_process_and_the_run_ends_stopped(
+    tmp_path: Path, stop_first: bool
+) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    executor = ChildExecutor(lambda ticket_id: stop_run(path, ticket_id), stop_first=stop_first)
+    report = drive(opener(path), executor)
+    (ticket_id,) = report.opened
+    assert report.failed == {ticket_id: "stopped"}
+    assert executor.child is not None
+    assert executor.child.returncode < 0  # the process was ended by a signal
+    with WorkStore(path) as store:
+        ticket = store.ticket(ticket_id)
+        assert ticket is not None and ticket.ended is True
+        assert ticket.assignment is not None and ticket.assignment.pid is None
+        (run,) = store.runs_of(ticket_id)
+        assert run.reason == "stopped"
+
+
+def test_stopping_a_ticket_that_is_not_running_has_no_process_to_end(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store_with(path, message(1, "CI is red", addressed=Addressed.NONE))
+    with WorkStore(path) as store:
+        (ticket_id,), _, _ = open_accepted(store)
+        assert operator.stop(store, ticket_id) is None

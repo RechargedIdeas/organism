@@ -121,11 +121,15 @@ class Mandate:
 
 @dataclass(frozen=True)
 class Assignment:
-    """The binding of a Ticket to one Executor instance (001)."""
+    """The binding of a Ticket to one Executor instance (001).
+
+    ``pid`` is the process group of the run while it runs, so a stop can end it. It is None otherwise.
+    """
 
     id: str
     ticket_id: str
     state: AssignmentState
+    pid: int | None = None
 
 
 @dataclass(frozen=True)

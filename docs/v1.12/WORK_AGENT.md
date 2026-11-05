@@ -216,7 +216,7 @@ The profile's network allowlist names the CLI's API host and the forge's hosts. 
 - the Ticket id is not a safe directory name;
 - none of the profile's variables is set. The message names the variable, and the value is never read.
 
-A run creates the Ticket's own directory under the root, runs the prepare argv first if there is one (ten-minute limit), then runs the CLI argv in that directory. Each refusal is a value in the `Execution`, so a caller records it rather than catching an exception. An `Execution`'s output comes from a program the agent does not trust, so a caller that records it treats it as data.
+A run creates the Ticket's own directory under the root, runs the prepare argv first if there is one (ten-minute limit), then runs the CLI argv in that directory. Each refusal is a value in the `Execution`, so a caller records it rather than catching an exception. An `Execution`'s output comes from a program the agent does not trust, so a caller that records it treats it as data. The jail calls the run's `on_start` with the child's process group as the child starts, and `end_process_group` ends that group.
 
 ### Worker slots
 
@@ -231,7 +231,7 @@ A run creates the Ticket's own directory under the root, runs the prepare argv f
 `driver.py` takes an accepted Decision to a Ticket, and runs the Ticket through the Executor. An accepted Decision carries the Mandate it was granted under (`Decision.mandate`), and the Ticket opens with that Mandate. Only Decisions under the Policy in force open Tickets. A Ticket's id is hashed from its Decision's id, so one Decision never opens two Tickets, and a stopped Ticket is not reopened. A Decision stored before the Mandate was carried has none, and is not opened.
 
 - **One open Ticket per Thread.** A person's message on a Thread that has an open Ticket is a follow-up (W8). It is stored against that Ticket, and no second Ticket opens. A follow-up that arrives during a run waits for the next run. Once the run has ended, the Ticket starts a new Assignment (`resume`), and the follow-up is in its task. A bot's message on such a Thread is held and opens nothing, because a bot is never routed.
-- **The store is held only in short steps.** A claim marks the Assignment running, and is committed before any process starts. The run holds no store, and then the result is written. So `pause` and `stop` from another process work during a run. A stop takes effect when the process ends. A restart ends a running Assignment through `recover`.
+- **The store is held only in short steps.** A claim marks the Assignment running, and is committed before any process starts. The run holds no store, and then the result is written. So `pause` and `stop` from another process work during a run. A stop ends the running process group: SIGTERM, then SIGKILL after five seconds. The run ends with the reason `stopped`. A restart ends a running Assignment through `recover`, which also forgets its process.
 - **The result.** A run that succeeds leaves its Ticket ready for a person (stage `person/review`). A refusal, a non-zero exit, a timeout, or an error raised by the runner leaves it failed (stage `person/blocked`) until a person writes. The reason is the refusal or the exit code, never the output. Each run is kept with its result, its reason, and the last 4,000 characters of its stdout and stderr (`organism work runs TICKET`). That output is text from a program the agent does not trust, so a reader treats it as data. A run that finds no free slot returns its Assignment to pending, and the pass stops there.
 - **The task.** The Executor gets the Policy's instructions for the rules the Mandate names, then the message that started the work, then any follow-ups since the last run. Each part is labelled as text from the source. A follow-up is marked delivered when its run starts, so a run that finds no free slot leaves it queued. An argv element equal to `{task}` is replaced by the task. No shell is involved.
 - **Halts.** Nothing is opened or run while the store is paused. When the executor reports a blocked reason (no Linux containment, a blocked program, or no key variable), a pass changes nothing, so a host that cannot run work does not fail every Ticket. A Ticket marked for a person (section 14) does not run, and a pass leaves it alone.
@@ -283,7 +283,7 @@ The reads (`status`, `tickets`, `attention`, `runs`) open the store read-only. T
 
 ### Operator actions
 
-`stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. A running process is not cancelled: the stop takes effect when it ends (section 10). `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
+`stop` ends an open Ticket and drops its waiting replies with the reason `stopped`. A Ticket that is not open is an error. A running process is ended: its process group gets SIGTERM, then SIGKILL after five seconds, once the store is closed (section 10). `retry` makes the waiting and failing effects due now, all of them or one kind. `evaluate` runs the W4 evaluation under the Policy in force, with the rule assessor, and needs an active Policy.
 
 ### Verdicts and adoption
 
@@ -329,7 +329,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - Several Threads per Trigger (Correlation). A Trigger has one Thread for now. Adding it needs its own tested rule.
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
 - The network allowlist of the `work_executor` profile is recorded, not enforced (section 10).
-- Cancelling a running process. `stop` ends the Ticket and drops its waiting replies, but the process runs to its end (section 10). `Outcome.STOP` is in the domain, but Eval does not produce it.
+- `Outcome.STOP` is in the domain, but Eval does not produce it.
 - Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
 - Instruction text stored as versioned artifacts: W9, section 14.
 - Subscriptions, hand-back and release, and pull-request following: W8 (section 13).
@@ -357,8 +357,8 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, the notices, and the revalidation of a notice: a Mandate that still stands drops it, and one that no longer stands waits for a person.
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.
-- `test_v112_work_executor.py` (`work:executor_fake`, fast tier): the refusals, the Ticket's own directory, prepare before run, the worker slots, recovery, and on Linux only, the real jail giving the child only `ANTHROPIC_API_KEY`.
-- `test_v112_work_driver.py` (`work:driver`, fast tier): an accepted Decision opens one Ticket with its Mandate, held and stopped Tickets, follow-ups and the bot hold, the task, the result of each kind of run and its kept output, slots, pause and halt, a Ticket whose Mandate no longer stands, a restart's rerun, the executor file, the deploy config's `work.executor`, and the CLI (`drive`, `runs`, `rerun`). On Linux only, a run through the real jail, both directly and through `organism work drive`.
+- `test_v112_work_executor.py` (`work:executor_fake`, fast tier): the refusals, the Ticket's own directory, prepare before run, the worker slots, recovery, and on Linux only, the real jail giving the child only `ANTHROPIC_API_KEY`, and a run's process group ended on request.
+- `test_v112_work_driver.py` (`work:driver`, fast tier): an accepted Decision opens one Ticket with its Mandate, held and stopped Tickets, follow-ups and the bot hold, the task, the result of each kind of run and its kept output, slots, pause and halt, a Ticket whose Mandate no longer stands, a restart's rerun, a stop that ends a running process, the executor file, the deploy config's `work.executor`, and the CLI (`drive`, `runs`, `rerun`). On Linux only, a run through the real jail, both directly and through `organism work drive`.
 
 ## 17. Changing this record
 

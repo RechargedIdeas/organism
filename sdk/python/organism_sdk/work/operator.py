@@ -15,7 +15,7 @@ from organism_sdk.signing import TrustStore
 from organism_sdk.work import governance
 from organism_sdk.work.assess import RuleAssessor
 from organism_sdk.work.channels.replies import REPLY
-from organism_sdk.work.domain import Verdict
+from organism_sdk.work.domain import AssignmentState, Verdict
 from organism_sdk.work.driver import requeue
 from organism_sdk.work.executors.process import RECOVERY
 from organism_sdk.work.gate import ScopeFacts
@@ -100,20 +100,26 @@ def attention(store: WorkStore) -> list[dict[str, Any]]:
     return items
 
 
-def stop(store: WorkStore, ticket_id: str) -> None:
-    """End a Ticket, and drop its replies still waiting to be sent.
+def stop(store: WorkStore, ticket_id: str) -> int | None:
+    """End a Ticket, and drop its replies still waiting to be sent. Returns the process group of its
+    run when one is running, else None (section 10 of the record).
 
-    A Ticket that is not open raises KeyError. A process that is already running is not cancelled:
-    the stop takes effect when it ends, and its result is still recorded (section 10 of the record).
+    The caller ends that group with `executors.end_process_group` once it has closed the store, since
+    ending it can take a few seconds. A Ticket that is not open raises KeyError. A run that has not
+    yet recorded its process is ended by the driver as soon as it does.
     """
     ticket = store.ticket(ticket_id)
     if ticket is None or ticket.ended:
         raise KeyError(ticket_id)
+    pid = None
+    if ticket.assignment is not None and ticket.assignment.state is AssignmentState.RUNNING:
+        pid = ticket.assignment.pid
     with store.transaction():
         store.save_ticket(replace(ticket, ended=True))
         for receipt in store.pending_receipts(ticket_id):
             store.settle_receipt(receipt.id, ReceiptStatus.DROPPED, "stopped")
         store.cancel_effect(REPLY, ticket_id)
+    return pid
 
 
 def runs(store: WorkStore, ticket_id: str) -> list[dict[str, Any]]:

@@ -13,6 +13,7 @@ from organism_sdk.work.executors.process import (
     ProcessExecutor,
     Slots,
     containment_gap,
+    end_process_group,
     recover,
     ticket_directory,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "ProcessExecutor",
     "Slots",
     "containment_gap",
+    "end_process_group",
     "executor_from_settings",
     "load_executor",
     "recover",

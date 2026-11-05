@@ -385,6 +385,8 @@ def _cmd_work(args: argparse.Namespace) -> int:
     if reads_only and not path.exists():
         _print({"ok": False, "error": f"no work store at {path}"})
         return 1
+    stopped: str | None = None
+    stopped_pid: int | None = None
     with WorkStore(path, read_only=reads_only) as store:
         if action == "status":
             _print(operator.status(store))
@@ -413,11 +415,11 @@ def _cmd_work(args: argparse.Namespace) -> int:
             _print({"ok": True, "paused": action == "pause"})
         elif action == "stop":
             try:
-                operator.stop(store, args.ticket)
+                stopped_pid = operator.stop(store, args.ticket)
             except KeyError:
                 _print({"ok": False, "error": f"no open ticket {args.ticket}"})
                 return 1
-            _print({"ok": True, "stopped": args.ticket})
+            stopped = args.ticket
         elif action == "retry":
             _print({"ok": True, "made_due": operator.retry(store, args.kind)})
         elif action == "label":
@@ -451,6 +453,12 @@ def _cmd_work(args: argparse.Namespace) -> int:
                 _print({"ok": False, "error": str(error)})
                 return 1
             _print({"ok": True, "decided": report.decided, "unavailable": report.unavailable})
+    if stopped is not None:
+        # After the store is closed: ending a run's process group can take a few seconds.
+        from organism_sdk.work.executors import end_process_group
+
+        ended = stopped_pid is not None and end_process_group(stopped_pid)
+        _print({"ok": True, "stopped": stopped, "process_ended": ended})
     return 0
 
 

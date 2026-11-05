@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import platform
@@ -9,7 +10,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -97,7 +98,14 @@ def _check_shell_escape(argv: Sequence[str], policy: SandboxPolicy) -> None:
     if not policy.deny_shell_escape:
         return
     if argv and os.path.basename(str(argv[0])).lower() in {
-        "sh", "bash", "zsh", "dash", "cmd.exe", "powershell", "pwsh", "cmd"
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "cmd.exe",
+        "powershell",
+        "pwsh",
+        "cmd",
     }:
         raise JailRefused(f"shell escape refused: argv0={argv[0]}")
     joined = " ".join(str(a) for a in argv).lower()
@@ -202,6 +210,16 @@ def allowlisted_env(
     return child_env
 
 
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
+    """Kill a child's process group, and reap the child, when the caller cannot take the child."""
+    if sys.platform == "win32":  # mypy checks each platform's branch only on that platform
+        proc.kill()
+    else:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait()
+
+
 class ProcessJail:
     """Run an argv under SandboxPolicy containment."""
 
@@ -215,7 +233,10 @@ class ProcessJail:
         env: dict[str, str] | None = None,
         input_bytes: bytes | None = None,
         cwd: str | None = None,
+        on_start: Callable[[int], None] | None = None,
     ) -> JailResult:
+        """`on_start` is called with the child's pid, which is also its process group, as soon as
+        the child runs. If it raises, the child is killed and the error propagates."""
         argv = [str(a) for a in argv]
         try:
             _check_shell_escape(argv, self.policy)
@@ -280,11 +301,16 @@ class ProcessJail:
                 rlimits_applied=rlimits_applied,
             )
 
+        if on_start is not None:
+            try:
+                on_start(proc.pid)
+            except BaseException:
+                _kill_group(proc)  # no caller knows this child, so nothing could stop it later
+                raise
+
         timed_out = False
         try:
-            stdout_b, stderr_b = proc.communicate(
-                input=input_bytes, timeout=self.policy.timeout_s
-            )
+            stdout_b, stderr_b = proc.communicate(input=input_bytes, timeout=self.policy.timeout_s)
         except subprocess.TimeoutExpired:
             timed_out = True
             try:

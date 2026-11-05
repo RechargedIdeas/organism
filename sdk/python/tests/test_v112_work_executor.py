@@ -7,7 +7,8 @@ Linux only, where containment exists.
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,10 @@ from organism_sdk.work.domain import (
 )
 from organism_sdk.work.executors import (
     RECOVERY,
+    Execution,
     ProcessExecutor,
     Slots,
+    end_process_group,
     recover,
     ticket_directory,
 )
@@ -52,6 +55,7 @@ class FakeJail:
         env: dict[str, str] | None = None,
         input_bytes: bytes | None = None,
         cwd: str | None = None,
+        on_start: Callable[[int], None] | None = None,
     ) -> JailResult:
         self.calls.append({"argv": list(argv), "cwd": cwd, "timeout_s": self.policy.timeout_s})
         return self.results.pop(0) if self.results else JailResult(ok=True, exit_code=0)
@@ -195,7 +199,9 @@ def test_the_executor_needs_an_argv(tmp_path: Path) -> None:
         ProcessExecutor(tmp_path, argv=[], slots=Slots(2))
 
 
-def open_ticket(store: WorkStore, ticket_id: str, state: AssignmentState) -> None:
+def open_ticket(
+    store: WorkStore, ticket_id: str, state: AssignmentState, pid: int | None = None
+) -> None:
     mandate = Mandate(
         policy_version="sha256:test",
         strength=Strength.EXPLICIT,
@@ -205,7 +211,7 @@ def open_ticket(store: WorkStore, ticket_id: str, state: AssignmentState) -> Non
         sender="alice",
         rules=("ci-fix",),
     )
-    assignment = Assignment(id=f"a-{ticket_id}", ticket_id=ticket_id, state=state)
+    assignment = Assignment(id=f"a-{ticket_id}", ticket_id=ticket_id, state=state, pid=pid)
     store.save_ticket(Ticket(id=ticket_id, mandate=mandate, assignment=assignment))
     store.save_assignment(assignment)
 
@@ -253,3 +259,49 @@ def test_the_real_jail_gives_the_child_only_the_allowed_variable(
     assert result.ok is True, result.stderr
     assert "ANTHROPIC_API_KEY" in result.stdout
     assert "WORK_TEST_OTHER" not in result.stdout
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the jail's containment is Linux")
+def test_a_run_reports_its_process_group_and_ends_when_it_is_ended(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    policy = replace(SandboxPolicy.work_executor(), timeout_s=60.0)
+    runner = ProcessExecutor(
+        tmp_path,
+        argv=[sys.executable, "-c", "import time; time.sleep(60)"],
+        slots=Slots(2),
+        policy=policy,
+        jail=ProcessJail,
+        slot_wait_s=1.0,
+    )
+    groups: list[int] = []
+    started = threading.Event()
+
+    def on_start(pid: int) -> None:
+        groups.append(pid)
+        started.set()
+
+    results: list[Execution] = []
+    worker = threading.Thread(
+        target=lambda: results.append(runner.run("t-stop", on_start=on_start))
+    )
+    worker.start()
+    assert started.wait(timeout=30)
+    assert end_process_group(groups[0]) is True
+    worker.join(timeout=30)
+    assert not worker.is_alive()
+    (result,) = results
+    assert result.ok is False
+    assert result.exit_code is not None and result.exit_code < 0  # ended by a signal
+
+
+def test_a_restart_forgets_the_process_of_an_interrupted_run(tmp_path: Path) -> None:
+    with WorkStore(tmp_path / "work.sqlite") as store:
+        open_ticket(store, "t-run", AssignmentState.RUNNING, pid=4321)
+        assert recover(store) == ["t-run"]
+        ticket = store.ticket("t-run")
+        assert ticket is not None and ticket.assignment is not None
+        assert (ticket.assignment.state, ticket.assignment.pid) == (AssignmentState.ENDED, None)
+        (assignment,) = store.assignments_of("t-run")
+        assert (assignment.state, assignment.pid) == (AssignmentState.ENDED, None)

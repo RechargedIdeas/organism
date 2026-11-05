@@ -12,9 +12,13 @@ records them must treat them as data, never as instructions.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
+import signal
+import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -30,6 +34,7 @@ BLOCKED_PROGRAMS = frozenset({"sudo", "su", "doas", "ssh", "scp", "sftp", "nc", 
 PREPARE_TIMEOUT_S = 600.0
 PERSON_RESERVE = 1  # D4: one worker slot stays free for a person's message
 TICKET_DIRECTORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+GRACE_S = 5.0  # how long a stopped run's process group has to exit after SIGTERM
 RECOVERY = "recovery"
 SLOT_BUSY = "no worker slot is free"
 # An argv element equal to this is replaced by the Ticket's task. No shell expands it.
@@ -60,7 +65,14 @@ class Executor(Protocol):
         """Why nothing can run on this host or in this configuration, or None when runs can start."""
         ...
 
-    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution: ...
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution: ...
 
 
 class Runner(Protocol):
@@ -73,6 +85,7 @@ class Runner(Protocol):
         env: dict[str, str] | None = None,
         input_bytes: bytes | None = None,
         cwd: str | None = None,
+        on_start: Callable[[int], None] | None = None,
     ) -> JailResult: ...
 
 
@@ -134,6 +147,36 @@ def ticket_directory(root: Path, ticket_id: str) -> Path:
     return root / ticket_id
 
 
+def end_process_group(pid: int, *, grace_s: float = GRACE_S) -> bool:
+    """End a run's process group: SIGTERM, then SIGKILL if the group is still there after `grace_s`.
+
+    Each run starts in a session of its own, so the group id is the child's pid, and the group holds
+    nothing else. Returns False when the group had already ended, or when this host has no process
+    groups. Ending a group can take up to `grace_s`, so call it without holding the store.
+    """
+    if sys.platform == "win32":  # mypy checks each platform's branch only on that platform
+        return False
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return False
+
+    def alive() -> bool:
+        try:
+            os.killpg(pid, 0)
+        except ProcessLookupError:
+            return False
+        return True
+
+    deadline = time.monotonic() + grace_s
+    while alive() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if alive():
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(pid, signal.SIGKILL)
+    return True
+
+
 class ProcessExecutor:
     """Runs the configured CLI argv for a Ticket, in the Ticket's own directory."""
 
@@ -164,7 +207,14 @@ class ProcessExecutor:
     def blocked_reason(self) -> str | None:
         return self._refusal()
 
-    def run(self, ticket_id: str, *, person: bool = False, task: str = "") -> Execution:
+    def run(
+        self,
+        ticket_id: str,
+        *,
+        person: bool = False,
+        task: str = "",
+        on_start: Callable[[int], None] | None = None,
+    ) -> Execution:
         refusal = self._refusal()
         if refusal is not None:
             return Execution(ticket_id, ok=False, refused=refusal)
@@ -175,7 +225,7 @@ class ProcessExecutor:
         if not self.slots.acquire(person=person, timeout=self.slot_wait_s):
             return Execution(ticket_id, ok=False, refused=SLOT_BUSY, busy=True)
         try:
-            return self._run_in_directory(ticket_id, directory, task)
+            return self._run_in_directory(ticket_id, directory, task, on_start)
         finally:
             self.slots.release()
 
@@ -192,15 +242,21 @@ class ProcessExecutor:
             return "none of the variables the profile passes is set: " + ", ".join(names)
         return None
 
-    def _run_in_directory(self, ticket_id: str, directory: Path, task: str) -> Execution:
+    def _run_in_directory(
+        self,
+        ticket_id: str,
+        directory: Path,
+        task: str,
+        on_start: Callable[[int], None] | None,
+    ) -> Execution:
         directory.mkdir(parents=True, exist_ok=True)
         where = str(directory)
         if self.prepare is not None:
-            step = self.jail(self.prepare_policy).run(self.prepare, cwd=where)
+            step = self.jail(self.prepare_policy).run(self.prepare, cwd=where, on_start=on_start)
             if not step.ok:
                 return _from_jail(ticket_id, step, where)
         argv = [task if item == TASK_PLACEHOLDER else item for item in self.argv]
-        result = self.jail(self.policy).run(argv, cwd=where)
+        result = self.jail(self.policy).run(argv, cwd=where, on_start=on_start)
         return _from_jail(ticket_id, result, where)
 
 
@@ -229,7 +285,7 @@ def recover(store: WorkStore) -> list[str]:
             for assignment in store.assignments_of(ticket.id):
                 if assignment.state is not AssignmentState.RUNNING:
                     continue
-                ended = replace(assignment, state=AssignmentState.ENDED)
+                ended = replace(assignment, state=AssignmentState.ENDED, pid=None)
                 store.save_assignment(ended)
                 if ticket.assignment == assignment:  # the Ticket keeps its own copy of it
                     store.save_ticket(replace(ticket, assignment=ended))

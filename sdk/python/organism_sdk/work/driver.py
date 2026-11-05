@@ -22,7 +22,7 @@ from organism_sdk.work.domain import (
     Ticket,
     Trigger,
 )
-from organism_sdk.work.executors.process import RECOVERY, Execution, Executor
+from organism_sdk.work.executors.process import RECOVERY, Execution, Executor, end_process_group
 from organism_sdk.work.governance import NOTICE, still_valid
 from organism_sdk.work.policy import Policy
 from organism_sdk.work.routing import route
@@ -84,16 +84,16 @@ def drive(
         if claimed is None:
             continue
         task, delivered = claimed
-        execution = _run(executor, ticket_id, task)
+        execution = _run(executor, ticket_id, task, _recorder(open_store, ticket_id))
         with open_store() as store:
-            _finish(store, ticket_id, execution, delivered)
+            stopped = _finish(store, ticket_id, execution, delivered)
         if execution.busy:
             report.waiting.append(ticket_id)
             break
         if execution.ok:
             report.ready.append(ticket_id)
         else:
-            report.failed[ticket_id] = _reason(execution)
+            report.failed[ticket_id] = _failure(execution, stopped)
     return report
 
 
@@ -308,17 +308,47 @@ def _claim(store: WorkStore, ticket_id: str) -> tuple[str, list[int]] | None:
     return task, [seq for seq, _ in pending]
 
 
-def _run(executor: Executor, ticket_id: str, task: str) -> Execution:
+def _run(
+    executor: Executor, ticket_id: str, task: str, on_start: Callable[[int], None]
+) -> Execution:
     try:
-        return executor.run(ticket_id, task=task)
+        return executor.run(ticket_id, task=task, on_start=on_start)
     except Exception as error:  # noqa: BLE001 - one Ticket's failed run must not stop the pass
         return Execution(ticket_id, ok=False, refused=f"executor error: {type(error).__name__}")
 
 
-def _finish(store: WorkStore, ticket_id: str, execution: Execution, delivered: list[int]) -> None:
+def _recorder(open_store: Callable[[], WorkStore], ticket_id: str) -> Callable[[int], None]:
+    """The callback a run calls with its process group as the process starts. The store is opened
+    only for that write, so a stop from another process can open it during the run."""
+
+    def record(pid: int) -> None:
+        with open_store() as store:
+            stopped = _save_pid(store, ticket_id, pid)
+        if stopped:
+            # The Ticket was stopped before its process was known, so nothing else will end it.
+            end_process_group(pid, grace_s=0.0)
+
+    return record
+
+
+def _save_pid(store: WorkStore, ticket_id: str, pid: int) -> bool:
+    """Keep a run's process group on its Assignment. True when the Ticket is no longer open, so the
+    caller must end the group itself."""
+    with store.transaction():
+        ticket = store.ticket(ticket_id)
+        if ticket is None or ticket.assignment is None or ticket.ended:
+            return True
+        assignment = replace(ticket.assignment, pid=pid)
+        store.save_assignment(assignment)
+        store.save_ticket(replace(ticket, assignment=assignment))
+    return False
+
+
+def _finish(store: WorkStore, ticket_id: str, execution: Execution, delivered: list[int]) -> bool:
     """Record what a run did. A run that found no free slot goes back to waiting, and its follow-ups
     stay queued. Any other run ends its Assignment, keeps its output, marks its follow-ups delivered,
-    and leaves the Ticket ready or failed for a person to see."""
+    and leaves the Ticket ready or failed for a person to see. Returns True when the Ticket was
+    stopped during the run."""
     with store.transaction():
         ticket = store.ticket(ticket_id)
         if ticket is None:
@@ -327,14 +357,14 @@ def _finish(store: WorkStore, ticket_id: str, execution: Execution, delivered: l
             raise ValueError(f"ticket {ticket_id} has no assignment")
         if execution.busy:
             _move(store, ticket, AssignmentState.PENDING)
-            return
+            return False
         ended = _move(store, ticket, AssignmentState.ENDED)
         store.mark_followups_delivered(delivered)
         store.record_run(
             ticket_id,
             ticket.assignment.id,
             ok=execution.ok,
-            reason=None if execution.ok else _reason(execution),
+            reason=None if execution.ok else _failure(execution, ticket.ended),
             stdout=_tail(execution.stdout),
             stderr=_tail(execution.stderr),
         )
@@ -346,13 +376,15 @@ def _finish(store: WorkStore, ticket_id: str, execution: Execution, delivered: l
                 person_message_after_report=store.has_undelivered_followups(ticket_id),
             )
         )
+    return ticket.ended
 
 
 def _move(store: WorkStore, ticket: Ticket, state: AssignmentState) -> Ticket:
-    """Move the Ticket's Assignment to `state`, and save it with the Ticket. Returns the saved Ticket."""
+    """Move the Ticket's Assignment to `state`, and save it with the Ticket. Returns the saved Ticket.
+    The process is forgotten on the way: a process is recorded only while its run is running."""
     if ticket.assignment is None:
         raise ValueError(f"ticket {ticket.id} has no assignment")
-    assignment = replace(ticket.assignment, state=state)
+    assignment = replace(ticket.assignment, state=state, pid=None)
     store.save_assignment(assignment)
     moved = replace(ticket, assignment=assignment)
     store.save_ticket(moved)
@@ -361,6 +393,11 @@ def _move(store: WorkStore, ticket: Ticket, state: AssignmentState) -> Ticket:
 
 def _tail(text: str) -> str:
     return text[-OUTPUT_CHARS:]
+
+
+def _failure(execution: Execution, stopped: bool) -> str:
+    """Why a run failed. A stop is the reason even when the stop made the process exit by a signal."""
+    return "stopped" if stopped else _reason(execution)
 
 
 def _reason(execution: Execution) -> str:
