@@ -8,15 +8,11 @@ imports this module, and only on Windows.
 from __future__ import annotations
 
 import ctypes
+import functools
 import sys
 from ctypes import wintypes
 
 from organism_sdk.envstore import NAME_PATTERN, EnvStoreError
-
-# Windows-only. Off Windows the import stops here, and mypy skips the rest of the module, so the
-# advapi32 calls are checked on the platform they run on. envstore imports this module only on win32.
-if sys.platform != "win32":
-    raise ImportError("envstore_windows needs Windows; envstore imports it only on win32")
 
 ERROR_NOT_FOUND = 1168
 CRED_TYPE_GENERIC = 1
@@ -45,27 +41,40 @@ class _Credential(ctypes.Structure):
     ]
 
 
-_advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-_advapi32.CredWriteW.argtypes = [ctypes.POINTER(_Credential), wintypes.DWORD]
-_advapi32.CredWriteW.restype = wintypes.BOOL
-_advapi32.CredReadW.argtypes = [
-    wintypes.LPCWSTR,
-    wintypes.DWORD,
-    wintypes.DWORD,
-    ctypes.POINTER(ctypes.POINTER(_Credential)),
-]
-_advapi32.CredReadW.restype = wintypes.BOOL
-_advapi32.CredDeleteW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
-_advapi32.CredDeleteW.restype = wintypes.BOOL
-_advapi32.CredEnumerateW.argtypes = [
-    wintypes.LPCWSTR,
-    wintypes.DWORD,
-    ctypes.POINTER(wintypes.DWORD),
-    ctypes.POINTER(ctypes.POINTER(ctypes.POINTER(_Credential))),
-]
-_advapi32.CredEnumerateW.restype = wintypes.BOOL
-_advapi32.CredFree.argtypes = [ctypes.c_void_p]
-_advapi32.CredFree.restype = None
+@functools.cache
+def _advapi32() -> ctypes.CDLL:
+    """advapi32 with its argument types set. Loaded on first use; it exists only on Windows."""
+    if sys.platform != "win32":
+        raise OSError("advapi32 exists only on Windows")
+    lib = ctypes.WinDLL("advapi32", use_last_error=True)
+    lib.CredWriteW.argtypes = [ctypes.POINTER(_Credential), wintypes.DWORD]
+    lib.CredWriteW.restype = wintypes.BOOL
+    lib.CredReadW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.POINTER(_Credential)),
+    ]
+    lib.CredReadW.restype = wintypes.BOOL
+    lib.CredDeleteW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
+    lib.CredDeleteW.restype = wintypes.BOOL
+    lib.CredEnumerateW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(ctypes.POINTER(ctypes.POINTER(_Credential))),
+    ]
+    lib.CredEnumerateW.restype = wintypes.BOOL
+    lib.CredFree.argtypes = [ctypes.c_void_p]
+    lib.CredFree.restype = None
+    return lib
+
+
+def _last_error() -> int:
+    """The calling thread's last Windows error code. Windows only."""
+    if sys.platform != "win32":
+        raise OSError("Windows error codes exist only on Windows")
+    return ctypes.get_last_error()
 
 
 def _failed(action: str, code: int) -> str:
@@ -81,10 +90,10 @@ class CredentialManager:
     def names(self) -> list[str]:
         count = wintypes.DWORD(0)
         entries = ctypes.POINTER(ctypes.POINTER(_Credential))()
-        if not _advapi32.CredEnumerateW(
+        if not _advapi32().CredEnumerateW(
             self.prefix + "*", 0, ctypes.byref(count), ctypes.byref(entries)
         ):
-            code = ctypes.get_last_error()
+            code = _last_error()
             if code == ERROR_NOT_FOUND:
                 return []
             raise EnvStoreError(_failed("list the variables", code))
@@ -97,12 +106,12 @@ class CredentialManager:
                     found.append(name)
             return found
         finally:
-            _advapi32.CredFree(ctypes.cast(entries, ctypes.c_void_p))
+            _advapi32().CredFree(ctypes.cast(entries, ctypes.c_void_p))
 
     def read(self, name: str) -> str | None:
         entry = ctypes.POINTER(_Credential)()
-        if not _advapi32.CredReadW(self.prefix + name, CRED_TYPE_GENERIC, 0, ctypes.byref(entry)):
-            code = ctypes.get_last_error()
+        if not _advapi32().CredReadW(self.prefix + name, CRED_TYPE_GENERIC, 0, ctypes.byref(entry)):
+            code = _last_error()
             if code == ERROR_NOT_FOUND:
                 return None
             raise EnvStoreError(_failed("read the variable", code))
@@ -116,7 +125,7 @@ class CredentialManager:
         except UnicodeDecodeError:
             raise EnvStoreError("the stored value is not valid UTF-8") from None
         finally:
-            _advapi32.CredFree(ctypes.cast(entry, ctypes.c_void_p))
+            _advapi32().CredFree(ctypes.cast(entry, ctypes.c_void_p))
 
     def write(self, name: str, value: str) -> None:
         data = value.encode("utf-8")
@@ -127,12 +136,12 @@ class CredentialManager:
         credential.Persist = CRED_PERSIST_LOCAL_MACHINE
         credential.CredentialBlobSize = len(data)
         credential.CredentialBlob = ctypes.cast(blob, ctypes.POINTER(ctypes.c_ubyte))
-        if not _advapi32.CredWriteW(ctypes.byref(credential), 0):
-            raise EnvStoreError(_failed("save the variable", ctypes.get_last_error()))
+        if not _advapi32().CredWriteW(ctypes.byref(credential), 0):
+            raise EnvStoreError(_failed("save the variable", _last_error()))
 
     def delete(self, name: str) -> bool:
-        if not _advapi32.CredDeleteW(self.prefix + name, CRED_TYPE_GENERIC, 0):
-            code = ctypes.get_last_error()
+        if not _advapi32().CredDeleteW(self.prefix + name, CRED_TYPE_GENERIC, 0):
+            code = _last_error()
             if code == ERROR_NOT_FOUND:
                 return False
             raise EnvStoreError(_failed("remove the variable", code))
