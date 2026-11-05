@@ -29,7 +29,7 @@ from typing import Any, Self
 
 from organism_sdk.work import codec
 from organism_sdk.work.domain import Assignment, Decision, Ticket, Trigger, Verdict
-from organism_sdk.work.policy import Policy
+from organism_sdk.work.policy import Policy, instruction_hash
 
 SCHEMA_VERSION = "2"
 STORE_ENV = "ORGANISM_WORK_STORE"
@@ -100,6 +100,10 @@ CREATE TABLE IF NOT EXISTS policies (
   version TEXT PRIMARY KEY,
   body TEXT NOT NULL,
   signature TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS instructions (
+  hash TEXT PRIMARY KEY,
+  text TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS runs (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -592,6 +596,31 @@ class WorkStore:
         with self._lock:
             rows = self._conn.execute("SELECT decision_id, verdict FROM labels").fetchall()
         return {str(decision_id): Verdict(verdict) for decision_id, verdict in rows}
+
+    # Instructions (W9): each text stored under its digest. A stored text stays.
+
+    def save_instruction(self, text: str) -> str:
+        """Store an instruction's text under its digest, and return the digest."""
+        digest = instruction_hash(text)
+        with self.transaction():
+            self._conn.execute(
+                "INSERT OR IGNORE INTO instructions (hash, text) VALUES (?, ?)", (digest, text)
+            )
+        return digest
+
+    def instruction(self, digest: str) -> str | None:
+        """The text stored under a digest, or None. A text that no longer matches its digest raises,
+        because the Ticket that pinned it would otherwise run with text it did not start with."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT text FROM instructions WHERE hash = ?", (digest,)
+            ).fetchone()
+        if row is None:
+            return None
+        text = str(row[0])
+        if instruction_hash(text) != digest:
+            raise ValueError(f"stored instruction {digest} does not match its digest")
+        return text
 
     # Policy
 

@@ -141,7 +141,9 @@ class Ticket:
     The fields are the facts the stage table reads. The store (W2) keeps them current.
     ``latest_report`` is None until the Executor reports. ``person_message_after_report``
     is True when a person has written to the Ticket since that report. ``trigger_id`` is the
-    Trigger the Ticket opened from, so the driver can give the Executor its task.
+    Trigger the Ticket opened from, so the driver can give the Executor its task. ``instructions``
+    pins, for each rule the Mandate names, the digest of the instruction text the Ticket started
+    with (W9). A Ticket opened before they were pinned has none, and reads its Policy version.
     """
 
     id: str
@@ -154,6 +156,7 @@ class Ticket:
     person_message_after_report: bool = False
     thread: str | None = None
     trigger_id: str | None = None
+    instructions: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)

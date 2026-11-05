@@ -129,7 +129,10 @@ def open_accepted(store: WorkStore) -> tuple[list[str], list[str], list[str]]:
         if store.ticket_for_thread(trigger.thread) is not None:
             held.append(decision.id)
             continue
-        _open(store, ticket_id, mandate, thread=trigger.thread, trigger_id=trigger.id)
+        pinned = pinned_instructions(store, policy, mandate)
+        _open(
+            store, ticket_id, mandate, thread=trigger.thread, trigger_id=trigger.id, pinned=pinned
+        )
         opened.append(ticket_id)
     return opened, held, followed
 
@@ -196,16 +199,41 @@ def revalidate_notices(store: WorkStore, policy: Policy) -> list[str]:
     return needing
 
 
-def task_for(
-    policy: Policy | None, mandate: Mandate, message: str, followups: Sequence[str] = ()
-) -> str:
-    """The task an Executor is given: the Policy's instructions for the rules that matched, the
-    message that started the work, and any follow-ups since the last run. Text from the source is
-    labelled as data."""
-    matched = set(mandate.rules)
-    instructions = (
-        [] if policy is None else [r.instruction for r in policy.rules if r.id in matched]
+def pinned_instructions(
+    store: WorkStore, policy: Policy, mandate: Mandate
+) -> tuple[tuple[str, str], ...]:
+    """The digest of the text of each rule the Mandate names, as the Policy in force states it (W9).
+    The text is stored under its digest, so the Ticket runs with it whatever Policy comes next."""
+    by_id = {rule.id: rule for rule in policy.rules}
+    return tuple(
+        (rule_id, store.save_instruction(by_id[rule_id].instruction))
+        for rule_id in mandate.rules
+        if rule_id in by_id
     )
+
+
+def standing_instructions(store: WorkStore, ticket: Ticket) -> list[str]:
+    """The instruction texts a Ticket runs with: the ones it pinned when it opened. A Ticket opened
+    before any were pinned reads the rules of the Policy version its Mandate was granted under."""
+    if not ticket.instructions:
+        policy = store.policy(ticket.mandate.policy_version)
+        if policy is None:
+            return []
+        matched = set(ticket.mandate.rules)
+        return [rule.instruction for rule in policy.rules if rule.id in matched]
+    texts: list[str] = []
+    for rule_id, digest in ticket.instructions:
+        text = store.instruction(digest)
+        if text is None:
+            raise ValueError(f"ticket {ticket.id}: the text of rule {rule_id} is not in the store")
+        texts.append(text)
+    return texts
+
+
+def task_for(instructions: Sequence[str], message: str, followups: Sequence[str] = ()) -> str:
+    """The task an Executor is given: the standing instructions the Ticket runs with, the message
+    that started the work, and any follow-ups since the last run. Text from the source is labelled
+    as data."""
     parts: list[str] = []
     if instructions:
         parts.append("Standing instructions from the approved Policy:\n" + "\n".join(instructions))
@@ -239,7 +267,13 @@ def _waiting(ticket: Ticket) -> bool:
 
 
 def _open(
-    store: WorkStore, ticket_id: str, mandate: Mandate, *, thread: str, trigger_id: str
+    store: WorkStore,
+    ticket_id: str,
+    mandate: Mandate,
+    *,
+    thread: str,
+    trigger_id: str,
+    pinned: tuple[tuple[str, str], ...],
 ) -> None:
     assignment = Assignment(
         id=f"{ticket_id}-a1", ticket_id=ticket_id, state=AssignmentState.PENDING
@@ -250,6 +284,7 @@ def _open(
         assignment=assignment,
         thread=thread,
         trigger_id=trigger_id,
+        instructions=pinned,
     )
     with store.transaction():
         store.save_ticket(ticket)
@@ -300,8 +335,7 @@ def _claim(store: WorkStore, ticket_id: str) -> tuple[str, list[int]] | None:
             message = "" if trigger is None else trigger.text
         pending = store.pending_followups(ticket_id)
         task = task_for(
-            store.policy(ticket.mandate.policy_version),
-            ticket.mandate,
+            standing_instructions(store, ticket),
             message,
             [text for _, text in pending],
         )

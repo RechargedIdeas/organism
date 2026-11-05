@@ -449,27 +449,10 @@ def test_rows_written_before_the_new_fields_still_read(tmp_path: Path) -> None:
 
 
 def test_the_task_has_the_policy_instructions_then_the_message() -> None:
-    mandate = Mandate(
-        policy_version=POLICY.version,
-        strength=Strength.INFERRED,
-        via=Via.ADMISSION,
-        source="github",
-        row="repo",
-        sender="alice",
-        rules=("ci-fix",),
-    )
-    task = task_for(POLICY, mandate, "CI is red")
+    task = task_for(["fix failing CI"], "CI is red")
     assert task.startswith("Standing instructions from the approved Policy:\nfix failing CI")
     assert task.index("fix failing CI") < task.index("CI is red")
-    explicit = Mandate(
-        policy_version=POLICY.version,
-        strength=Strength.EXPLICIT,
-        via=Via.ADDRESSED,
-        source="github",
-        row="repo",
-        sender="alice",
-    )
-    only_message = task_for(POLICY, explicit, "please look")
+    only_message = task_for([], "please look")
     assert "Standing instructions" not in only_message
     assert "please look" in only_message
 

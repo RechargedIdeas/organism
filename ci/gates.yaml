@@ -394,6 +394,12 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_policy_version.py"
 
+  # Instruction text by digest (v1.12 W9): a Ticket runs with the text it started with, and a change
+  # to a rule's text flags its notice. Test keys only.
+  - id: work:instructions
+    tier: fast
+    command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_instructions.py"
+
   # Eval, one Trigger at a time (v1.12 W4): the rule assessment and the decision, with no store.
   - id: work:admission
     tier: fast

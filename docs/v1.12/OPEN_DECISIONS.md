@@ -44,7 +44,7 @@ Replies queue, and nothing is posted (section 11 of WORK_AGENT.md).
 **Recommendation:** C, then B. Nothing posts until the operator sets the flag after the dry-run
 shows the replies are right.
 
-**Blocked until chosen:** the go-ahead itself. The agent does not enable external writes.
+**Status:** built as C, then B. `work.external_writes` sets each Source to `off` (the default), `dry_run` or `on`. A dry run records each reply and posts nothing, and `organism work replies` lists them. The operator sets the mode; the agent does not. A dry run lasts until the operator changes the mode: the timed period that the shadow gate would set is not built. See WORK_AGENT.md, section 11.
 
 ## 3. Approver signing key
 
@@ -85,7 +85,7 @@ will not generate, store or read a private key.
 
 **Recommendation:** A. It is one file the operator reads, and it cannot widen a Mandate.
 
-**Blocked until chosen:** the list of scopes to listen to.
+**Status:** built as A. The list is `work.listen` in the deploy config, a map from each Source to its rows. Eval skips a Trigger outside it, and a config without `work.listen` listens to every Trigger. See WORK_AGENT.md, section 15.
 
 ## 5. Instruction text as versioned artifacts, and the "default updated" flag (W9)
 
@@ -102,7 +102,7 @@ told, or should only new Tickets get the new text?
 **Recommendation:** A. It reuses the notice path built for Policy changes, and a running Ticket
 never changes its text under it.
 
-**Blocked until chosen:** the choice. The rest of W9 waits on it.
+**Status:** built as A. Each instruction's text is stored under its digest, and a Ticket pins the digests of the rules it names when it opens. A notice carries `default_updated` when a rule's text changed. See WORK_AGENT.md, section 14.
 
 ## 6. Related Threads (Correlation)
 

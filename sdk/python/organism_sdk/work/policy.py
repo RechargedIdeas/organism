@@ -18,6 +18,12 @@ from typing import Any
 MAX_PATTERN = 200  # characters in a rule's pattern
 
 
+def instruction_hash(text: str) -> str:
+    """The digest that names an instruction's text (W9): SHA-256 of its UTF-8 bytes. A Ticket keeps
+    the digest of each instruction it started with, so the text it runs with is fixed."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 class AcceptMode(str, Enum):
     """What the gate does with inferred candidates (002)."""
 

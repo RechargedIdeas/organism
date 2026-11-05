@@ -75,13 +75,10 @@ def attention(store: WorkStore) -> list[dict[str, Any]]:
             items.append({"kind": "ticket", "id": ticket.id, "detail": stage.value})
     for effect in store.pending_effects():
         if effect.kind == NOTICE:
-            items.append(
-                {
-                    "kind": "policy_notice",
-                    "id": effect.key,
-                    "detail": f"policy changed to {effect.payload.get('policy')}",
-                }
-            )
+            detail = f"policy changed to {effect.payload.get('policy')}"
+            if effect.payload.get("default_updated"):
+                detail += "; an instruction this ticket started with has new text"
+            items.append({"kind": "policy_notice", "id": effect.key, "detail": detail})
         elif effect.kind == RECOVERY:
             items.append(
                 {

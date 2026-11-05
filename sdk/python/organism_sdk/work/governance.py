@@ -15,7 +15,7 @@ from collections.abc import Iterable
 
 from organism_sdk.signing import TrustStore, verify_any
 from organism_sdk.work.domain import Strength, Ticket
-from organism_sdk.work.policy import AcceptMode, Policy
+from organism_sdk.work.policy import AcceptMode, Policy, instruction_hash
 from organism_sdk.work.store import WorkStore
 
 POLICY_DOMAIN = b"organism.work.policy.v1\n"
@@ -82,6 +82,24 @@ def affected_tickets(old: Policy, new: Policy, tickets: Iterable[Ticket]) -> lis
     ]
 
 
+def default_updated(store: WorkStore, ticket: Ticket, policy: Policy) -> bool:
+    """True when the text of a rule the Ticket started with reads differently in `policy`: the
+    "default updated" flag of W9. A rule that was removed, or only switched on, off or to auto, is
+    not a text change. A Ticket that pinned no text reads the text of its Policy version."""
+    current = {rule.id: instruction_hash(rule.instruction) for rule in policy.rules}
+    if ticket.instructions:
+        started = dict(ticket.instructions)
+    else:
+        old = store.policy(ticket.mandate.policy_version)
+        matched = set(ticket.mandate.rules)
+        started = (
+            {}
+            if old is None
+            else {r.id: instruction_hash(r.instruction) for r in old.rules if r.id in matched}
+        )
+    return any(current.get(rule_id, digest) != digest for rule_id, digest in started.items())
+
+
 def adopt(store: WorkStore, policy: Policy, *, signature: bytes, trust: TrustStore) -> list[str]:
     """Make an approved Policy the one in force, and notify the open Tickets it affects.
 
@@ -101,7 +119,11 @@ def adopt(store: WorkStore, policy: Policy, *, signature: bytes, trust: TrustSto
                 store.enqueue(
                     NOTICE,
                     ticket.id,
-                    {"policy": policy.version, "previous": previous.version},
+                    {
+                        "policy": policy.version,
+                        "previous": previous.version,
+                        "default_updated": default_updated(store, ticket, policy),
+                    },
                 )
                 notified.append(ticket.id)
     return notified

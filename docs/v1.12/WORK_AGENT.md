@@ -269,9 +269,9 @@ The same object can sit in the deploy config, under `work.executor`. `--config F
 
 A reply is a comment on the Issue or pull request of the Thread, named `github:owner/name#number`, posted through `gh api`. Each body ends with a hidden marker, `<!-- organism-receipt:<id> -->`. Before posting, the channel reads the thread's comments. A reply whose marker is already there is not posted again, so a crash between the post and the store recording it does not post twice. Only HTTP 410 counts as gone: that reply is dropped with the reason `gone`. Any other failure is raised, and the store retries it.
 
-### Off by default
+### Modes
 
-With `enabled=False`, `reply_handlers` returns no handler. The replies wait in the queue and nothing reaches GitHub. No command passes `enabled=True` yet. Turning external writes on is a separate, deliberate change.
+`work.external_writes` in the deploy config sets each Source's mode: `off`, `dry_run` or `on`. Off is the default, and only `github` is known. Off, `reply_handlers` returns no handler, so the replies wait in the queue and nothing reaches GitHub. A dry run settles each reply as `dry_run`, with the reason `would post to <thread>`, and makes no call to `gh`. `organism work replies -c <deploy.yaml>` runs the handler for the configured mode and lists what a dry run recorded, so the replies can be read before the mode is changed to `on`. The agent does not set the mode itself (OPEN_DECISIONS item 2).
 
 ## 12. W7 behaviour
 
@@ -319,9 +319,14 @@ The Ticket driver calls `route` for each accepted Decision (section 10). A perso
 
 Adoption runs in one transaction. It stores the Policy, makes it active, and queues a `policy_notice` effect for each open Ticket the change touches. A Ticket is touched when a rule its Mandate uses changed, or when the Source part it came from changed. A change to the accept mode touches no Ticket. A notice never cancels a Ticket. Each pass of the driver settles the notices first. A Ticket whose Mandate still stands drops its notice. A Ticket whose Mandate no longer stands (its Source is no longer listed, a rule it names is disabled, or an inferred Mandate is no longer under Auto) is marked for a person. It does not run, and it keeps its notice, which shows in `attention`, until the person stops it.
 
+### Instruction text by digest
+
+Each instruction's text is stored under its SHA-256 digest (`policy.instruction_hash`), and it is read back only if it still matches that digest. When a Ticket opens, it pins the digest of the text of each rule its Mandate names, as the Policy in force states it. Its task is built from those pinned texts, so a running Ticket never changes its text under it, whatever Policy comes next. A Ticket opened before the pinning existed reads the rules of the Policy version its Mandate names.
+
+A notice carries a `default_updated` flag. It is true when the text of a rule the Ticket started with reads differently in the new Policy. A change that only switches a rule on, off or to auto, or that removes the rule, leaves the flag false. Attention shows a flagged notice with "an instruction this ticket started with has new text".
+
 ### Not built
 
-- Instruction text stored as versioned artifacts, and the "default updated" flag.
 - The approver's key. This record generates no key and stores none. The approver keeps the private key outside the repo (W-D5).
 
 ## 15. Not yet built
@@ -330,10 +335,8 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - A model-judged rule and the LLM assessor: W-D2, not adopted. Eval judges one Trigger at a time, so it needs no batching. Batching comes with a model.
 - `Outcome.STOP` is in the domain, but Eval does not produce it.
 - Signing keys. The CLI adopts a Policy only with an approver's signature and the trust store, and this record generates neither. The approver makes the key pair and gives the agent the public key (W-D5). A graduated Policy is adopted the same way.
-- Instruction text stored as versioned artifacts: W9, section 14.
 - Subscriptions, hand-back and release, and pull-request following: W8 (section 13).
-- Scope facts are fixed: `evaluate` treats every Trigger as listened and observed, in the row given by `--row`. Per-scope listening waits for configuration.
-- External writes: no command enables the reply channel (section 11).
+- Scope facts are fixed: `evaluate` treats every Trigger it is given as listened and observed, in the row given by `--row`. Which Triggers it is given is set by `work.listen` (OPEN_DECISIONS item 4), so the listening list narrows Eval, and the facts stay as they are.
 - Context-only follows, which do not admit anything: W8.
 
 ## 16. Gates
@@ -354,6 +357,7 @@ Adoption runs in one transaction. It stores the Policy, makes it active, and que
 - `desktop/tests/test_needs_you_panel.py` and `desktop/tests/test_nav.py` (`work:needs_you_panel`, offscreen): the panel's summary and rows, reading beside a writer, refresh, the missing-store message, and the fourteen panels in navigation order.
 - `test_v112_work_followups.py` (`work:followups`, fast tier): routing and the one-owner invariant, with property tests, and the rule that related Threads never change a routing.
 - `test_v112_work_policy_version.py` (`work:policy_version`, fast tier): signed adoption, rejection without an approver's signature, the notices, and the revalidation of a notice: a Mandate that still stands drops it, and one that no longer stands waits for a person.
+- `test_v112_work_instructions.py` (`work:instructions`, fast tier): instruction text read back by its digest, a stored text that no longer matches refused, the text pinned when a Ticket opens, a running Ticket keeping its text across a Policy change, the `default_updated` flag (a changed text flags its notice, a switched or removed rule does not), and a Ticket opened before pinning reading its Policy version.
 - `test_v112_work_adopt.py` (added to `work:operator`): the verdict's latest-wins rule, the CLI's label and adopt, and rejection of a Policy signed by an author key or a stranger.
 - `test_v112_work_jail_profile.py` (`work:jail_profile`, fast tier): the `work_executor` values, the one named variable, the allowlisted environment, and the containment rule, checked on any host.
 - `test_v112_work_egress.py` and `test_v112_work_netns.py` (`work:egress`, fast tier): the egress proxy's decisions and relay over loopback, and on Linux a child in a network namespace that cannot reach host loopback. The proxy's handler is driven through real sockets: a refused CONNECT (host, port, or a malformed target) is answered before any dial, a listed name that resolves to a private address is refused even beside a public one, and a name is looked up once so the proxy dials the address it checked. Malformed heads get 400, bytes sent with the head are relayed, and each side can end its half of a tunnel. Both run in WSL. The namespace test skips on other hosts.
