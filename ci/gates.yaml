@@ -379,6 +379,13 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:. {python} -m pytest -q sdk/python/tests/test_v112_work_eval.py"
 
+  # The checked-in conformance vectors must be what the Python reference generator produces. Without this, a port could keep
+  # passing against stale vectors. Runs in seconds and writes only to a temporary folder.
+  - id: conformance:regen
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} ci/conformance_regen.py"
+    inputs: ["conformance", "sdk/python", "modules", "ci/conformance_regen.py"]
+
   # ---------------------------------------------------------------- full (before merge / on demand)
   # The Kotlin SDK must match the language-neutral conformance vectors (K0 and K1). The launcher picks the Gradle wrapper for this OS.
   - id: conformance:kotlin

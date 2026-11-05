@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1091,21 +1092,22 @@ def gate_vectors() -> dict:
     }
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+def main(out: Path = OUT) -> None:
+    out.mkdir(parents=True, exist_ok=True)
     for name, data in (("hypervector", hypervector_vectors()), ("degradation", degradation_vectors()),
                        ("contract", contract_vectors()), ("lifecycle", lifecycle_vectors()),
                        ("canonical", canonical_vectors()), ("signature", signature_vectors()),
                        ("tool", tool_vectors()), ("model_artifact", model_artifact_vectors()),
                        ("router", router_vectors()), ("shadow", shadow_vectors()),
                        ("health", health_vectors()), ("evidence", gate_vectors())):
-        (OUT / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n",
+        (out / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n",
                                           encoding="utf-8", newline="\n")
         print("wrote", name)
-    d = json.loads((OUT / "degradation.json").read_text())
+    d = json.loads((out / "degradation.json").read_text())
     seen = {t[1] for s in d["scenarios"] for t in s["transitions"]}
     print("levels reached:", sorted(seen))
 
 
 if __name__ == "__main__":
-    main()
+    # An optional folder argument writes the vectors there instead (ci/conformance_regen.py uses this).
+    main(Path(sys.argv[1]) if len(sys.argv) > 1 else OUT)
