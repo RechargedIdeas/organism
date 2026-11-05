@@ -112,4 +112,9 @@ registered with Organism).
   experts, tools, platform adapters, data handling and the user interface. Gaps A2, B6, C2, E2 and G1 sit on that
   boundary, and each one needs an owner decision.
 - **Fixed in K1:** B3 (Kotlin registry synchronized, commit `34c25a2`). Everything else is still open.
+- **Fixed in K1b (uncommitted until reviewed):** A1 (output forms TEXT, TOKEN_STREAM, TOOL_CALL, with a warning for a
+  tool call that names no action class), A2 (`ToolContract`), A3 (`HUMAN_CONFIRMATION`), A8 (`ModelArtifact`), A9 (the
+  Python verify is `signing.verify`; Kotlin has a pure verify), C3 (canonical JSON, `docs/INTEROP.md`). Vectors:
+  `canonical.json`, `signature.json`, `tool.json`, `model_artifact.json`, and 5 new cases in `contract.json`. Still open
+  from K1b: B6, A5, A6, A7.
 - **Status 2026-11-04:** `docs/HANDOVER.md` has the working order for these gaps.

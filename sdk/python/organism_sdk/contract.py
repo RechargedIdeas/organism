@@ -1,10 +1,13 @@
 """SubstrateContract dataclasses + validation — A3.1 + Amendment 3.1 (R-6)."""
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from organism_sdk.canonical import CanonicalError, canonical_text
 from organism_sdk.errors import RegistrationRejected
 
 
@@ -84,6 +87,10 @@ class OutputForm(str, Enum):
     ASSIGNMENT_CERTIFICATE = "ASSIGNMENT_CERTIFICATE"
     FEATURE_VECTOR = "FEATURE_VECTOR"
     JUSTIFICATION_TOKEN = "JUSTIFICATION_TOKEN"
+    # A1: forms for language models. A module that emits text, a token stream or a tool call declares it here.
+    TEXT = "TEXT"
+    TOKEN_STREAM = "TOKEN_STREAM"
+    TOOL_CALL = "TOOL_CALL"
 
 
 class UncertaintyKind(str, Enum):
@@ -114,6 +121,8 @@ class JustificationKind(str, Enum):
     RULE_TRACE = "RULE_TRACE"
     ENERGY_CERT = "ENERGY_CERT"
     SYMBOLIC_PROOF = "SYMBOLIC_PROOF"
+    # A3: a person confirmed this irreversible action. The token is the confirmation record.
+    HUMAN_CONFIRMATION = "HUMAN_CONFIRMATION"
 
 
 class RecoveryKind(str, Enum):
@@ -409,6 +418,97 @@ class Lifecycle:
     max_idle_time_s: float | None = None
 
 
+# ---- Tool contract (A2) ----
+
+class ToolConfirmation(str, Enum):
+    """When a person must confirm a call. ``ON_FIRST_USE`` asks once per session and tool."""
+
+    NONE = "NONE"
+    ON_FIRST_USE = "ON_FIRST_USE"
+    ALWAYS = "ALWAYS"
+
+
+class ToolNetwork(str, Enum):
+    NONE = "NONE"
+    LOCAL = "LOCAL"
+    INTERNET = "INTERNET"
+
+
+class ToolConfinement(str, Enum):
+    """How tightly the host must confine the tool process. ``STRICT`` means no file or process access beyond the tool's own scope."""
+
+    NONE = "NONE"
+    SCOPED = "SCOPED"
+    STRICT = "STRICT"
+
+
+_TOOL_NAME = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
+_HIGH_RISK = (MaxSafetyTier.HIGH, MaxSafetyTier.CRITICAL)
+
+
+@dataclass(frozen=True)
+class ToolContract:
+    """A callable tool a module offers (A2).
+
+    ``schema_json`` is the JSON Schema of the call arguments, kept as canonical JSON text (see
+    ``organism_sdk.canonical``), so its bytes can be hashed and signed. Canonical JSON has no floats,
+    so a fractional bound is written as a string or scaled. ``risk_tier`` uses the safety scale
+    (RESEARCH < LOW < MEDIUM < HIGH < CRITICAL).
+    """
+
+    name: str
+    schema_json: str
+    risk_tier: MaxSafetyTier
+    confirmation: ToolConfirmation = ToolConfirmation.NONE
+    network: ToolNetwork = ToolNetwork.NONE
+    confinement: ToolConfinement = ToolConfinement.NONE
+
+    def validate(self) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        if not _TOOL_NAME.fullmatch(self.name):
+            issues.append(
+                ValidationIssue(Severity.ERROR, "tool_name_invalid", "tool.name",
+                                "name must match [a-z][a-z0-9_.-]{0,63}")
+            )
+        try:
+            parsed = json.loads(self.schema_json)
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, dict):
+            issues.append(
+                ValidationIssue(Severity.ERROR, "tool_schema_invalid", "tool.schema",
+                                "schema must be a JSON object")
+            )
+        else:
+            try:
+                canonical = canonical_text(parsed) == self.schema_json
+            except CanonicalError:
+                canonical = False
+            if not canonical:
+                issues.append(
+                    ValidationIssue(Severity.ERROR, "tool_schema_not_canonical", "tool.schema",
+                                    "schema text must be canonical JSON")
+                )
+        if (self.risk_tier == MaxSafetyTier.HIGH and self.confirmation == ToolConfirmation.NONE) or (
+            self.risk_tier == MaxSafetyTier.CRITICAL and self.confirmation != ToolConfirmation.ALWAYS
+        ):
+            issues.append(
+                ValidationIssue(Severity.ERROR, "tool_confirmation_required", "tool.confirmation",
+                                "HIGH risk needs confirmation, CRITICAL needs it on every call")
+            )
+        if (self.network == ToolNetwork.INTERNET or self.risk_tier in _HIGH_RISK) and (
+            self.confinement == ToolConfinement.NONE
+        ):
+            issues.append(
+                ValidationIssue(Severity.ERROR, "tool_confinement_required", "tool.confinement",
+                                "internet access or HIGH/CRITICAL risk needs confinement")
+            )
+        return issues
+
+    def is_registrable(self) -> bool:
+        return not any(i.severity == Severity.ERROR for i in self.validate())
+
+
 @dataclass(frozen=True)
 class SubstrateContract:
     identity: Identity
@@ -520,6 +620,17 @@ class SubstrateContract:
                 )
             )
 
+        # A1: a module that emits tool calls proposes actions. It should name the action classes that need a token.
+        if self.emission.output_form == OutputForm.TOOL_CALL and not self.emission.requires_justification_for:
+            issues.append(
+                ValidationIssue(
+                    Severity.WARNING,
+                    "tool_call_without_justification",
+                    "emission.requires_justification_for",
+                    "output_form TOOL_CALL but no action classes require justification",
+                )
+            )
+
         return issues
 
     def require_valid(self) -> None:
@@ -583,6 +694,9 @@ class SubstrateContract:
             OutputForm.ASSIGNMENT_CERTIFICATE: contract_pb2.OUTPUT_ASSIGNMENT_CERTIFICATE,
             OutputForm.FEATURE_VECTOR: contract_pb2.OUTPUT_FEATURE_VECTOR,
             OutputForm.JUSTIFICATION_TOKEN: contract_pb2.OUTPUT_JUSTIFICATION_TOKEN,
+            OutputForm.TEXT: contract_pb2.OUTPUT_TEXT,
+            OutputForm.TOKEN_STREAM: contract_pb2.OUTPUT_TOKEN_STREAM,
+            OutputForm.TOOL_CALL: contract_pb2.OUTPUT_TOOL_CALL,
         }
         unc_map = {
             UncertaintyKind.NONE: contract_pb2.UNCERTAINTY_NONE,
@@ -609,6 +723,7 @@ class SubstrateContract:
             JustificationKind.RULE_TRACE: contract_pb2.JUSTIFICATION_RULE_TRACE,
             JustificationKind.ENERGY_CERT: contract_pb2.JUSTIFICATION_ENERGY_CERT,
             JustificationKind.SYMBOLIC_PROOF: contract_pb2.JUSTIFICATION_SYMBOLIC_PROOF,
+            JustificationKind.HUMAN_CONFIRMATION: contract_pb2.JUSTIFICATION_HUMAN_CONFIRMATION,
         }
         safety_map = {
             MaxSafetyTier.RESEARCH: common_pb2.SAFETY_RESEARCH,

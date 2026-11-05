@@ -42,7 +42,7 @@ integrate with KotMoE as it goes, keeping docs and repos current.
 |---|---|---|---|
 | K0 | Fork on X:, venv, baseline, conformance harness, Kotlin build, hypervector + degradation parity | S | **done** |
 | K1 | Contract, validation, registry + lifecycle ladder (Kotlin), vectors `contract.json`, `lifecycle.json` | M | **partly done** (`34c25a2`): contract field subset, validation, ladder, registry, vectors |
-| K1b | Output forms (text, token stream, tool call), tool contract, human-confirmation justification, Ed25519 signature verification, health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes, canonical JSON writer | M | open. The P0 rows of `docs/AI_MODEL_GAPS.md` come first |
+| K1b | Output forms (text, token stream, tool call), tool contract, human-confirmation justification, Ed25519 signature verification, health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes, canonical JSON writer | M | **partly done**: output forms, tool contract, human confirmation, Ed25519 verify, canonical JSON, model artifact. Open: health and drain interfaces, calibration evidence, measured-metabolics record, GPU and NPU hardware classes |
 | K2 | Router, `DispatchPlan` canonical bytes, trace entries, eligibility mask + exclusions (Python+Kotlin), vectors | M | |
 | K3 | Hormone bus, autonomic, circadian, immune, interoception parity; plain-name modulators; level table as data | M | |
 | K4 | Workspace, ops log, snapshots, replay (JSONL + digest chain), vectors | M | |

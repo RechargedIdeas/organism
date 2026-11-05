@@ -6,14 +6,27 @@ package org.organism.sdk
  */
 object Json {
     fun parse(text: String): Any? {
-        val p = Parser(text)
+        val p = Parser(text, exact = false)
         val v = p.value()
         p.ws()
         require(p.i == text.length) { "trailing data at ${p.i}" }
         return v
     }
 
-    private class Parser(val s: String) {
+    /**
+     * Like [parse], but keeps what the canonical writer ([Canonical]) needs to see. Integer literals become [Long]
+     * (or [java.math.BigInteger] beyond 64 bits), every other number is a [Double], and `NaN`, `Infinity` and
+     * `-Infinity` are accepted as doubles, as Python's `json.loads` does, so the writer can reject them by code.
+     */
+    fun parseExact(text: String): Any? {
+        val p = Parser(text, exact = true)
+        val v = p.value()
+        p.ws()
+        require(p.i == text.length) { "trailing data at ${p.i}" }
+        return v
+    }
+
+    private class Parser(val s: String, val exact: Boolean) {
         var i = 0
 
         fun ws() {
@@ -31,6 +44,9 @@ object Json {
                 c == 't' -> lit("true", true)
                 c == 'f' -> lit("false", false)
                 c == 'n' -> lit("null", null)
+                exact && c == 'N' -> lit("NaN", Double.NaN)
+                exact && c == 'I' -> lit("Infinity", Double.POSITIVE_INFINITY)
+                exact && s.startsWith("-Infinity", i) -> lit("-Infinity", Double.NEGATIVE_INFINITY)
                 c == '-' || c.isDigit() -> num()
                 else -> error("unexpected '$c' at $i")
             }
@@ -42,10 +58,15 @@ object Json {
             return v
         }
 
-        private fun num(): Double {
+        private fun num(): Any {
             val st = i
             while (i < s.length && (s[i].isDigit() || s[i] == '+' || s[i] == '-' || s[i] == '.' || s[i] == 'e' || s[i] == 'E')) i++
-            return s.substring(st, i).toDouble()
+            val text = s.substring(st, i)
+            if (exact && text.none { it == '.' || it == 'e' || it == 'E' }) {
+                val big = java.math.BigInteger(text)
+                return if (big.bitLength() < 64) big.toLong() else big
+            }
+            return text.toDouble()
         }
 
         private fun str(): String {

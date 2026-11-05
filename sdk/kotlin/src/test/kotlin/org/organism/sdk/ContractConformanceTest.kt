@@ -103,7 +103,7 @@ class ContractConformanceTest {
     @Test
     fun contractValidationMatchesReference() {
         val cases = load("contract").arr("cases").map { it.asMap() }
-        assertEquals(24, cases.size, "contract case count changed: regenerate and review the vectors")
+        assertEquals(29, cases.size, "contract case count changed: regenerate and review the vectors")
         for (case in cases) {
             val name = case.str("name")
             val contract = parseContract(case.obj("contract"))

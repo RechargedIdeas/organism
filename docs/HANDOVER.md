@@ -128,9 +128,9 @@ rank for DEVELOPMENT equals EXPLORATION.
 
 1. **Merge `main` into `feat/kotlin-parity`** (or rebase). That brings in the MoA layer and the Windows fixes. Resolve
    `STATUS.md` and `CHANGELOG.md`. Run the tests again. This is the owner's call on merge versus rebase.
-2. **K1b, P0 items from `docs/AI_MODEL_GAPS.md`:** output forms including text, token stream and tool call (A1); a tool
-   contract (A2); a human-confirmation justification (A3); a canonical JSON writer (C3); Ed25519 signature verification
-   (A9).
+2. **K1b:** the P0 items are done on this branch: output forms (A1), tool contract (A2), human confirmation (A3), model
+   artifact (A8), Ed25519 verify (A9), canonical JSON (C3). See `docs/INTEROP.md` for the rules and vectors. What is left
+   of K1b is item 7 below.
 3. **K2:** eligibility mask with typed exclusions, canonical `DispatchPlan` bytes, and a router policy artifact with a
    digest. Python and Kotlin, with a `router.json` vector. This is the first stage on the Lightspeed path.
 4. **Persistence and traces:** a lifecycle stream on the op log with a digest chain (B2, C1), and a redaction hook in the
