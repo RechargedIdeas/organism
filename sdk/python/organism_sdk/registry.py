@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -93,6 +94,62 @@ class ShadowValidationRecord:
     evidence_digest: bytes = b""
 
 
+# States a module may enter only with shadow evidence that meets the threshold (gap B1): the states where it is
+# validated or serves. PROPOSED -> SANDBOXED needs no evidence, and DEPRECATED and RETIRED are retirements.
+GATED_STATES: frozenset[str] = frozenset({"SHADOW_VALIDATED", "EXPLORATION", "DELIBERATION"})
+
+
+@dataclass(frozen=True)
+class ShadowThreshold:
+    """What shadow evidence must show before a gated promotion.
+
+    ``min_invocations`` counts the live invocations over all records. ``max_error_ratio`` bounds the
+    weighted candidate error by the weighted incumbent error; 1.0 means no worse than the incumbent.
+    """
+
+    min_invocations: int = 100
+    max_error_ratio: float = 1.0
+
+
+def shadow_gate(records: Sequence[ShadowValidationRecord], threshold: ShadowThreshold) -> list[ValidationIssue]:
+    """The issues that stop a gated promotion, or an empty list when the evidence passes. Pure.
+
+    Codes: ``shadow_evidence_insufficient`` (no records, or too few invocations),
+    ``shadow_evidence_unattributed`` (a record without an evidence digest), ``shadow_error_regression``.
+    """
+    if not records:
+        return [ValidationIssue(Severity.ERROR, "shadow_evidence_insufficient", "shadow_records", "no shadow records")]
+    total = sum(r.invocations for r in records)
+    if total < threshold.min_invocations:
+        return [
+            ValidationIssue(
+                Severity.ERROR,
+                "shadow_evidence_insufficient",
+                "shadow_records",
+                f"invocations={total} required={threshold.min_invocations}",
+            )
+        ]
+    if any(not r.evidence_digest for r in records):
+        return [
+            ValidationIssue(
+                Severity.ERROR, "shadow_evidence_unattributed", "shadow_records", "a record has no evidence digest"
+            )
+        ]
+    # Explicit loops: Python 3.12+ compensates float sums, and the Kotlin port adds plainly. Both must agree.
+    incumbent = 0.0
+    candidate = 0.0
+    for r in records:
+        incumbent += r.incumbent_error * r.invocations
+        candidate += r.candidate_error * r.invocations
+    if candidate > threshold.max_error_ratio * incumbent:
+        return [
+            ValidationIssue(
+                Severity.ERROR, "shadow_error_regression", "shadow_records", "candidate error exceeds the incumbent"
+            )
+        ]
+    return []
+
+
 @dataclass
 class _Entry:
     contract: SubstrateContract
@@ -125,16 +182,24 @@ class RegistryClient:
     With a ``trust_store``, registration needs an author signature and promotion needs an approver
     signature, each from a trusted key. Without one, signatures are not checked. That is the
     default for local development and for the internal callers that pass placeholder bytes.
+
+    A promotion into a ``GATED_STATES`` state needs shadow evidence that meets ``shadow_threshold``
+    whether or not a trust store is set. ``test_bypass_validation`` does not skip that check.
     """
 
     def __init__(
-        self, trace: TraceEmitter | None = None, *, trust_store: TrustStore | None = None
+        self,
+        trace: TraceEmitter | None = None,
+        *,
+        trust_store: TrustStore | None = None,
+        shadow_threshold: ShadowThreshold | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._modules: dict[str, _Entry] = {}
         self._trace = trace or TraceEmitter()
         self._audit: list[dict[str, Any]] = []
         self._trust_store = trust_store
+        self._shadow_threshold = shadow_threshold if shadow_threshold is not None else ShadowThreshold()
 
     def _note_rejected(self, role: str, module_id: str) -> None:
         with self._lock:
@@ -309,6 +374,10 @@ class RegistryClient:
                         )
                     ],
                 )
+            if to_state in GATED_STATES:
+                gate_issues = shadow_gate(shadow_records, self._shadow_threshold)
+                if gate_issues:
+                    return PromoteResponse(accepted=False, validation_issues=gate_issues)
             entry.state = to_state
         self._trace.emit_lifecycle(
             LifecycleTraceEntry(module_id=module_id, from_state=from_state, to_state=to_state, event="promote")

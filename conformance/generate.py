@@ -50,7 +50,14 @@ from organism_sdk.contract import (
 from organism_sdk.degradation import DegradationMachine, HealthSignals
 from organism_sdk.hypervector import DIM, WORD_COUNT, Hypervector
 from organism_sdk.model_artifact import ModelArtifact
-from organism_sdk.registry import CapabilityFilter, LifecycleState, ModuleHandle, RegistryClient
+from organism_sdk.registry import (
+    CapabilityFilter,
+    LifecycleState,
+    ModuleHandle,
+    RegistryClient,
+    ShadowThreshold,
+    ShadowValidationRecord,
+)
 from organism_sdk.router import (
     DEFAULT_FORM_TO_ROLES,
     EXCLUSION_CODES,
@@ -60,6 +67,14 @@ from organism_sdk.router import (
     canonical_routing_entry,
     default_bootstrap_policy,
     eligibility,
+)
+from organism_sdk.shadow_runner import MAX_LOSS, ShadowRunner
+from organism_sdk.signing import (
+    TrustStore,
+    promotion_payload,
+    public_key_for,
+    registration_payload,
+    sign,
 )
 from organism_sdk.signing import verify as ed25519_verify
 from organism_sdk.trace import RoutingTraceEntry
@@ -356,6 +371,120 @@ QUERY_FILTERS = [
 ]
 
 
+# Fixed seeds for the reference vectors (K6). Ed25519 signing is deterministic, so the signatures are reproducible.
+AUTHOR_SEED = hashlib.sha256(b"organism.vectors.author.v1").digest()
+APPROVER_SEED = hashlib.sha256(b"organism.vectors.approver.v1").digest()
+OTHER_SEED = hashlib.sha256(b"organism.vectors.other.v1").digest()
+EVIDENCE_DIGEST = hashlib.sha256(b"organism.vectors.evidence.v1").digest()
+
+
+def _record(invocations: int = 200, incumbent: float = 0.25, candidate: float = 0.125, p95: float = 3.5,
+            digest: bytes = EVIDENCE_DIGEST) -> ShadowValidationRecord:
+    return ShadowValidationRecord(invocations=invocations, incumbent_error=incumbent, candidate_error=candidate,
+                                  p95_latency_ms=p95, gates_passed=("sandbox", "contract"), evidence_digest=digest)
+
+
+def _record_json(r: ShadowValidationRecord) -> dict:
+    return {"invocations": r.invocations, "incumbent_error": r.incumbent_error,
+            "candidate_error": r.candidate_error, "p95_latency_ms": r.p95_latency_ms,
+            "gates_passed": list(r.gates_passed), "evidence_digest": r.evidence_digest.hex()}
+
+
+def _evidence_transition(name: str, initial: str, frm: str, to: str, shown: list, signed_over: list, *,
+                         signer: bytes = APPROVER_SEED, signature: bytes | None = None) -> dict:
+    """One promote() call with a trust store (K6, gap B1). ``signed_over`` is the evidence the approver signed;
+    ``shown`` is what the caller submits. They differ only in the tampering case."""
+    trust = TrustStore(authors=frozenset({public_key_for(AUTHOR_SEED)}),
+                       approvers=frozenset({public_key_for(APPROVER_SEED)}))
+    rc = RegistryClient(trust_store=trust)
+    c = make_contract(module_id="m.lc")
+    rc.register(c, b"\x00" * 32, sign(AUTHOR_SEED, registration_payload("m.lc", c.identity.version, b"\x00" * 32)),
+                initial_state=initial)
+    sig = signature if signature is not None else sign(signer, promotion_payload("m.lc", frm, to, signed_over))
+    resp = rc.promote("m.lc", frm, to, shown, sig)
+    return {"name": name, "initial": initial, "from": frm, "to": to,
+            "shadow": [_record_json(r) for r in shown], "approver_signature": sig.hex(),
+            "accepted": resp.accepted,
+            "code": resp.validation_issues[0].code if resp.validation_issues else None,
+            "state_after": rc.query(CapabilityFilter())[0].state}
+
+
+def _evidence_vectors() -> list[dict]:
+    good = [_record()]
+    return [
+        _evidence_transition("sandboxed_to_shadow_ok", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED", good, good),
+        _evidence_transition("shadow_to_exploration_ok", "SHADOW_VALIDATED", "SHADOW_VALIDATED", "EXPLORATION",
+                             good, good),
+        _evidence_transition("exploration_to_deliberation_ok", "EXPLORATION", "EXPLORATION", "DELIBERATION",
+                             good, good),
+        _evidence_transition("deprecated_needs_no_evidence", "DELIBERATION", "DELIBERATION", "DEPRECATED", [], []),
+        _evidence_transition("too_few_invocations", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED",
+                             [_record(invocations=99)], [_record(invocations=99)]),
+        _evidence_transition("candidate_worse", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED",
+                             [_record(incumbent=0.125, candidate=0.25)], [_record(incumbent=0.125, candidate=0.25)]),
+        _evidence_transition("unattributed", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED",
+                             [_record(digest=b"")], [_record(digest=b"")]),
+        _evidence_transition("no_records", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED", [], []),
+        _evidence_transition("tampered_evidence", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED",
+                             [_record(invocations=201)], good),
+        _evidence_transition("other_key_signature", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED", good, good,
+                             signer=OTHER_SEED),
+        _evidence_transition("missing_signature", "SANDBOXED", "SANDBOXED", "SHADOW_VALIDATED", good, good,
+                             signature=b""),
+        _evidence_transition("ladder_error_before_evidence", "PROPOSED", "PROPOSED", "EXPLORATION", [], []),
+    ]
+
+
+def _scripted_runner(rows: list[tuple[int, int, int, int]]) -> tuple[ShadowRunner, list[int]]:
+    """A runner whose clock is scripted: two reads per request, so the latency of row k is its latency in ns.
+    Returns the runner and the tick sequence, which the Kotlin replay reproduces exactly."""
+    ticks: list[int] = []
+    t = 0
+    for *_, lat in rows:
+        ticks += [t, t + lat]
+        t += lat + 1000
+    feed = iter(ticks)
+
+    def candidate(i: int) -> str:
+        if rows[i][2]:
+            raise RuntimeError("candidate failed")
+        return f"cand:{i}"
+
+    def loss(request: int, output: str) -> int:
+        return rows[request][0] if output.startswith("inc") else rows[request][1]
+
+    runner = ShadowRunner(incumbent=lambda i: f"inc:{i}", candidate=candidate, loss=loss,
+                          clock_ns=lambda: next(feed), gates_passed=("shadow_runner",))
+    return runner, ticks
+
+
+SHADOW_SCRIPTS = [
+    ("candidate_better", [(400, 200, 0, 2_000_000), (500, 250, 0, 3_000_000), (300, 100, 0, 1_000_000),
+                          (600, 300, 0, 4_000_000)]),
+    ("candidate_fails_once", [(400, 200, 0, 2_000_000), (500, 0, 1, 5_000_000), (300, 100, 0, 1_000_000)]),
+    ("candidate_worse", [(100, 900, 0, 1_000_000), (100, 900, 0, 1_000_000), (100, 900, 0, 1_000_000)]),
+    ("empty", []),
+    ("p95_twenty_requests", [(100 * (i % 3), 50 * (i % 5), 0, (i + 1) * 1_000_000) for i in range(20)]),
+]
+
+
+def shadow_vectors() -> dict:
+    """ShadowRunner on scripted live traffic (K6, gap H1): the record and its evidence digest per script."""
+    cases = []
+    for name, rows in SHADOW_SCRIPTS:
+        runner, ticks = _scripted_runner(rows)
+        for i in range(len(rows)):
+            runner.on_traffic(i)
+        rec = runner.record()
+        cases.append({
+            "name": name, "rows": [list(r) for r in rows], "ticks": ticks,
+            "expected": {"invocations": rec.invocations, "incumbent_error": rec.incumbent_error,
+                         "candidate_error": rec.candidate_error, "p95_latency_ms": rec.p95_latency_ms,
+                         "gates_passed": list(rec.gates_passed), "evidence_digest": rec.evidence_digest.hex()},
+        })
+    return {"schema": SCHEMA, "max_loss": MAX_LOSS, "cases": cases}
+
+
 def lifecycle_vectors() -> dict:
     states = list(get_args(LifecycleState))
     transitions = [_transition(s, f, t) for s in states for f in states for t in states if s == f]
@@ -380,9 +509,15 @@ def lifecycle_vectors() -> dict:
         )
         ids = sorted(h.module_id for h in rc.query(flt))
         queries.append({"filter": f, "expected_ids": ids})
+    default = ShadowThreshold()
     return {"schema": SCHEMA, "contract": contract_dict(make_contract(module_id="m.lc")), "states": states,
             "transitions": transitions, "lifecycle_mismatch": mismatch,
-            "queries": {"modules": modules, "cases": queries}}
+            "queries": {"modules": modules, "cases": queries},
+            # K6: gated promotions need evidence over the threshold and a verifying approver (trust store).
+            "gated_states": sorted(["SHADOW_VALIDATED", "EXPLORATION", "DELIBERATION"]),
+            "threshold": {"min_invocations": default.min_invocations, "max_error_ratio": default.max_error_ratio},
+            "trust": {"approvers": [public_key_for(APPROVER_SEED).hex()]},
+            "evidence_cases": _evidence_vectors()}
 
 
 CANONICAL_CASES = [
@@ -739,7 +874,7 @@ def main() -> None:
                        ("contract", contract_vectors()), ("lifecycle", lifecycle_vectors()),
                        ("canonical", canonical_vectors()), ("signature", signature_vectors()),
                        ("tool", tool_vectors()), ("model_artifact", model_artifact_vectors()),
-                       ("router", router_vectors())):
+                       ("router", router_vectors()), ("shadow", shadow_vectors())):
         (OUT / f"{name}.json").write_text(json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n",
                                           encoding="utf-8", newline="\n")
         print("wrote", name)

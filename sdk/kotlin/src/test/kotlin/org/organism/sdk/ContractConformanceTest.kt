@@ -117,6 +117,46 @@ class ContractConformanceTest {
         }
     }
 
+    private fun unhex(s: String): ByteArray = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private fun record(d: Map<String, Any?>) = ShadowValidationRecord(
+        invocations = d.int("invocations"),
+        incumbentError = d.dbl("incumbent_error"),
+        candidateError = d.dbl("candidate_error"),
+        p95LatencyMs = d.dbl("p95_latency_ms"),
+        gatesPassed = d.strs("gates_passed"),
+        evidenceDigest = unhex(d.str("evidence_digest")),
+    )
+
+    /** K6: a gated promotion needs evidence over the threshold and a verifying approver; `lifecycle.json` holds the cases. */
+    @Test
+    fun gateAndApproverMatchReference() {
+        val doc = load("lifecycle")
+        val threshold = doc.obj("threshold").let { t -> ShadowThreshold(t.int("min_invocations"), t.dbl("max_error_ratio")) }
+        assertEquals(ShadowThreshold(), threshold, "default threshold changed")
+        assertEquals(doc.strs("gated_states").sorted(), GATED_STATES.map { it.name }.sorted(), "gated states")
+        val approvers = doc.obj("trust").arr("approvers").map { unhex(it as String) }
+        val contract = parseContract(doc.obj("contract"))
+        val cases = doc.arr("evidence_cases").map { it.asMap() }
+        assertEquals(12, cases.size, "evidence case count changed: regenerate and review lifecycle.json")
+        for (c in cases) {
+            val name = c.str("name")
+            val registry = ModuleRegistry(approvers = approvers, threshold = threshold)
+            registry.register(contract, LifecycleState.valueOf(c.str("initial")))
+            val shadow = c.arr("shadow").map { record(it.asMap()) }
+            val result = registry.promote(
+                "m.lc",
+                LifecycleState.valueOf(c.str("from")),
+                LifecycleState.valueOf(c.str("to")),
+                shadow,
+                unhex(c.str("approver_signature")),
+            )
+            assertEquals(c.bool("accepted"), result.accepted, "$name: accepted")
+            assertEquals(c["code"] as String?, result.code, "$name: code")
+            assertEquals(LifecycleState.valueOf(c.str("state_after")), registry.state("m.lc"), "$name: state")
+        }
+    }
+
     @Test
     fun statesMatchReference() {
         val names = load("lifecycle").strs("states")
