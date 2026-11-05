@@ -1,6 +1,8 @@
 """Desktop v1.8.1 — bundle path feedback, Active Organism badge, generative soak."""
+
 from __future__ import annotations
 
+import contextlib
 import gc
 import os
 from pathlib import Path
@@ -10,11 +12,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
-
 from organism_desktop.app import MainWindow
 from organism_desktop.service import DESKTOP_VERSION, DesktopService
+from PySide6.QtCore import QObject
+from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
 
 
 @pytest.fixture(scope="module")
@@ -137,7 +138,7 @@ def test_generative_evolve_promote_rollback_soak(
     for i in range(n):
         drafted = svc.evolve_organism_code(f"soak Organism cycle {i}", auto_promote=True)
         assert drafted["ok"], drafted
-        bid = drafted["bundle"]["bundle_id"]
+        assert "bundle_id" in drafted["bundle"]
         assert drafted["bundle"]["may_control"] is True
         mid = (drafted.get("runtime") or {}).get("hot_register", {}).get("module_id")
         assert mid, drafted.get("runtime")
@@ -187,16 +188,12 @@ def test_generative_ui_soak_offscreen(qapp, tmp_path: Path):
         # select last row if any
         if bundles:
             panel.code_table.selectRow(panel.code_table.rowCount() - 1)
-            try:
+            # gate may refuse if already promoted via draft path; continue
+            with contextlib.suppress(Exception):
                 panel._code_promote()
-            except Exception:
-                # gate may refuse if already promoted via draft path; continue
-                pass
             qapp.processEvents()
-            try:
+            with contextlib.suppress(Exception):
                 panel._code_rollback()
-            except Exception:
-                pass
             qapp.processEvents()
         if i % 4 == 0:
             panel.looks_kind.setCurrentText("theme")

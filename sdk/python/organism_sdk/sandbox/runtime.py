@@ -1,4 +1,5 @@
 """OrganismSandbox — native runtime containment for self + child work."""
+
 from __future__ import annotations
 
 import json
@@ -99,7 +100,9 @@ class OrganismSandbox:
         result = jail.run(argv, env=env, cwd=cwd, input_bytes=input_bytes)
         self.audit.record(
             SandboxAuditEvent(
-                action="refuse" if result.refused else ("timeout" if result.timed_out else ("ok" if result.ok else "error")),
+                action="refuse"
+                if result.refused
+                else ("timeout" if result.timed_out else ("ok" if result.ok else "error")),
                 label=pol.label,
                 ok=result.ok and not result.refused,
                 detail=result.refused or (result.stderr[:500] if result.stderr else ""),

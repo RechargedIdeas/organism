@@ -1,4 +1,5 @@
 """Sandbox audit log — optional TraceEmitter integration."""
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +26,7 @@ class SandboxAuditEvent:
     namespaces_used: list[str] = field(default_factory=list)
     degraded: list[str] = field(default_factory=list)
     duration_ms: float | None = None
-    emitted_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    emitted_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
