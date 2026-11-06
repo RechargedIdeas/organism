@@ -1,0 +1,59 @@
+{
+  "accuracy_ci95_seed0": [
+    0.906,
+    0.9829
+  ],
+  "batch_rows_per_s": 4.5,
+  "dim": 1024,
+  "folds": 5,
+  "host": {
+    "cpu_count": 12,
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+    "python": "3.11.9",
+    "torch": "2.15.0+cpu",
+    "torch_threads": 4
+  },
+  "kind": "sentence",
+  "latency_ms": {
+    "max": 533.583,
+    "p50": 291.437,
+    "p95": 384.308
+  },
+  "license": "apache-2.0",
+  "load_s": 10.268,
+  "name": "qwen3-embedding-0.6b",
+  "params": 595776512,
+  "peak_rss_mb": 2807.4,
+  "probe_parameters": 3075,
+  "repo": "Qwen/Qwen3-Embedding-0.6B",
+  "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "rows": 117,
+  "scores": {
+    "accuracy": {
+      "mean": 0.9287749287749287,
+      "std": 0.017562433056891657
+    },
+    "macro_f1": {
+      "mean": 0.9182816758305558,
+      "std": 0.02045254143569674
+    },
+    "recall_extractor": {
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recall_intent_classifier": {
+      "mean": 0.8620689655172414,
+      "std": 0.04876598490941706
+    },
+    "recall_unsure": {
+      "mean": 0.894308943089431,
+      "std": 0.02299534247761132
+    },
+    "wrong_route": {
+      "mean": 0.03703703703703704,
+      "std": 0.008058196936598833
+    }
+  },
+  "seeds": 3
+}

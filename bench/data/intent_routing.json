@@ -1,0 +1,821 @@
+[
+  {
+    "id": "r001",
+    "query": "Pull the email addresses out of this list: ann@a.io and ben@b.io",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r002",
+    "query": "Extract every email address from the contact sheet: cy@c.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r003",
+    "query": "Which email addresses are in this export? dee@d.net and eli@e.net",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r004",
+    "query": "Get the email address out of this badge scan: fay@f.com",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r005",
+    "query": "Pull out the email addresses from the support log: gus@g.dev",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r006",
+    "query": "List the email addresses found in this paragraph: hal@h.co",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r007",
+    "query": "Find the email addresses in this spreadsheet column: ivy@i.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r008",
+    "query": "Take the email address out of this business card text: jay@j.biz",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r009",
+    "query": "Pick out each email address from this message: kay@k.app",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r010",
+    "query": "Dig the email addresses out of these notes: lou@l.us",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r011",
+    "query": "Copy the email address from this footer: moe@m.edu",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r012",
+    "query": "Pull the email address out of this quoted reply: nia@n.gov",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r013",
+    "query": "Open a ticket to change my email address",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r014",
+    "query": "Our email address format needs to change next quarter",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r015",
+    "query": "Which email address should I use for the vendor account",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r016",
+    "query": "What makes a good email address for a small business",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r017",
+    "query": "My email address was hacked, so what do I do now",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r018",
+    "query": "Update my email address on the staff directory",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r019",
+    "query": "Please reset the email address on the shared mailbox",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r020",
+    "query": "Why did my email address bounce this morning",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r021",
+    "query": "Create an email address alias for the sales team",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r022",
+    "query": "Switch the email address on the billing account to finance",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r023",
+    "query": "Is an email address enough to log in to this portal",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r024",
+    "query": "Help me choose a new email address for my blog",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r025",
+    "query": "Remind me to email the invoice to finance tomorrow",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r026",
+    "query": "Please email the signed contract to the client",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_email_context.json"
+  },
+  {
+    "id": "r027",
+    "query": "Pull the email address out of this signature: jo@park.dev",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r028",
+    "query": "Which email address appears in this note: kim@lab.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r029",
+    "query": "Get the email address from this header: ana@corp.com",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r030",
+    "query": "Extract the email address from the invoice text: billing@shop.io",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r031",
+    "query": "List every email address mentioned in this thread: lee@mail.net and ray@mail.net",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r032",
+    "query": "Find the email address in the memo: sam@firm.co",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r033",
+    "query": "Pull out the email address from this form: pat@home.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r034",
+    "query": "Send an email address change request to the help desk",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r035",
+    "query": "What is the best email address format for a company",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r036",
+    "query": "Set up a new email address for the new hire",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r037",
+    "query": "My email address changed, so update my profile",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r038",
+    "query": "Remind me to email the report at five",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r039",
+    "query": "Summarize the email address policy for new staff",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_email_recall.json"
+  },
+  {
+    "id": "r040",
+    "query": "Please book a dentist appointment for Thursday afternoon",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r041",
+    "query": "Remind me to send the invoice at five",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r042",
+    "query": "Can you give me a summary of this report",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r043",
+    "query": "Translate this paragraph into Spanish",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r044",
+    "query": "I need a calendar invite for the planning meeting",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r045",
+    "query": "Don't forget to water the plants tomorrow",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r046",
+    "query": "Shorten this text to two sentences",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r047",
+    "query": "Put the quarterly review on my calendar",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r048",
+    "query": "Pull the email addresses out of this list: a@x.io and b@y.org",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r049",
+    "query": "Extract every date from the notes: 2024-01-15 and 2024-03-02",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r050",
+    "query": "List the numbers in this line: 7, 8 and 9.5",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r051",
+    "query": "Find dates in the contract: 2026-05-01",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r052",
+    "query": "Get the numbers from the receipt, the total is 14.20",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r053",
+    "query": "Extract the emails from this thread: x@z.com",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r054",
+    "query": "Find the numbers mentioned in the memo: 3 and 11",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r055",
+    "query": "Which dates appear in the log: 2025-02-14",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r056",
+    "query": "Find me a good hiking trail near the lake",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r057",
+    "query": "What is your favorite color",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r058",
+    "query": "Write a poem about the sea",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r059",
+    "query": "How many moons does Mars have",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r060",
+    "query": "Send an email to my manager about the delay",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r061",
+    "query": "Good evening, nice to see you",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r062",
+    "query": "Explain how photosynthesis works",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r063",
+    "query": "Find a good recipe for dinner",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_heldout.json"
+  },
+  {
+    "id": "r064",
+    "query": "Which email addresses appear in the attached log? fay@f.net",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r065",
+    "query": "What email addresses are listed in this contact export? gil@g.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r066",
+    "query": "Which email addresses show up in this thread? hal@h.io and ian@i.io",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r067",
+    "query": "Are there any email addresses in this document? jan@j.dev",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r068",
+    "query": "Which email addresses are in the signature block below? kip@k.net",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r069",
+    "query": "What email addresses does this message contain? oz@o.com",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r070",
+    "query": "Which email addresses are in this file? nia@n.org",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r071",
+    "query": "Email addresses in this export, please: ros@r.me",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r072",
+    "query": "Which email addresses should we retire after the merger?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r073",
+    "query": "Which email addresses are allowed to post to the all-staff list?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r074",
+    "query": "What email addresses are best for a monthly newsletter?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r075",
+    "query": "Are there any email addresses that bounced last week?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r076",
+    "query": "Are email addresses case sensitive in most mail systems?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r077",
+    "query": "Which email address should the new hire get?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r078",
+    "query": "Update the email addresses in this directory for the new hire.",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r079",
+    "query": "Why do some email addresses in this system look invalid?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r080",
+    "query": "Do email addresses need a domain part to be valid?",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r081",
+    "query": "Please delete the old email addresses from the staff directory.",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r082",
+    "query": "Please email the signed contract to the client.",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_recall_fresh.json"
+  },
+  {
+    "id": "r083",
+    "query": "Schedule a meeting with the design team on Monday",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r084",
+    "query": "Please book an appointment for next week",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r085",
+    "query": "Remind me to call the bank tomorrow",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r086",
+    "query": "Don't forget to water the plants",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r087",
+    "query": "Summarize this report in three sentences",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r088",
+    "query": "Give me a tldr of the release notes",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r089",
+    "query": "Translate this paragraph into French",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r090",
+    "query": "Can you translate the menu in Spanish",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r091",
+    "query": "Add the standup to my calendar",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r092",
+    "query": "Shorten the abstract please",
+    "form": "pattern_recognition",
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r093",
+    "query": "Set a reminder for the dentist at noon",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r094",
+    "query": "Put the review meeting on the calendar",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r095",
+    "query": "Summary of the incident timeline, please",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r096",
+    "query": "translate the greeting in french",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r097",
+    "query": "book a table for two",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r098",
+    "query": "Remember to submit the expense form",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r099",
+    "query": "Find a time for the meeting and remind the team",
+    "form": null,
+    "label": "intent_classifier",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r100",
+    "query": "Extract all dates from the contract: signed 2026-01-15, renewed 2027-01-15",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r101",
+    "query": "Find the email addresses in this thread: ana@example.org and bo@example.net",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r102",
+    "query": "Extract the numbers 12, 7.5 and 300 from the table",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r103",
+    "query": "Find dates in the minutes: 2025-06-02",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r104",
+    "query": "Extract every number in the sentence about 4 cats and 2 dogs",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r105",
+    "query": "Find the emails in the signature block: sales@example.com",
+    "form": "feature_extraction",
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r106",
+    "query": "Extract the dates from 2024-03-10 onward",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r107",
+    "query": "Find the numbers in this invoice: 1200 and 45.90",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r108",
+    "query": "Please extract emails from the list: team@example.com",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r109",
+    "query": "Find all dates mentioned: 2023-12-31",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r110",
+    "query": "Extract numbers: 17 and 99",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r111",
+    "query": "Can you find the email for the vendor, it is vendor@example.io",
+    "form": null,
+    "label": "extractor",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r112",
+    "query": "Hello there, how are you today",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r113",
+    "query": "What is the weather like in Lisbon",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r114",
+    "query": "Extract and remind me",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r115",
+    "query": "Tell me a joke about cats",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r116",
+    "query": "Good morning",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  },
+  {
+    "id": "r117",
+    "query": "Find the best coffee shop nearby",
+    "form": null,
+    "label": "unsure",
+    "source": "moa_routing_synthetic.json"
+  }
+]

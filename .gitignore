@@ -5,6 +5,10 @@ dist/
 *.egg-info/
 *.whl
 
+# Encoder benchmark: downloaded weights and local run output. The lock file and baseline are kept.
+bench/models/
+bench/results/
+
 # Generated proto
 sdk/python/organism_sdk/_proto/
 sdk/rust/organism-proto/src/gen/

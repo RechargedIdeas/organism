@@ -1,0 +1,56 @@
+{
+  "lexical_router": {
+    "accuracy": {
+      "mean": 0.9743589743589743,
+      "std": 0.0
+    },
+    "macro_f1": {
+      "mean": 0.9751409640896785,
+      "std": 0.0
+    },
+    "recall_extractor": {
+      "mean": 0.9574468085106383,
+      "std": 0.0
+    },
+    "recall_intent_classifier": {
+      "mean": 0.9655172413793104,
+      "std": 0.0
+    },
+    "recall_unsure": {
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "wrong_route": {
+      "mean": 0.0,
+      "std": 0.0
+    }
+  },
+  "lexical_router_note": "Rules were tuned on these rows, so this score is optimistic.",
+  "majority_class": {
+    "accuracy": {
+      "mean": 0.4017094017094018,
+      "std": 5.551115123125783e-17
+    },
+    "macro_f1": {
+      "mean": 0.19105691056910568,
+      "std": 0.0
+    },
+    "recall_extractor": {
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recall_intent_classifier": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "recall_unsure": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "wrong_route": {
+      "mean": 0.5982905982905983,
+      "std": 0.0
+    }
+  },
+  "rows": 117
+}

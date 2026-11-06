@@ -1,0 +1,59 @@
+{
+  "accuracy_ci95_seed0": [
+    0.8718,
+    0.9658
+  ],
+  "batch_rows_per_s": 209.2,
+  "dim": 384,
+  "folds": 5,
+  "host": {
+    "cpu_count": 12,
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+    "python": "3.11.9",
+    "torch": "2.15.0+cpu",
+    "torch_threads": 4
+  },
+  "kind": "sentence",
+  "latency_ms": {
+    "max": 522.891,
+    "p50": 14.648,
+    "p95": 21.835
+  },
+  "license": "apache-2.0",
+  "load_s": 8.302,
+  "name": "minilm-l6",
+  "params": 22713216,
+  "peak_rss_mb": 522.6,
+  "probe_parameters": 1155,
+  "repo": "sentence-transformers/all-MiniLM-L6-v2",
+  "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "rows": 117,
+  "scores": {
+    "accuracy": {
+      "mean": 0.8974358974358975,
+      "std": 0.030419026359063593
+    },
+    "macro_f1": {
+      "mean": 0.8855301875783241,
+      "std": 0.034207540627745225
+    },
+    "recall_extractor": {
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recall_intent_classifier": {
+      "mean": 0.8735632183908045,
+      "std": 0.05860941969646877
+    },
+    "recall_unsure": {
+      "mean": 0.7967479674796748,
+      "std": 0.04599068495522259
+    },
+    "wrong_route": {
+      "mean": 0.07122507122507123,
+      "std": 0.016116393873197663
+    }
+  },
+  "seeds": 3
+}

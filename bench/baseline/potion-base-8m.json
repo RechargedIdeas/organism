@@ -1,0 +1,57 @@
+{
+  "accuracy_ci95_seed0": [
+    0.8205,
+    0.9402
+  ],
+  "batch_rows_per_s": 33704.0,
+  "dim": 256,
+  "folds": 5,
+  "host": {
+    "cpu_count": 12,
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+    "python": "3.11.9"
+  },
+  "kind": "static",
+  "latency_ms": {
+    "max": 0.323,
+    "p50": 0.186,
+    "p95": 0.225
+  },
+  "license": "mit",
+  "load_s": 0.59,
+  "name": "potion-base-8m",
+  "params": 7559168,
+  "peak_rss_mb": 95.6,
+  "probe_parameters": 771,
+  "repo": "minishlab/potion-base-8M",
+  "revision": "bf8b056651a2c21b8d2565580b8569da283cab23",
+  "rows": 117,
+  "scores": {
+    "accuracy": {
+      "mean": 0.8660968660968661,
+      "std": 0.014527121121346964
+    },
+    "macro_f1": {
+      "mean": 0.8563961654775082,
+      "std": 0.01648301465504572
+    },
+    "recall_extractor": {
+      "mean": 0.9361702127659575,
+      "std": 0.017372267679313345
+    },
+    "recall_intent_classifier": {
+      "mean": 0.8160919540229884,
+      "std": 0.043007556169815414
+    },
+    "recall_unsure": {
+      "mean": 0.8211382113821138,
+      "std": 0.01149767123880561
+    },
+    "wrong_route": {
+      "mean": 0.07407407407407408,
+      "std": 0.00805819693659883
+    }
+  },
+  "seeds": 3
+}

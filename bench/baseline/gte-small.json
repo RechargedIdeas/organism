@@ -1,0 +1,59 @@
+{
+  "accuracy_ci95_seed0": [
+    0.8547,
+    0.9573
+  ],
+  "batch_rows_per_s": 108.5,
+  "dim": 384,
+  "folds": 5,
+  "host": {
+    "cpu_count": 12,
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+    "python": "3.11.9",
+    "torch": "2.15.0+cpu",
+    "torch_threads": 4
+  },
+  "kind": "sentence",
+  "latency_ms": {
+    "max": 42.449,
+    "p50": 25.506,
+    "p95": 35.771
+  },
+  "license": "mit",
+  "load_s": 8.215,
+  "name": "gte-small",
+  "params": 33360000,
+  "peak_rss_mb": 563.7,
+  "probe_parameters": 1155,
+  "repo": "thenlper/gte-small",
+  "revision": "17e1f347d17fe144873b1201da91788898c639cd",
+  "rows": 117,
+  "scores": {
+    "accuracy": {
+      "mean": 0.8917378917378919,
+      "std": 0.014527121121346964
+    },
+    "macro_f1": {
+      "mean": 0.880643324987703,
+      "std": 0.01578490269167351
+    },
+    "recall_extractor": {
+      "mean": 0.9858156028368793,
+      "std": 0.010029883421085795
+    },
+    "recall_intent_classifier": {
+      "mean": 0.9080459770114943,
+      "std": 0.032510656606278054
+    },
+    "recall_unsure": {
+      "mean": 0.7723577235772359,
+      "std": 0.02299534247761132
+    },
+    "wrong_route": {
+      "mean": 0.07977207977207977,
+      "std": 0.00805819693659883
+    }
+  },
+  "seeds": 3
+}
