@@ -24,12 +24,12 @@ def test_v15_desktop_gate():
         "envvars",
         "docs",
     ]
-    assert DESKTOP_VERSION == "1.10.0"
+    assert DESKTOP_VERSION == "1.11.0"
     svc = DesktopService.create()
     st = svc.home_status()
     assert st["cpu_everywhere"] is True
     assert st["device"]["runtime"] == "CPU_GENERAL"
-    assert st["desktop_version"] == "1.10.0"
+    assert st["desktop_version"] == "1.11.0"
 
     # Registry round-trip
     reg = svc.register_core_module("deterministic")

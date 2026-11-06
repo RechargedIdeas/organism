@@ -261,6 +261,10 @@ gates:
     tier: fast
     command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v19_generative_cli.py"
 
+  - id: v111:oc_fixes
+    tier: fast
+    command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v111_oc_fixes.py"
+
   - id: v110:bare_sandbox
     tier: fast
     command: "PYTHONPATH=sdk/python:modules:. {python} -m pytest -q sdk/python/tests/test_v110_bare_sandbox.py"

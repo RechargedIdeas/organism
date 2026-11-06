@@ -40,7 +40,9 @@ def _base() -> SubstrateContract:
 
 
 def _with_tier(c: SubstrateContract, tier: ReliabilityTier) -> SubstrateContract:
-    return replace(c, safety=replace(c.safety, reliability_tier=tier))
+    # OC-3: l4_terminal is only valid on T0; clear it when the test retargets the tier.
+    l4 = bool(getattr(c.safety, "l4_terminal", False)) and tier is ReliabilityTier.T0_DETERMINISTIC
+    return replace(c, safety=replace(c.safety, reliability_tier=tier, l4_terminal=l4))
 
 
 def _within(c: SubstrateContract) -> MeasuredMetabolics:

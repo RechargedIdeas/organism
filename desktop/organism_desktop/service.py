@@ -61,7 +61,7 @@ from organism_desktop.catalog import DESKTOP_BUILTIN_IDS, catalog_as_dicts, find
 
 logger = logging.getLogger(__name__)
 
-DESKTOP_VERSION = "1.10.0"
+DESKTOP_VERSION = "1.11.0"
 
 CoreKind = Literal["deterministic", "learned"]
 

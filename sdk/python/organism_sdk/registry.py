@@ -55,6 +55,10 @@ _PROMOTE_ORDER = [
     "RETIRED",
 ]
 _EXTENDED_STATES = frozenset({"DEVELOPMENT", "SELF_TERMINATING", "SUCCEEDED", "DEGRADED"})
+# OC-1: demoted / terminal states are not "at least DELIBERATION" for routing.
+_NON_ROUTABLE_STATES = frozenset({"DEPRECATED", "RETIRED"})
+# States the router may dispatch (OC-1). EXPLORATION/DEVELOPMENT serve exploration sinks.
+ROUTABLE_STATES: frozenset[str] = frozenset({"DELIBERATION", "EXPLORATION", "DEVELOPMENT"})
 
 
 @dataclass
@@ -66,6 +70,11 @@ class ModuleHandle:
     state: LifecycleState
     contract_digest: bytes
     hardware_requirement: str = "NONE"  # IMP-17
+    # OC-3: contract-declared L4 terminal eligibility (T0 GOVERNANCE DETERMINISTIC + RULE_TRACE).
+    l4_terminal: bool = False
+    # OC-7: metabolic hints copied from the contract for latency-aware ranking.
+    latency_p95_ms: float = 0.0
+    energy_per_inference_j: float = 0.0
 
 
 @dataclass
@@ -329,11 +338,14 @@ class RegistryClient:
                 ):
                     continue
                 if filter.min_lifecycle_state is not None:
+                    # OC-1: DEPRECATED/RETIRED never satisfy a live min-state filter.
+                    if e.state in _NON_ROUTABLE_STATES and filter.min_lifecycle_state not in _NON_ROUTABLE_STATES:
+                        continue
 
                     def _rank(s: str) -> int:
                         if s == "DEVELOPMENT":
                             return _PROMOTE_ORDER.index("EXPLORATION")
-                        if s in _EXTENDED_STATES:
+                        if s in _EXTENDED_STATES or s in _NON_ROUTABLE_STATES:
                             return -1
                         return _PROMOTE_ORDER.index(s)
 
@@ -345,6 +357,10 @@ class RegistryClient:
                     if hw is not None and hasattr(hw, "value")
                     else (str(hw) if hw else "NONE")
                 )
+                l4_flag = bool(getattr(e.contract.safety, "l4_terminal", False))
+                # Builtin deterministic engine remains L4-eligible for backward compatibility.
+                if mid == "deterministic_engine":
+                    l4_flag = True
                 out.append(
                     ModuleHandle(
                         module_id=mid,
@@ -354,6 +370,11 @@ class RegistryClient:
                         state=e.state,
                         contract_digest=e.contract_digest,
                         hardware_requirement=hw_s or "NONE",
+                        l4_terminal=l4_flag,
+                        latency_p95_ms=float(getattr(e.contract.metabolic, "latency_p95_ms", 0.0) or 0.0),
+                        energy_per_inference_j=float(
+                            getattr(e.contract.metabolic, "energy_per_inference_j", 0.0) or 0.0
+                        ),
                     )
                 )
         return out
@@ -495,6 +516,89 @@ class RegistryClient:
                     ],
                 )
         return HotSwapResponse(accepted=True)
+
+    def state(self, module_id: str) -> LifecycleState:
+        """Public lifecycle state accessor (OC-9). Raises KeyError when unknown."""
+        with self._lock:
+            return self._modules[module_id].state
+
+    def rollback(
+        self,
+        module_id: str,
+        to_state: LifecycleState,
+        *,
+        reason: str = "",
+        rollback_of_entry_id: str | None = None,
+        test_bypass_validation: bool = False,
+    ) -> PromoteResponse:
+        """Demote a module and emit a ROLLBACK lifecycle event (OC-2 / R-37).
+
+        Unlike ``promote``, this may move *down* the ladder (or from DEPRECATED back
+        onto it). ``rollback_of_entry_id`` links the audit entry to the promote it
+        undoes (LCT-12). Terminal RETIRED modules cannot roll back without bypass.
+        """
+        with self._lock:
+            entry = self._modules[module_id]
+            from_state = entry.state
+            if from_state == "RETIRED" and not test_bypass_validation:
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[
+                        ValidationIssue(
+                            Severity.ERROR,
+                            "rollback_from_retired",
+                            "from_state",
+                            "RETIRED modules cannot roll back",
+                        )
+                    ],
+                )
+            if to_state == from_state and not test_bypass_validation:
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[
+                        ValidationIssue(
+                            Severity.ERROR,
+                            "rollback_noop",
+                            "to_state",
+                            "rollback target equals current state",
+                        )
+                    ],
+                )
+            # Must be a demotion on the promote ladder, or leaving DEPRECATED/extended.
+            def _ladder_idx(s: str) -> int:
+                if s == "DEVELOPMENT":
+                    return _PROMOTE_ORDER.index("EXPLORATION")
+                if s in _PROMOTE_ORDER:
+                    return _PROMOTE_ORDER.index(s)
+                return -1
+
+            fi, ti = _ladder_idx(from_state), _ladder_idx(to_state)
+            demotion_ok = ti >= 0 and (fi < 0 or ti < fi)
+            if not demotion_ok and not test_bypass_validation:
+                return PromoteResponse(
+                    accepted=False,
+                    validation_issues=[
+                        ValidationIssue(
+                            Severity.ERROR,
+                            "invalid_rollback",
+                            "to_state",
+                            f"cannot roll back {from_state} -> {to_state}",
+                        )
+                    ],
+                )
+            entry.state = to_state
+        self._trace.emit_lifecycle(
+            LifecycleTraceEntry(
+                module_id=module_id,
+                from_state=from_state,
+                to_state=to_state,
+                event="rollback",
+                operation="ROLLBACK",
+                rollback_of_entry_id=rollback_of_entry_id,
+                reason=reason,
+            )
+        )
+        return PromoteResponse(accepted=True)
 
     def list_module_ids(self) -> list[str]:
         with self._lock:

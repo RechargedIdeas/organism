@@ -282,6 +282,7 @@ class DeterministicEngine(OrganismModule):
                 requires_causal_certificate=False,
                 requires_cross_check=False,
                 max_safety_tier=MaxSafetyTier.CRITICAL,
+                l4_terminal=True,
             ),
             lifecycle=Lifecycle(hot_swap_supported=False, shadow_validation_required=False),
             capabilities=CapabilityScopes(

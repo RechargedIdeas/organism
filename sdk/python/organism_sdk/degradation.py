@@ -35,6 +35,27 @@ Q_P95_L4 = 250.0
 BYZ_COUNT_L4 = 3
 
 
+@dataclass(frozen=True)
+class DegradationThresholds:
+    """Configurable degradation thresholds (OC-6).
+
+    Mining rigs and other hot-by-design hosts pass a custom envelope so a fixed
+    L0 recovery at 50% thermal headroom does not pin them at L1.
+    """
+
+    alpha: float = ALPHA
+    delta_1: float = DELTA_1
+    delta_2: float = DELTA_2
+    thermal_l1: float = THERMAL_L1
+    thermal_l0: float = THERMAL_L0
+    gc_l3: float = GC_L3
+    gc_l4: float = GC_L4
+    mem_l4: float = MEM_L4
+    q_p95_l3: float = Q_P95_L3
+    q_p95_l4: float = Q_P95_L4
+    byz_count_l4: int = BYZ_COUNT_L4
+
+
 @dataclass
 class HealthSignals:
     h_m: dict[str, str] = field(default_factory=dict)  # module -> HEALTHY|DEGRADED|FAILED
@@ -49,8 +70,10 @@ class HealthSignals:
     trace_ok: bool = True
     det_ok: bool = True
     causal_ok: bool = True
-    neural_modules: tuple[str, ...] = ("learned_module_t2",)
-    leading_predictive: tuple[str, ...] = ("learned_module_t2",)
+    # OC-4: no Organism-specific module names by default. Callers must pass the
+    # modules they actually registered, or L0↔L1 neural triggers stay inert.
+    neural_modules: tuple[str, ...] = ()
+    leading_predictive: tuple[str, ...] = ()
 
 
 @dataclass
@@ -66,6 +89,7 @@ class DegradationMachine:
     t_down: dict[str, float] = field(default_factory=lambda: dict(T_DOWN))
     t_up: dict[str, float] = field(default_factory=lambda: dict(T_UP))
     _wall_origin: float | None = None
+    thresholds: DegradationThresholds = field(default_factory=DegradationThresholds)
 
     def advance(self, dt: float) -> None:
         self.now_s += dt
@@ -110,6 +134,7 @@ class DegradationMachine:
         prev = L
         td = self.t_down
         tu = self.t_up
+        th = self.thresholds
 
         def neural_degraded() -> bool:
             return any(s.h_m.get(m) == "DEGRADED" for m in s.neural_modules)
@@ -121,19 +146,19 @@ class DegradationMachine:
             return all(s.h_m.get(m, "HEALTHY") == "HEALTHY" for m in s.neural_modules)
 
         def neural_calib_ok(delta: float = 0.0) -> bool:
-            return all(s.c_m.get(m, 1.0) >= 1.0 - ALPHA + delta for m in s.neural_modules)
+            return all(s.c_m.get(m, 1.0) >= 1.0 - th.alpha + delta for m in s.neural_modules)
 
         def neural_calib_bad(delta: float) -> bool:
             # A0.1: c_m < 1 − α − δ_k (sign correction)
-            return all(s.c_m.get(m, 1.0) < 1.0 - ALPHA - delta for m in s.neural_modules)
+            return all(s.c_m.get(m, 1.0) < 1.0 - th.alpha - delta for m in s.neural_modules)
 
         new: Level | None = None
         trigger = ""
 
         if L == "L0":
             down = self._any_confirmed([
-                ("l0_thermal", s.thermal < THERMAL_L1, td["L1"]),
-                ("l0_calib", neural_calib_bad(DELTA_1) and bool(s.neural_modules), td["L1"]),
+                ("l0_thermal", s.thermal < th.thermal_l1, td["L1"]),
+                ("l0_calib", neural_calib_bad(th.delta_1) and bool(s.neural_modules), td["L1"]),
                 ("l0_hm", neural_degraded(), td["L1"]),
             ])
             if s.det_ok and s.trace_ok and down:
@@ -142,11 +167,11 @@ class DegradationMachine:
         elif L == "L1":
             down = self._any_confirmed([
                 ("l1_failed", neural_failed(), td["L2"]),
-                ("l1_calib2", neural_calib_bad(DELTA_2), td["L2"]),
+                ("l1_calib2", neural_calib_bad(th.delta_2), td["L2"]),
                 ("l1_causal", not s.causal_ok, td["L2"]),
             ])
             up = self._all_sustained([
-                ("l1_thermal", s.thermal > THERMAL_L0, tu["L1"]),
+                ("l1_thermal", s.thermal > th.thermal_l0, tu["L1"]),
                 ("l1_calib", neural_calib_ok(0.0), tu["L1"]),
                 ("l1_hm", neural_healthy(), tu["L1"]),
             ])
@@ -158,15 +183,15 @@ class DegradationMachine:
         elif L == "L2":
             down = self._confirmed(
                 "l2_gc",
-                (s.gc > GC_L3 or s.q_p95 > Q_P95_L3)
+                (s.gc > th.gc_l3 or s.q_p95 > th.q_p95_l3)
                 or all(
-                    s.h_m.get(m) == "FAILED" or s.c_m.get(m, 1.0) < 1.0 - ALPHA - DELTA_2
+                    s.h_m.get(m) == "FAILED" or s.c_m.get(m, 1.0) < 1.0 - th.alpha - th.delta_2
                     for m in s.leading_predictive
                 ),
                 td["L3"],
             )
             up = self._all_sustained([
-                ("l2_calib", any(s.c_m.get(m, 0) >= 1 - ALPHA for m in s.neural_modules), tu["L2"]),
+                ("l2_calib", any(s.c_m.get(m, 0) >= 1 - th.alpha for m in s.neural_modules), tu["L2"]),
                 ("l2_hm", neural_healthy(), tu["L2"]),
                 ("l2_causal", s.causal_ok, tu["L2"]),
             ])
@@ -179,13 +204,13 @@ class DegradationMachine:
             down = self._any_confirmed([
                 ("l3_trace", not s.trace_ok, td["L4"]),
                 ("l3_det", not s.det_ok, td["L4"]),
-                ("l3_gc", s.gc > GC_L4 or s.mem > MEM_L4, td["L4"]),
-                ("l3_qp", s.q_p95 > Q_P95_L4, td["L4"]),
-                ("l3_byz", s.byz_count >= BYZ_COUNT_L4, td["L4"]),
+                ("l3_gc", s.gc > th.gc_l4 or s.mem > th.mem_l4, td["L4"]),
+                ("l3_qp", s.q_p95 > th.q_p95_l4, td["L4"]),
+                ("l3_byz", s.byz_count >= th.byz_count_l4, td["L4"]),
             ])
             up = self._all_sustained([
                 ("l3_ok", s.trace_ok and s.det_ok, tu["L3"]),
-                ("l3_gc", s.gc < GC_L3 and s.q_p95 < Q_P95_L3, tu["L3"]),
+                ("l3_gc", s.gc < th.gc_l3 and s.q_p95 < th.q_p95_l3, tu["L3"]),
                 ("l3_byz", not s.byz, tu["L3"]),
             ])
             if down:
@@ -196,8 +221,8 @@ class DegradationMachine:
         elif L == "L4":
             up = self._all_sustained([
                 ("l4_ok", s.trace_ok and s.det_ok, tu["L4"]),
-                ("l4_gc", s.gc < GC_L3 and s.mem < MEM_L4, tu["L4"]),
-                ("l4_qp", s.q_p95 < Q_P95_L3, tu["L4"]),
+                ("l4_gc", s.gc < th.gc_l3 and s.mem < th.mem_l4, tu["L4"]),
+                ("l4_qp", s.q_p95 < th.q_p95_l3, tu["L4"]),
                 ("l4_byz", not s.byz, tu["L4"]),
             ]) and self.human_ack
             if up:
@@ -236,7 +261,7 @@ class FaultInjector:
 
     def restore_module(self, module_id: str) -> None:
         self.machine.signals.h_m[module_id] = "HEALTHY"
-        self.machine.signals.c_m[module_id] = 1.0 - ALPHA + 0.05
+        self.machine.signals.c_m[module_id] = 1.0 - self.machine.thresholds.alpha + 0.05
 
     def corrupt_trace_sink(self) -> None:
         self.machine.signals.trace_ok = False
@@ -246,5 +271,5 @@ class FaultInjector:
 
     def byzantine_strike(self) -> None:
         self.machine.signals.byz_count += 1
-        if self.machine.signals.byz_count >= BYZ_COUNT_L4:
+        if self.machine.signals.byz_count >= self.machine.thresholds.byz_count_l4:
             self.machine.signals.byz = True

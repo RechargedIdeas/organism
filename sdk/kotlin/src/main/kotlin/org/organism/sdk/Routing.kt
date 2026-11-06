@@ -44,6 +44,8 @@ data class RouteModule(
     val role: String,
     val tier: String,
     val hardware: String = "NONE",
+    /** OC-3: contract-declared L4 terminal eligibility. */
+    val l4Terminal: Boolean = false,
 )
 
 /** Result of [Routing.eligibility]: modules that may be ranked, and an exclusion for each one that may not. Registry order. */
@@ -166,7 +168,7 @@ object Routing {
                 m.tier !in allowedTiers -> excluded += Excluded(m.moduleId, "tier_ineligible", mapOf("tier" to m.tier))
                 safetyTier == "critical" && m.tier in LEARNED ->
                     excluded += Excluded(m.moduleId, "critical_forbids_learned")
-                level == "L4" && m.moduleId != "deterministic_engine" ->
+                level == "L4" && !m.l4Terminal && m.moduleId != "deterministic_engine" ->
                     excluded += Excluded(m.moduleId, "l4_deterministic_only")
                 (health[m.moduleId] ?: "HEALTHY") == "FAILED" -> excluded += Excluded(m.moduleId, "health_failed")
                 hw != "NONE" && hw !in availableHardware -> excluded += Excluded(
@@ -182,9 +184,19 @@ object Routing {
         return Eligibility(eligible, excluded)
     }
 
-    /** SHA-256 of the canonical JSON of the policy content (reference `compute_policy_digest`, gap D2). */
-    fun policyDigest(policyId: String, version: String, formToRoles: Map<String, List<String>>): ByteArray {
-        val body = mapOf("policy_id" to policyId, "version" to version, "form_to_roles" to formToRoles)
+    /** SHA-256 of the canonical JSON of the policy content (reference `compute_policy_digest`, gap D2 / OC-7). */
+    fun policyDigest(
+        policyId: String,
+        version: String,
+        formToRoles: Map<String, List<String>>,
+        ranking: String = "trust_first",
+    ): ByteArray {
+        val body = mapOf(
+            "policy_id" to policyId,
+            "version" to version,
+            "form_to_roles" to formToRoles,
+            "ranking" to ranking,
+        )
         return MessageDigest.getInstance("SHA-256").digest(Canonical.bytes(body))
     }
 

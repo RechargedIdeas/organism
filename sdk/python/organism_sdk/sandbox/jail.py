@@ -75,7 +75,10 @@ def has_resource_module() -> bool:
 
 
 def capabilities() -> dict[str, Any]:
-    """What this host can offer for jailing."""
+    """What this host can offer for jailing.
+
+    OC-5/OC-10: callers must read this report — never assume isolation or quotas.
+    """
     linux = sys.platform.startswith("linux")
     has_resource = has_resource_module()
     has_unshare = False
@@ -88,15 +91,40 @@ def capabilities() -> dict[str, Any]:
         except Exception:
             logger.debug("capabilities failed", exc_info=True)
             has_unshare = False
+    has_affinity = hasattr(os, "sched_setaffinity")
+    has_nice = hasattr(os, "nice")
+    has_cgroup_cpu = False
+    if linux:
+        try:
+            has_cgroup_cpu = Path("/sys/fs/cgroup/cgroup.controllers").is_file()
+        except Exception:
+            logger.debug("cgroup probe failed", exc_info=True)
+            has_cgroup_cpu = False
+    has_seccomp = False
+    try:
+        import seccomp  # type: ignore[import-not-found]  # noqa: F401
+
+        has_seccomp = True
+    except Exception:
+        has_seccomp = False
     return {
         "platform": platform.system(),
         "linux": linux,
         "rlimits": has_resource,
         "unshare": has_unshare,
+        "network_namespace": bool(linux and has_unshare),
+        "user_namespace": bool(linux and has_unshare),
+        "pid_namespace": bool(linux and has_unshare),
+        "cpu_affinity": has_affinity,
+        "nice": has_nice,
+        "cgroup_cpu_quota": has_cgroup_cpu,
+        "seccomp": has_seccomp,
         "spawn": True,
         "cpu_everywhere": True,
         "docker_required": False,
         "native_sandbox": True,
+        # Honest: isolation is only real when the jail reports namespaces_used including net.
+        "claims_isolation_without_report": False,
     }
 
 
@@ -263,6 +291,32 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int, report_fd: int | None = 
                 _note(report_fd, "RLIMIT_NPROC")
             except Exception:  # noqa: BLE001, S110
                 pass
+        # OC-10: affinity / nice / seccomp — best-effort, noted when applied.
+        if policy.cpu_affinity and hasattr(os, "sched_setaffinity"):
+            try:
+                os.sched_setaffinity(0, set(int(c) for c in policy.cpu_affinity))
+                _note(report_fd, "cpu_affinity")
+            except Exception:  # noqa: BLE001, S110
+                pass
+        if policy.nice is not None and hasattr(os, "nice"):
+            try:
+                os.nice(int(policy.nice))
+                _note(report_fd, "nice")
+            except Exception:  # noqa: BLE001, S110
+                pass
+        if policy.seccomp_profile == "minimal":
+            try:
+                import seccomp  # type: ignore[import-not-found]
+
+                f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
+                # Deny a small set of high-risk calls; anything else remains allowed.
+                for name in ("reboot", "swapon", "swapoff", "mount", "umount2", "kexec_load"):
+                    with contextlib.suppress(Exception):
+                        f.add_rule(seccomp.ERRNO(1), name)
+                f.load()
+                _note(report_fd, "seccomp_minimal")
+            except Exception:  # noqa: BLE001, S110
+                pass
 
     def _preexec() -> None:
         try:
@@ -274,18 +328,38 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int, report_fd: int | None = 
 
 
 def _plan_namespaces(policy: SandboxPolicy) -> tuple[int, list[str], list[str]]:
-    """Return (flags, attempted_names, degraded_notes) for parent-side reporting."""
+    """Return (flags, attempted_names, degraded_notes) for parent-side reporting.
+
+    OC-5: when ``allow_network`` is False (or ``isolate_network`` is True), plan a
+    user+net namespace without requiring ``ORGANISM_JAIL_FULL_NS``. Pid still needs
+    the full-ns env (or an explicit future flag). When the host cannot isolate,
+    we report loudly via ``degraded`` — never claim isolation.
+    """
     caps = capabilities()
     degraded: list[str] = []
     attempted: list[str] = []
     flags = 0
+    want_net = bool(policy.enforce_network or policy.effective_isolate_network())
+    full = os.environ.get("ORGANISM_JAIL_FULL_NS", "").lower() in ("1", "true", "yes")
+    if full:
+        want_net = True
+
     if not policy.use_namespaces:
-        return 0, [], []
+        if want_net:
+            degraded.append("network_not_namespaced")
+            degraded.append("isolation_not_claimed")
+        return 0, [], degraded
     if not caps["linux"]:
         degraded.append("namespaces_unavailable_non_linux")
+        if want_net:
+            degraded.append("network_not_namespaced")
+            degraded.append("isolation_not_claimed")
         return 0, [], degraded
     if not caps["unshare"]:
         degraded.append("unshare_unavailable")
+        if want_net:
+            degraded.append("network_not_namespaced")
+            degraded.append("isolation_not_claimed")
         return 0, [], degraded
 
     CLONE_NEWUSER = 0x10000000
@@ -293,16 +367,13 @@ def _plan_namespaces(policy: SandboxPolicy) -> tuple[int, list[str], list[str]]:
     CLONE_NEWPID = 0x20000000
     CLONE_NEWNET = 0x40000000
     wanted = [("user", CLONE_NEWUSER), ("mount", CLONE_NEWNS)]
-    full = os.environ.get("ORGANISM_JAIL_FULL_NS", "").lower() in ("1", "true", "yes")
     if full:
         wanted.append(("pid", CLONE_NEWPID))
-    if full or policy.enforce_network:
+    if want_net:
         wanted.append(("net", CLONE_NEWNET))
     for name, flag in wanted:
         attempted.append(name)
         flags |= flag
-    if not policy.allow_network and "net" not in attempted:
-        degraded.append("network_not_namespaced")
     return flags, attempted, degraded
 
 
@@ -463,6 +534,33 @@ class ProcessJail:
 
         ns_flags, ns_attempted, degraded = _plan_namespaces(self.policy)
         caps = capabilities()
+        # OC-5 fail-closed: refuse rather than run open when isolation was required.
+        if (
+            self.policy.require_network_isolation
+            and self.policy.effective_isolate_network()
+            and "net" not in ns_attempted
+        ):
+            return JailResult(
+                ok=False,
+                refused=(
+                    "network isolation required but this host cannot create a network namespace; "
+                    f"capabilities={{{', '.join(f'{k}={caps.get(k)}' for k in ('linux','unshare','network_namespace'))}}}"
+                ),
+                degraded=degraded + ["isolation_not_claimed"],
+                namespaces_attempted=ns_attempted,
+            )
+        # OC-10: report unavailable CPU controls as degraded (never silent).
+        if self.policy.cpu_quota is not None and not caps.get("cgroup_cpu_quota"):
+            degraded.append("cpu_quota_unavailable")
+        if self.policy.cpu_affinity and not caps.get("cpu_affinity"):
+            degraded.append("cpu_affinity_unavailable")
+        if self.policy.nice is not None and not caps.get("nice"):
+            degraded.append("nice_unavailable")
+        if self.policy.seccomp_profile and not caps.get("seccomp"):
+            degraded.append("seccomp_unavailable")
+        if self.policy.devices:
+            # OC-11: interface only — mounting device nodes needs a mount ns + privileges.
+            degraded.append("devices_not_bound")
         planned_rlimits: list[str] = []
         if caps["rlimits"]:
             if self.policy.max_rss_mb:
@@ -548,9 +646,20 @@ class ProcessJail:
         # report lacks was not applied, so the run is partial. The program's own stderr does not count.
         reported = _read_report(report_r)
         rlimits_applied = [name for name in planned_rlimits if name in reported]
+        for extra in ("cpu_affinity", "nice", "seccomp_minimal"):
+            if extra in reported:
+                rlimits_applied.append(extra)
         ns_used = list(ns_attempted) if NAMESPACES_NOTE in reported else []
-        if len(rlimits_applied) < len(planned_rlimits) or (ns_attempted and not ns_used):
+        if len([r for r in rlimits_applied if r.startswith("RLIMIT_")]) < len(planned_rlimits) or (
+            ns_attempted and not ns_used
+        ):
             degraded.append("namespace_or_rlimit_partial")
+        # OC-5: if we wanted net isolation but did not get it, say so explicitly.
+        if self.policy.effective_isolate_network() and "net" not in ns_used:
+            if "network_not_namespaced" not in degraded:
+                degraded.append("network_not_namespaced")
+            if "isolation_not_claimed" not in degraded:
+                degraded.append("isolation_not_claimed")
         stderr = (stderr_b or b"").decode("utf-8", errors="replace")
 
         code = proc.returncode

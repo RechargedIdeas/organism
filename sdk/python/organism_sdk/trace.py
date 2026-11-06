@@ -70,6 +70,12 @@ class LifecycleTraceEntry:
     level: str | None = None
     on_drain_outcome: str | None = None  # started|completed|abandoned|killed
     on_drain_synthetic: bool = False
+    # OC-2 / R-37: distinguish failure-triggered rollback from ordinary demotion.
+    operation: str | None = None  # REGISTER|PROMOTE|ROLLBACK|...
+    entry_id: str | None = None
+    rollback_of_entry_id: str | None = None
+    reason: str = ""
+    validation_issues: list[Any] = field(default_factory=list)
     emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -136,13 +142,25 @@ class EvolutionTraceEntry:
 
 
 class V02TraceSink:
-    """Optional sink for v0.2 biological trace kinds (stub until G–I runtime)."""
+    """Optional sink for v0.2 biological trace kinds (stub until G–I runtime).
 
-    def __init__(self) -> None:
-        self.entries: list[Any] = []
+    OC-13: bounded ring buffer (``maxlen``) so a 24/7 consumer cannot leak memory.
+    """
+
+    def __init__(self, *, maxlen: int = 10_000) -> None:
+        from collections import deque
+
+        if maxlen <= 0:
+            raise ValueError("maxlen must be positive")
+        self.maxlen = maxlen
+        self._entries: Any = deque(maxlen=maxlen)
+
+    @property
+    def entries(self) -> list[Any]:
+        return list(self._entries)
 
     def record(self, entry: Any) -> None:
-        self.entries.append(entry)
+        self._entries.append(entry)
 
 
 
@@ -172,11 +190,21 @@ class TraceEmitter:
     v0.2: emit_immune / emit_hormone / emit_autonomic require attach_v02_sink().
     """
 
-    def __init__(self, router_state: RouterStateProvider | None = None) -> None:
+    def __init__(
+        self,
+        router_state: RouterStateProvider | None = None,
+        *,
+        auto_attach_v02_sink: bool = True,
+        v02_sink_maxlen: int = 10_000,
+    ) -> None:
         self._router = router_state
         self._entries: list[Any] = []
         self._strict = router_state is not None
-        self._v02_sink: V02TraceSink | None = None
+        # OC-13: default-attach a bounded sink so HormoneBus/Router do not crash.
+        self._v02_sink: V02TraceSink | None = (
+            V02TraceSink(maxlen=v02_sink_maxlen) if auto_attach_v02_sink else None
+        )
+        self._v02_missing_diagnoses: list[dict[str, Any]] = []
 
     def attach_router_state(self, provider: RouterStateProvider) -> None:
         self._router = provider
@@ -236,18 +264,29 @@ class TraceEmitter:
 
     def emit_immune(self, entry: ImmuneTraceEntry) -> None:
         if self._v02_sink is None:
-            raise NotImplementedError(
-                "v0.2 ImmuneLayer not enabled; attach_v02_sink() — see docs/v0.2/"
+            self._v02_missing_diagnoses.append(
+                {
+                    "code": "v02_sink_missing",
+                    "kind": "immune",
+                    "hint": "attach_v02_sink() — see docs/v0.2/",
+                }
             )
+            return
         stamped = self._stamp(entry)
         self._v02_sink.record(stamped)
         self._entries.append(stamped)
 
     def emit_hormone(self, entry: HormoneTraceEntry) -> None:
         if self._v02_sink is None:
-            raise NotImplementedError(
-                "v0.2 HormoneBus not enabled; attach_v02_sink() — see docs/v0.2/"
+            # OC-13: no-op with diagnosis rather than crashing Router/HormoneBus.
+            self._v02_missing_diagnoses.append(
+                {
+                    "code": "v02_sink_missing",
+                    "kind": "hormone",
+                    "hint": "attach_v02_sink() — see docs/v0.2/",
+                }
             )
+            return
         stamped = self._stamp(entry)
         self._v02_sink.record(stamped)
         self._entries.append(stamped)
@@ -262,9 +301,18 @@ class TraceEmitter:
 
     def emit_autonomic(self, entry: AutonomicTraceEntry) -> None:
         if self._v02_sink is None:
-            raise NotImplementedError(
-                "v0.2 AutonomicController not enabled; attach_v02_sink() — see docs/v0.2/"
+            self._v02_missing_diagnoses.append(
+                {
+                    "code": "v02_sink_missing",
+                    "kind": "autonomic",
+                    "hint": "attach_v02_sink() — see docs/v0.2/",
+                }
             )
+            return
         stamped = self._stamp(entry)
         self._v02_sink.record(stamped)
         self._entries.append(stamped)
+
+    @property
+    def v02_missing_diagnoses(self) -> list[dict[str, Any]]:
+        return list(self._v02_missing_diagnoses)

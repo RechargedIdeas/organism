@@ -52,6 +52,8 @@ def test_e4_two_module_bootstrap(tmp_path: Path):
         signals=HealthSignals(
             h_m={"learned_module_t2": "HEALTHY"},
             c_m={"learned_module_t2": 0.96},
+            neural_modules=("learned_module_t2",),
+            leading_predictive=("learned_module_t2",),
         )
     )
     FaultInjector(deg).kill_module("learned_module_t2")

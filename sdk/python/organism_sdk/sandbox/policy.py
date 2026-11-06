@@ -31,6 +31,11 @@ class SandboxPolicy:
     # reaches only the listed hosts, through an egress proxy on a Unix socket. Linux only, and the
     # jail refuses rather than run open. Off by default; see organism_sdk/sandbox/egress.py.
     enforce_network: bool = False
+    # OC-5: create CLONE_NEWNET when network is denied. None → True when allow_network is False.
+    # Never silently claim isolation: JailResult.degraded / capabilities report the truth.
+    isolate_network: bool | None = None
+    # When True with isolate_network, refuse the run if a net namespace cannot be made (fail closed).
+    require_network_isolation: bool = False
     # Attempt Linux user/mount/pid/net namespaces when available
     use_namespaces: bool = True
     # Deny shell / interpreter escape patterns in argv
@@ -45,12 +50,29 @@ class SandboxPolicy:
     label: str = "default"
     # Self-sandbox: Organism wrapping its own workers
     self_sandbox: bool = False
+    # OC-10: CPU rate / affinity / nice / seccomp (best-effort; degraded when unavailable)
+    cpu_quota: float | None = None  # fraction of one CPU, via cgroup v2 cpu.max when delegated
+    cpu_affinity: tuple[int, ...] | None = None  # os.sched_setaffinity
+    nice: int | None = None
+    seccomp_profile: str | None = None  # "minimal" | None; applied when libseccomp is present
+    # OC-11: device allow-list (interface only). Empty = CPU only (CPU Everywhere).
+    devices: tuple[str, ...] = ()
+
+    def effective_isolate_network(self) -> bool:
+        """OC-5: isolate when explicitly set, else when network is denied."""
+        if self.isolate_network is not None:
+            return bool(self.isolate_network)
+        return not self.allow_network
 
     def as_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["scrub_env_prefixes"] = list(self.scrub_env_prefixes)
         if self.env_allowlist is not None:
             d["env_allowlist"] = list(self.env_allowlist)
+        d["devices"] = list(self.devices)
+        if self.cpu_affinity is not None:
+            d["cpu_affinity"] = list(self.cpu_affinity)
+        d["effective_isolate_network"] = self.effective_isolate_network()
         return d
 
     @classmethod

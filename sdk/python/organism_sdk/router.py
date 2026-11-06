@@ -20,6 +20,9 @@ from organism_sdk.trace import RoutingTraceEntry, TraceEmitter
 
 Level = Literal["L0", "L1", "L2", "L3", "L4"]
 PlanType = Literal["DispatchPlan", "DegradedDispatchPlan"]
+# OC-7: how eligible modules are ordered into primary + fallbacks.
+RankingPolicy = Literal["trust_first", "learned_first_with_t0_fallback", "metabolic"]
+RANKING_POLICIES: tuple[str, ...] = ("trust_first", "learned_first_with_t0_fallback", "metabolic")
 
 # Typed exclusions (gap D1). The codes are part of the contract: the Kotlin port and router.json use the same set.
 ExclusionCode = Literal[
@@ -133,10 +136,14 @@ class RouterPolicyArtifact:
     form_to_roles: dict[str, tuple[str, ...]] = field(
         default_factory=lambda: dict(DEFAULT_FORM_TO_ROLES)
     )
+    # OC-7: ranking policy; included in the digest.
+    ranking: RankingPolicy = "trust_first"
 
     def digest_matches(self) -> bool:
         """True when ``digest`` is the digest of this policy's content (see ``compute_policy_digest``)."""
-        return self.digest == compute_policy_digest(self.policy_id, self.version, self.form_to_roles)
+        return self.digest == compute_policy_digest(
+            self.policy_id, self.version, self.form_to_roles, ranking=self.ranking
+        )
 
 
 @dataclass
@@ -202,14 +209,23 @@ class DispatchPlan:
 
 
 def compute_policy_digest(
-    policy_id: str, version: str, form_to_roles: Mapping[str, Sequence[str]]
+    policy_id: str,
+    version: str,
+    form_to_roles: Mapping[str, Sequence[str]],
+    *,
+    ranking: RankingPolicy = "trust_first",
 ) -> bytes:
-    """SHA-256 of the canonical JSON of the policy content (gap D2). It changes when the id, the version or any
-    form mapping changes, so a plan can name the exact policy it was made with."""
+    """SHA-256 of the canonical JSON of the policy content (gap D2 / OC-7).
+
+    Changes when the id, version, form mapping, or ranking policy changes.
+    """
+    if ranking not in RANKING_POLICIES:
+        raise ValueError(f"unknown ranking policy: {ranking!r}")
     body = {
         "policy_id": policy_id,
         "version": version,
         "form_to_roles": {form: list(roles) for form, roles in form_to_roles.items()},
+        "ranking": ranking,
     }
     return hashlib.sha256(canonical_bytes(body)).digest()
 
@@ -218,8 +234,11 @@ def default_bootstrap_policy() -> RouterPolicyArtifact:
     return RouterPolicyArtifact(
         policy_id=BOOTSTRAP_POLICY_ID,
         version=BOOTSTRAP_POLICY_VERSION,
-        digest=compute_policy_digest(BOOTSTRAP_POLICY_ID, BOOTSTRAP_POLICY_VERSION, DEFAULT_FORM_TO_ROLES),
+        digest=compute_policy_digest(
+            BOOTSTRAP_POLICY_ID, BOOTSTRAP_POLICY_VERSION, DEFAULT_FORM_TO_ROLES, ranking="trust_first"
+        ),
         lifecycle_state="DELIBERATION",
+        ranking="trust_first",
     )
 
 
@@ -267,10 +286,12 @@ def eligibility(
         if task.safety_tier == "critical" and tier in ("T2_LEARNED_CALIBRATED", "T3_LEARNED_UNCALIBRATED"):
             excluded.append(Excluded(h.module_id, "critical_forbids_learned", {}))
             continue
-        # L4: deterministic engine only (module_id check)
-        if level == "L4" and h.module_id != "deterministic_engine":
-            excluded.append(Excluded(h.module_id, "l4_deterministic_only", {}))
-            continue
+        # OC-3: L4 admits any module declared l4_terminal (plus legacy deterministic_engine id).
+        if level == "L4":
+            l4_ok = bool(getattr(h, "l4_terminal", False)) or h.module_id == "deterministic_engine"
+            if not l4_ok:
+                excluded.append(Excluded(h.module_id, "l4_deterministic_only", {}))
+                continue
         if health.get(h.module_id, "HEALTHY") == "FAILED":
             excluded.append(Excluded(h.module_id, "health_failed", {}))
             continue
@@ -341,6 +362,14 @@ class Router:
 
     def set_level(self, level: Level) -> None:
         self._level = level
+
+    def set_health(self, health: Mapping[str, str] | None = None, **per_module: str) -> None:
+        """Public health setter (OC-9). Pass a mapping and/or module_id=status kwargs."""
+        merged = dict(self._health)
+        if health:
+            merged.update({str(k): str(v) for k, v in health.items()})
+        merged.update({str(k): str(v) for k, v in per_module.items()})
+        self._health = merged
 
     def set_autonomic_params(self, params: RouterExposedParams) -> None:
         self._autonomic = params
@@ -422,16 +451,51 @@ class Router:
         excluded: list[Excluded] = list(mask.excluded)
         candidates: list[ModuleHandle] = list(mask.eligible)
 
-        # Step 5 re-rank
+        # Step 5 re-rank (OC-7)
         ranking_trace: list[str] = []
+        ranking_policy: RankingPolicy = getattr(self._policy, "ranking", "trust_first") or "trust_first"
+        ranking_trace.append(f"ranking={ranking_policy}")
 
-        def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
-            tier = h.tier.value if hasattr(h.tier, "value") else str(h.tier)
-            hs = self._health.get(h.module_id, "HEALTHY")
-            health_rank = 0 if hs == "HEALTHY" else 1
-            return (health_rank, _TIER_RANK.get(tier, 9), h.module_id)
+        def _tier(h: ModuleHandle) -> str:
+            return h.tier.value if hasattr(h.tier, "value") else str(h.tier)
 
-        candidates.sort(key=sort_key)
+        def _health_rank(h: ModuleHandle) -> int:
+            return 0 if self._health.get(h.module_id, "HEALTHY") == "HEALTHY" else 1
+
+        if ranking_policy == "learned_first_with_t0_fallback":
+            # Prefer calibrated/uncalibrated learned as primary; keep T0 in the list as fallback.
+            def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
+                tier = _tier(h)
+                learned_pref = 0 if tier in ("T2_LEARNED_CALIBRATED", "T3_LEARNED_UNCALIBRATED") else 1
+                return (_health_rank(h), learned_pref, _TIER_RANK.get(tier, 9), h.module_id)
+
+            candidates.sort(key=sort_key)
+            # Ensure T0 modules stay available as fallbacks even if sorted after learned.
+            t0 = [h for h in candidates if _tier(h) == "T0_DETERMINISTIC"]
+            rest = [h for h in candidates if _tier(h) != "T0_DETERMINISTIC"]
+            # Primary = best learned (or best overall if none); fallbacks = remaining then T0 not already primary
+            if rest:
+                primary_first = rest + [h for h in t0 if h not in rest]
+                candidates[:] = primary_first
+        elif ranking_policy == "metabolic":
+            deadline = float(task.deadline_ms)
+            energy_budget = float(task.energy_budget_j)
+
+            def sort_key(h: ModuleHandle) -> tuple[int, int, float, float, str]:
+                lat = float(getattr(h, "latency_p95_ms", 0.0) or 0.0)
+                ene = float(getattr(h, "energy_per_inference_j", 0.0) or 0.0)
+                fits_deadline = 0 if (lat <= 0.0 or lat <= deadline) else 1
+                fits_energy = 0 if (ene <= 0.0 or ene <= energy_budget) else 1
+                return (_health_rank(h), fits_deadline, fits_energy, lat if lat > 0 else 1e9, ene, h.module_id)
+
+            candidates.sort(key=sort_key)
+        else:
+            # trust_first (default): health → tier (T0 first) → id
+            def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
+                return (_health_rank(h), _TIER_RANK.get(_tier(h), 9), h.module_id)
+
+            candidates.sort(key=sort_key)
+
         ranking_trace.append(f"order={[c.module_id for c in candidates]}")
 
         cross_check_required = task.form == "control_actuation" or self._level in ("L2", "L3", "L4")

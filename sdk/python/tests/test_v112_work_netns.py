@@ -41,7 +41,14 @@ def probe(port: int, monkeypatch: pytest.MonkeyPatch, *, full_ns: bool) -> tuple
         monkeypatch.setenv("ORGANISM_JAIL_FULL_NS", "1")
     else:
         monkeypatch.delenv("ORGANISM_JAIL_FULL_NS", raising=False)
-    policy = SandboxPolicy(timeout_s=20, label="netns-probe")
+    # OC-5: isolate_network defaults on when allow_network is False. The "no netns"
+    # probe must opt out; the full-ns probe keeps isolation (and adds pid via env).
+    policy = SandboxPolicy(
+        timeout_s=20,
+        label="netns-probe",
+        isolate_network=bool(full_ns),
+        allow_network=not full_ns,
+    )
     result = ProcessJail(policy).run([sys.executable, "-c", PROBE, str(port)])
     assert result.ok, result.stderr
     return result.stdout.strip(), result

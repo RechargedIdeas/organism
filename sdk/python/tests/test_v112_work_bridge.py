@@ -137,7 +137,10 @@ def test_a_host_off_the_list_is_refused_by_the_proxy(echo_port: int) -> None:
 
 @LINUX
 def test_without_enforcement_the_same_direct_connection_reaches_the_host(echo_port: int) -> None:
-    jail = ProcessJail(SandboxPolicy(timeout_s=20, label="bridge-test"))
+    # OC-5: opt out of default deny-network isolation so the child can reach the host.
+    jail = ProcessJail(
+        SandboxPolicy(timeout_s=20, label="bridge-test", allow_network=True, isolate_network=False)
+    )
     result = jail.run([sys.executable, "-c", DIRECT, str(echo_port)])
     assert result.ok, result.stderr
     assert result.stdout.strip() == "reached"

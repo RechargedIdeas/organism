@@ -25,13 +25,17 @@ object Ladder {
         LifecycleState.RETIRED,
     )
 
+    /** Demoted states are not "at least" a live state for routing (OC-1). */
+    val NON_ROUTABLE: Set<LifecycleState> = setOf(LifecycleState.DEPRECATED, LifecycleState.RETIRED)
+
     /**
-     * Rank used by queries (reference `_rank`). DEVELOPMENT ranks as EXPLORATION. The other extended states
-     * (SELF_TERMINATING, SUCCEEDED, DEGRADED) rank below every ladder state.
+     * Rank used by queries (reference `_rank`). DEVELOPMENT ranks as EXPLORATION. Extended and demoted
+     * states (SELF_TERMINATING, SUCCEEDED, DEGRADED, DEPRECATED, RETIRED) rank below every live ladder state.
      */
     fun rank(state: LifecycleState): Int = when (state) {
         LifecycleState.DEVELOPMENT -> PROMOTE_ORDER.indexOf(LifecycleState.EXPLORATION)
-        LifecycleState.SELF_TERMINATING, LifecycleState.SUCCEEDED, LifecycleState.DEGRADED -> -1
+        LifecycleState.SELF_TERMINATING, LifecycleState.SUCCEEDED, LifecycleState.DEGRADED,
+        LifecycleState.DEPRECATED, LifecycleState.RETIRED -> -1
         else -> PROMOTE_ORDER.indexOf(state)
     }
 
@@ -217,7 +221,11 @@ class ModuleRegistry(
             val minTier = filter.minReliability
             if (minTier != null && tier.ordinal > minTier.ordinal) continue
             val minState = filter.minLifecycleState
-            if (minState != null && Ladder.rank(entry.state) < Ladder.rank(minState)) continue
+            if (minState != null) {
+                // OC-1: demoted states never satisfy a live min-state filter.
+                if (entry.state in Ladder.NON_ROUTABLE && minState !in Ladder.NON_ROUTABLE) continue
+                if (Ladder.rank(entry.state) < Ladder.rank(minState)) continue
+            }
             out += ModuleHandle(id, identity.version, identity.role, tier, entry.state)
         }
         return out

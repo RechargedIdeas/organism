@@ -281,6 +281,8 @@ message SafetyDeclaration {
   bool              requires_cross_check         = 4;
   repeated ModuleRole cross_check_eligible_roles = 5;
   MaxSafetyTier     max_safety_tier              = 6;
+  // OC-3: eligible as the L4 terminal fallback (T0 + GOVERNANCE + DETERMINISTIC + RULE_TRACE).
+  bool              l4_terminal                  = 7;
 }
 
 // ---- Capability scopes (with R-8 / A6.5 / E-7 fields) ----------

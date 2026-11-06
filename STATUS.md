@@ -1,22 +1,24 @@
 # Organism — Implementation Status
 
-**Date:** 2026-11-04 (America/New_York)  
-**Release:** **v1.10.0 — Bare metal first + native sandbox** (latest tag). v1.11 is in progress and unreleased.  
-**Corpus:** closed v0.1–v1.9.0 + v1.10.0 host portability / native sandbox  
+**Date:** 2026-11-05 (America/New_York)  
+**Release:** **v1.11.0 — OC substrate fixes + MoA layer** (latest).  
+**Corpus:** closed v0.1–v1.10.0 + v1.11.0 OC-1…OC-13 + MoA phases 0–3/5 (rule-based)  
 **Repo:** https://github.com/RechargedIdeas/organism (private)  
-**Tag:** [v1.10.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.10.0)  
-**Gap review:** [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) lists what is fixed, what is open, and the decisions still needed.
+**Tag:** [v1.11.0](https://github.com/RechargedIdeas/organism/releases/tag/v1.11.0)  
+**Gap review:** [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) · OC fixes: [docs/v1.11/OC_FIXES.md](docs/v1.11/OC_FIXES.md)
 
 ## Verdict
 
-**v1.10.0** makes Organism **first-class on bare metal and VMs**. Docker is
-**optional** (one backend under `container_generic`); main CI gates never need
-it. A **native Organism sandbox** (`organism_sdk.sandbox`) jails child work and
-supports self-containment for workers / generative / soak / federation children.
-Bio/wet-lab actuation remains hard-refused. CPU Everywhere holds. Naming is
-**Organism** only.
+**v1.11.0** closes the CryptoMiner-proposed Organism gaps (OC-1…OC-13): demoted
+modules are no longer routable, L4 is contract-declared, deny-network jails plan
+a real net namespace without `ORGANISM_JAIL_FULL_NS`, degradation thresholds and
+router ranking are configurable, reference substrates ship in the wheel, and
+hormone tracing no longer crashes without a v0.2 sink. MoA phases 0–3 and
+rule-based guardrails remain as previously landed. Bio actuation stays refused.
+CPU Everywhere holds. Docker stays optional.
 
-See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md).
+See [docs/v1.11/OC_FIXES.md](docs/v1.11/OC_FIXES.md) and
+[docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md).
 
 ## Kotlin parity build-out (branch `feat/kotlin-parity`, 2026-11-04)
 
@@ -28,7 +30,11 @@ See [docs/v1.10/BARE_METAL_AND_SANDBOX.md](docs/v1.10/BARE_METAL_AND_SANDBOX.md)
 - **Gaps:** [docs/AI_MODEL_GAPS.md](docs/AI_MODEL_GAPS.md) lists 40 gaps for KotMoE, Lightspeed and future models.
 - **Branch note:** this branch includes `main` (the v1.11 MoA layer and the v1.12 work agent) through the merge
   commit. Review that merge before any PR.
-## v1.11 in progress: MoA layer
+## v1.11.0 OC fixes (done)
+
+All OC-1…OC-13 items from the CryptoMiner proposal are implemented. Details in [docs/v1.11/OC_FIXES.md](docs/v1.11/OC_FIXES.md).
+
+## v1.11 MoA layer (shipped with 1.11.0; synthesizer/judge still open)
 
 Phases 0 to 3 of the [upgrade plan](docs/UPGRADE_AND_EXPANSION_PLAN.md) are implemented
 and tested, and Phase 5 has its rule-based part. See [docs/v1.11/MOA_LAYER.md](docs/v1.11/MOA_LAYER.md).
@@ -64,7 +70,7 @@ checked, which is the default. Production keys live with the approver, never in 
 | mypy (hand-written) | 59 | `ci/baselines/mypy.json` (breakdown in [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)) |
 | rustfmt | 0 | enforced |
 
-`pytest -m 'not slow'` collects 591 tests. The pre-push fast tier runs 60 gates.
+`pytest -m 'not slow'` collects 1872+ tests. The pre-push fast tier runs 60 gates.
 
 ## v1.10.0 phase table
 

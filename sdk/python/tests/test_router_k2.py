@@ -120,6 +120,15 @@ def test_l4_admits_only_the_deterministic_engine() -> None:
     assert [e.reason_code for e in m.excluded] == ["l4_deterministic_only"]
 
 
+def test_l4_admits_any_module_with_l4_terminal_flag() -> None:
+    # OC-3: contract flag, not the hardcoded module id.
+    custom = _h("cm_det_strategy", role=ModuleRole.GOVERNANCE)
+    custom.l4_terminal = True
+    other = _h("governance_other", role=ModuleRole.GOVERNANCE)
+    m = _mask([custom, other], form="control_actuation", tier="high", level="L4")
+    assert [h.module_id for h in m.eligible] == ["cm_det_strategy"]
+
+
 def test_interpretability_excludes_learned_tiers() -> None:
     m = _mask([_h("learned", tier=ReliabilityTier.T3_LEARNED_UNCALIBRATED)], interpretability=True)
     assert [e.reason_code for e in m.excluded] == ["interpretability_required"]

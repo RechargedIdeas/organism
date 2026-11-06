@@ -1,3 +1,33 @@
+## [1.11.0] - 2026-11-05
+
+### Added
+- **OC fixes (CryptoMiner substrate review)** — see `docs/v1.11/OC_FIXES.md`.
+  - OC-1: `DEPRECATED`/`RETIRED` are non-routable under live lifecycle filters.
+  - OC-2: `LIFECYCLE_OP_ROLLBACK`, `rollback_of_entry_id`, `RegistryClient.rollback()`, LCT-12.
+  - OC-3: `SafetyDeclaration.l4_terminal` (T0 + GOVERNANCE + DETERMINISTIC + RULE_TRACE); L4 by contract.
+  - OC-5: deny-network jails plan `CLONE_NEWNET` without `ORGANISM_JAIL_FULL_NS`; `require_network_isolation`; honest capability report.
+  - OC-6: `DegradationThresholds` on `DegradationMachine`.
+  - OC-7: `RouterPolicyArtifact.ranking` (`trust_first` | `learned_first_with_t0_fallback` | `metabolic`) in the policy digest.
+  - OC-8: public `organism_sdk.contract_factory`; wheel ships `organism_modules` + reference substrates.
+  - OC-9: `Router.set_health()`, `RegistryClient.state()`.
+  - OC-10/11: `cpu_quota` / `cpu_affinity` / `nice` / `seccomp_profile` / `devices` on `SandboxPolicy` (best-effort + degraded reasons).
+  - OC-12: LCT-3 warning-tolerant + LCT-12 in `organism_sdk.lifecycle_trace`.
+  - OC-13: bounded `V02TraceSink(maxlen=…)`; TraceEmitter default-attaches; missing sink is a diagnosed no-op.
+- Gate `v111:oc_fixes` and tests in `sdk/python/tests/test_v111_oc_fixes.py`.
+- Docs: `docs/v1.11/OC_FIXES.md`.
+
+### Changed
+- **OC-4**: `HealthSignals.neural_modules` / `leading_predictive` default to empty tuples (no implicit `learned_module_t2`).
+- **Policy digest** includes `ranking` (bootstrap digest bytes change; conformance vectors regenerated).
+- Kotlin registry/router parity for OC-1, OC-3 L4 flag, and OC-7 digest ranking.
+- Versions aligned to **1.11.0**.
+
+### Behaviour notes for callers
+- Pass neural module ids explicitly into `HealthSignals`.
+- Read jail `namespaces_used` / `degraded` / `capabilities()` — never assume network isolation.
+- Refresh any stored router policy digests.
+
+
 ## [Unreleased] - 1.11.0-dev (branch feat/kotlin-parity)
 
 ### Added

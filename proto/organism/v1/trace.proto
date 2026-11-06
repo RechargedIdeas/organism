@@ -194,6 +194,9 @@ message LifecycleTraceEntry {
   DrainInfo                       on_drain              = 20;
   repeated organism.v1.ModuleHandle affected_modules    = 21;
   bytes                           audit_log_ref         = 22;
+  // OC-2 / R-37 / LCT-12: the promote (or prior) entry this rollback undoes.
+  string                          rollback_of_entry_id  = 23;
+  string                          reason                = 24;
 }
 
 enum LifecycleOperation {
@@ -210,6 +213,8 @@ enum LifecycleOperation {
   LIFECYCLE_OP_SHADOW_VALIDATION = 10;
   LIFECYCLE_OP_RULEBOOK_PUBLISH  = 11;
   LIFECYCLE_OP_POLICY_PUBLISH    = 12;
+  // OC-2 / R-37: failure-triggered or operator rollback, distinct from ordinary demotion.
+  LIFECYCLE_OP_ROLLBACK          = 13;
 }
 
 enum LifecycleTargetType {

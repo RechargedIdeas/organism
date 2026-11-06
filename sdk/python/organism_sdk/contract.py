@@ -366,6 +366,9 @@ class SafetyDeclaration:
     requires_cross_check: bool = False
     cross_check_eligible_roles: tuple[ModuleRole, ...] = ()
     max_safety_tier: MaxSafetyTier = MaxSafetyTier.HIGH
+    # OC-3: eligible as the L4 terminal fallback. Only valid for T0 + GOVERNANCE +
+    # DETERMINISTIC emission + RULE_TRACE justification (enforced in SubstrateContract.validate).
+    l4_terminal: bool = False
 
 
 @dataclass(frozen=True)
@@ -646,6 +649,45 @@ class SubstrateContract:
                 )
             )
 
+        # OC-3: l4_terminal is reserved for T0 GOVERNANCE DETERMINISTIC + RULE_TRACE.
+        if self.safety.l4_terminal:
+            if self.safety.reliability_tier != ReliabilityTier.T0_DETERMINISTIC:
+                issues.append(
+                    ValidationIssue(
+                        Severity.ERROR,
+                        "l4_terminal_tier",
+                        "safety.l4_terminal",
+                        "l4_terminal requires T0_DETERMINISTIC",
+                    )
+                )
+            if self.identity.role != ModuleRole.GOVERNANCE:
+                issues.append(
+                    ValidationIssue(
+                        Severity.ERROR,
+                        "l4_terminal_role",
+                        "safety.l4_terminal",
+                        "l4_terminal requires GOVERNANCE role",
+                    )
+                )
+            if self.emission.determinism != Determinism.DETERMINISTIC:
+                issues.append(
+                    ValidationIssue(
+                        Severity.ERROR,
+                        "l4_terminal_determinism",
+                        "safety.l4_terminal",
+                        "l4_terminal requires DETERMINISTIC emission",
+                    )
+                )
+            if self.justification.kind != JustificationKind.RULE_TRACE:
+                issues.append(
+                    ValidationIssue(
+                        Severity.ERROR,
+                        "l4_terminal_justification",
+                        "safety.l4_terminal",
+                        "l4_terminal requires RULE_TRACE justification",
+                    )
+                )
+
         return issues
 
     def require_valid(self) -> None:
@@ -806,6 +848,8 @@ class SubstrateContract:
         c.safety.requires_causal_certificate = self.safety.requires_causal_certificate
         c.safety.requires_cross_check = self.safety.requires_cross_check
         c.safety.max_safety_tier = safety_map[self.safety.max_safety_tier]
+        if hasattr(c.safety, "l4_terminal"):
+            c.safety.l4_terminal = bool(self.safety.l4_terminal)
 
         c.capabilities.read_roles.extend(self.capabilities.read_roles)
         c.capabilities.write_roles.extend(self.capabilities.write_roles)

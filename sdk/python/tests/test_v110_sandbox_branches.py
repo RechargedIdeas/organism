@@ -205,29 +205,44 @@ def test_a_setup_reason_is_read_only_from_a_child_that_failed_its_setup() -> Non
 
 def test_a_policy_that_turns_namespaces_off_plans_none(monkeypatch: pytest.MonkeyPatch) -> None:
     _caps(monkeypatch, linux=True, unshare=True)
-    assert jail._plan_namespaces(_quick(use_namespaces=False)) == (0, [], [])
+    # OC-5: network isolation was wanted, so the plan says so even with namespaces off.
+    assert jail._plan_namespaces(_quick(use_namespaces=False)) == (
+        0, [], ["network_not_namespaced", "isolation_not_claimed"]
+    )
+    assert jail._plan_namespaces(
+        _quick(use_namespaces=False, allow_network=True, isolate_network=False)
+    ) == (0, [], [])
 
 
 def test_a_host_that_is_not_linux_plans_no_namespaces(monkeypatch: pytest.MonkeyPatch) -> None:
     _caps(monkeypatch, linux=False, unshare=False)
     plan = jail._plan_namespaces(_quick(use_namespaces=True))
-    assert plan == (0, [], ["namespaces_unavailable_non_linux"])
+    assert plan == (
+        0,
+        [],
+        ["namespaces_unavailable_non_linux", "network_not_namespaced", "isolation_not_claimed"],
+    )
 
 
 def test_a_linux_host_without_unshare_plans_no_namespaces(monkeypatch: pytest.MonkeyPatch) -> None:
     _caps(monkeypatch, linux=True, unshare=False)
     plan = jail._plan_namespaces(_quick(use_namespaces=True))
-    assert plan == (0, [], ["unshare_unavailable"])
+    assert plan == (
+        0,
+        [],
+        ["unshare_unavailable", "network_not_namespaced", "isolation_not_claimed"],
+    )
 
 
-def test_the_default_plan_is_user_and_mount_and_notes_the_network_is_not_namespaced(
+def test_the_default_plan_isolates_the_network_without_full_ns_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # OC-5: allow_network=False → plan user+mount+net; ORGANISM_JAIL_FULL_NS not required.
     _caps(monkeypatch, linux=True, unshare=True)
     flags, attempted, degraded = jail._plan_namespaces(_quick(use_namespaces=True))
-    assert attempted == ["user", "mount"]
-    assert flags == CLONE_NEWUSER | CLONE_NEWNS
-    assert degraded == ["network_not_namespaced"]
+    assert attempted == ["user", "mount", "net"]
+    assert flags == CLONE_NEWUSER | CLONE_NEWNS | CLONE_NEWNET
+    assert degraded == []
 
 
 def test_enforcing_the_network_adds_its_namespace_and_full_mode_adds_pid(
@@ -235,16 +250,30 @@ def test_enforcing_the_network_adds_its_namespace_and_full_mode_adds_pid(
 ) -> None:
     _caps(monkeypatch, linux=True, unshare=True)
     flags, attempted, degraded = jail._plan_namespaces(
-        _quick(use_namespaces=True, enforce_network=True)
+        _quick(use_namespaces=True, enforce_network=True, allow_network=True, isolate_network=False)
     )
     assert attempted == ["user", "mount", "net"]
     assert flags & CLONE_NEWNET
     assert degraded == []
     monkeypatch.setenv("ORGANISM_JAIL_FULL_NS", "1")
-    flags, attempted, _ = jail._plan_namespaces(_quick(use_namespaces=True))
+    flags, attempted, _ = jail._plan_namespaces(
+        _quick(use_namespaces=True, allow_network=True, isolate_network=False)
+    )
     assert attempted == ["user", "mount", "pid", "net"]
     assert flags & CLONE_NEWPID
     assert flags & CLONE_NEWNET
+
+
+def test_allow_network_without_isolate_skips_net_and_reports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _caps(monkeypatch, linux=True, unshare=True)
+    flags, attempted, degraded = jail._plan_namespaces(
+        _quick(use_namespaces=True, allow_network=True, isolate_network=False)
+    )
+    assert attempted == ["user", "mount"]
+    assert "net" not in attempted
+    assert degraded == []
 
 
 def test_a_host_whose_libc_cannot_load_reports_no_unshare(monkeypatch: pytest.MonkeyPatch) -> None:
