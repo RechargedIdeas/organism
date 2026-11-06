@@ -221,7 +221,8 @@ def _host(tmp_path: Path, handlers: dict[str, Any]) -> tuple[ToolHost, list[str]
     def wrap(name: str, fn: Any) -> Any:
         def handler(args: dict[str, Any]) -> str:
             ran.append(name)
-            return fn(args)
+            value: str = fn(args)
+            return value
 
         return handler
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from organism_sdk.calibration import (
@@ -27,6 +29,8 @@ from organism_sdk.learned import ModelRef, decide_label
 from organism_sdk.pathscope import PathEscape, PathScope
 from organism_sdk.tool_host import (
     AuditRecord,
+    Confirm,
+    Handler,
     ToolHost,
     ToolRefused,
     ToolRegistrationError,
@@ -34,6 +38,27 @@ from organism_sdk.tool_host import (
     validate_args,
     verify_chain,
 )
+
+
+def _approve(log: list[str], answer: str | None) -> Confirm:
+    """A confirmation callback that records the tool name it was asked about, then gives ``answer``."""
+
+    def confirm(name: str, args: Mapping[str, Any]) -> str | None:
+        log.append(name)
+        return answer
+
+    return confirm
+
+
+def _recorded(log: list[str], tag: str, result: str) -> Handler:
+    """A handler that records its call under ``tag`` and returns ``result``."""
+
+    def handler(args: Mapping[str, Any]) -> str:
+        log.append(tag)
+        return result
+
+    return handler
+
 
 # ---------------------------------------------------------------- calibration (D3)
 
@@ -273,7 +298,7 @@ def test_a_read_tool_runs_and_is_audited(scope: PathScope) -> None:
     host = ToolHost(scope)
     seen: list[dict[str, object]] = []
 
-    def handler(args: dict[str, object]) -> str:
+    def handler(args: Mapping[str, Any]) -> str:
         seen.append(dict(args))
         return "contents"
 
@@ -315,7 +340,7 @@ def test_a_path_outside_the_scope_is_refused_before_anyone_is_asked(scope: PathS
         path_args=("path",),
     )
     with pytest.raises(ToolRefused):
-        host.call("write_file", {"path": "../escape.txt"}, confirm=lambda n, a: asked.append(n) or "alice")
+        host.call("write_file", {"path": "../escape.txt"}, confirm=_approve(asked, "alice"))
     assert asked == []
     assert host.audit()[-1].outcome == "refused_path"
 
@@ -327,7 +352,7 @@ def test_an_always_confirmed_tool_needs_a_person_each_time() -> None:
         _contract("run_tests", {"type": "object", "properties": {}, "additionalProperties": False},
                   risk=MaxSafetyTier.HIGH, confirmation=ToolConfirmation.ALWAYS,
                   confinement=ToolConfinement.SCOPED),
-        lambda args: ran.append("ran") or "green",
+        _recorded(ran, "ran", "green"),
     )
     with pytest.raises(ToolRefused):
         host.call("run_tests", {})
@@ -347,15 +372,15 @@ def test_an_on_first_use_tool_asks_once() -> None:
                   confirmation=ToolConfirmation.ON_FIRST_USE),
         lambda args: "a.txt",
     )
-    host.call("list_files", {}, confirm=lambda n, a: asked.append(n) or "bob")
-    host.call("list_files", {}, confirm=lambda n, a: asked.append(n) or "bob")
+    host.call("list_files", {}, confirm=_approve(asked, "bob"))
+    host.call("list_files", {}, confirm=_approve(asked, "bob"))
     assert asked == ["list_files"]
 
 
 def test_a_failing_handler_is_recorded_and_reported() -> None:
     host = ToolHost()
 
-    def broken(args: dict[str, object]) -> str:
+    def broken(args: Mapping[str, Any]) -> str:
         raise OSError("disk gone")
 
     host.register(_contract("noop", {"type": "object", "properties": {}, "additionalProperties": False}), broken)
