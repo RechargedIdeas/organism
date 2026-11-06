@@ -105,7 +105,8 @@ def capabilities() -> dict[str, Any]:
         import seccomp  # type: ignore[import-not-found]  # noqa: F401
 
         has_seccomp = True
-    except Exception:
+    # An optional probe: any failure, not only ImportError, means seccomp is treated as absent.
+    except Exception:  # noqa: BLE001
         has_seccomp = False
     return {
         "platform": platform.system(),
@@ -294,7 +295,7 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int, report_fd: int | None = 
         # OC-10: affinity / nice / seccomp — best-effort, noted when applied.
         if policy.cpu_affinity and hasattr(os, "sched_setaffinity"):
             try:
-                os.sched_setaffinity(0, set(int(c) for c in policy.cpu_affinity))
+                os.sched_setaffinity(0, {int(c) for c in policy.cpu_affinity})
                 _note(report_fd, "cpu_affinity")
             except Exception:  # noqa: BLE001, S110
                 pass

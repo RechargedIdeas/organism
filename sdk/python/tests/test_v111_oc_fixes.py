@@ -1,7 +1,6 @@
 """v1.11 OC-1 … OC-13 — Organism fixes proposed by CryptoMiner substrate integration."""
 from __future__ import annotations
 
-import os
 import sys
 from collections import deque
 
@@ -17,7 +16,7 @@ from organism_sdk.contract import (
 from organism_sdk.contract_factory import make_contract
 from organism_sdk.degradation import DegradationMachine, DegradationThresholds, HealthSignals
 from organism_sdk.lifecycle_trace import validate_lct3, validate_lct12, validate_lifecycle_entry
-from organism_sdk.registry import CapabilityFilter, RegistryClient
+from organism_sdk.registry import CapabilityFilter, ModuleHandle, RegistryClient
 from organism_sdk.router import (
     Router,
     RouterPolicyArtifact,
@@ -29,7 +28,6 @@ from organism_sdk.router import (
 from organism_sdk.sandbox import SandboxPolicy, capabilities
 from organism_sdk.sandbox import jail as jail_mod
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
-from organism_sdk.registry import ModuleHandle
 
 
 def _register(rc: RegistryClient, mid: str, *, role=ModuleRole.SOLVER, tier=ReliabilityTier.T0_DETERMINISTIC,

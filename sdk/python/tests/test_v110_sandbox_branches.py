@@ -268,7 +268,7 @@ def test_allow_network_without_isolate_skips_net_and_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _caps(monkeypatch, linux=True, unshare=True)
-    flags, attempted, degraded = jail._plan_namespaces(
+    _flags, attempted, degraded = jail._plan_namespaces(
         _quick(use_namespaces=True, allow_network=True, isolate_network=False)
     )
     assert attempted == ["user", "mount"]
