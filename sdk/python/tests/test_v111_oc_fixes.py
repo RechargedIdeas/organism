@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from collections import deque
+from typing import Any
 
 import pytest
 from organism_sdk.contract import (
@@ -11,6 +12,7 @@ from organism_sdk.contract import (
     ModuleRole,
     ReliabilityTier,
     Severity,
+    SubstrateContract,
     ValidationIssue,
 )
 from organism_sdk.contract_factory import make_contract
@@ -30,8 +32,15 @@ from organism_sdk.sandbox import jail as jail_mod
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
 
 
-def _register(rc: RegistryClient, mid: str, *, role=ModuleRole.SOLVER, tier=ReliabilityTier.T0_DETERMINISTIC,
-              state: str = "DELIBERATION", **kw):
+def _register(
+    rc: RegistryClient,
+    mid: str,
+    *,
+    role: ModuleRole = ModuleRole.SOLVER,
+    tier: ReliabilityTier = ReliabilityTier.T0_DETERMINISTIC,
+    state: str = "DELIBERATION",
+    **kw: Any,
+) -> SubstrateContract:
     c = make_contract(
         module_id=mid,
         version="0.1.0",
@@ -207,7 +216,7 @@ def test_oc6_custom_thermal_thresholds() -> None:
     m.signals.thermal = 0.01
     m.tick()
     m.advance(5.0)
-    assert m.level == "L1"
+    assert str(m.level) == "L1"
 
 
 # ---- OC-7 ----

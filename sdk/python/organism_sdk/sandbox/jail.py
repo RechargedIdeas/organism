@@ -307,7 +307,7 @@ def _make_preexec(policy: SandboxPolicy, ns_flags: int, report_fd: int | None = 
                 pass
         if policy.seccomp_profile == "minimal":
             try:
-                import seccomp  # type: ignore[import-not-found]
+                import seccomp
 
                 f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
                 # Deny a small set of high-risk calls; anything else remains allowed.

@@ -26,7 +26,7 @@ def _severity_of(issue: Any) -> str:
     sev = getattr(issue, "severity", None)
     if sev is None and isinstance(issue, dict):
         sev = issue.get("severity")
-    if hasattr(sev, "value"):
+    if sev is not None and hasattr(sev, "value"):
         return str(sev.value)
     return str(sev or "")
 
