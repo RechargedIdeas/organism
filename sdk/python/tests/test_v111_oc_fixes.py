@@ -1,9 +1,9 @@
 """v1.11 OC-1 … OC-13 — Organism fixes proposed by CryptoMiner substrate integration."""
 from __future__ import annotations
 
-import os
 import sys
 from collections import deque
+from typing import Any
 
 import pytest
 from organism_sdk.contract import (
@@ -12,12 +12,13 @@ from organism_sdk.contract import (
     ModuleRole,
     ReliabilityTier,
     Severity,
+    SubstrateContract,
     ValidationIssue,
 )
 from organism_sdk.contract_factory import make_contract
 from organism_sdk.degradation import DegradationMachine, DegradationThresholds, HealthSignals
 from organism_sdk.lifecycle_trace import validate_lct3, validate_lct12, validate_lifecycle_entry
-from organism_sdk.registry import CapabilityFilter, RegistryClient
+from organism_sdk.registry import CapabilityFilter, ModuleHandle, RegistryClient
 from organism_sdk.router import (
     Router,
     RouterPolicyArtifact,
@@ -29,11 +30,11 @@ from organism_sdk.router import (
 from organism_sdk.sandbox import SandboxPolicy, capabilities
 from organism_sdk.sandbox import jail as jail_mod
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
-from organism_sdk.registry import ModuleHandle
 
 
-def _register(rc: RegistryClient, mid: str, *, role=ModuleRole.SOLVER, tier=ReliabilityTier.T0_DETERMINISTIC,
-              state: str = "DELIBERATION", **kw):
+def _register(rc: RegistryClient, mid: str, *, role: ModuleRole = ModuleRole.SOLVER,
+              tier: ReliabilityTier = ReliabilityTier.T0_DETERMINISTIC,
+              state: str = "DELIBERATION", **kw: Any) -> SubstrateContract:
     c = make_contract(
         module_id=mid,
         version="0.1.0",
@@ -209,7 +210,8 @@ def test_oc6_custom_thermal_thresholds() -> None:
     m.signals.thermal = 0.01
     m.tick()
     m.advance(5.0)
-    assert m.level == "L1"
+    # mypy keeps the "L0" narrowing from the assert above; the level changed at run time.
+    assert m.level == "L1"  # type: ignore[comparison-overlap]
 
 
 # ---- OC-7 ----
@@ -246,7 +248,7 @@ def test_oc7_ranking_in_policy_digest() -> None:
 
 # ---- OC-8 ----
 def test_oc8_contract_factory_public_and_modules_packaged() -> None:
-    import organism_modules
+    import organism_modules  # type: ignore[import-not-found]  # lives in modules/, which mypy does not search
     from organism_sdk.contract_factory import make_contract as mc
 
     assert "reservoir" in organism_modules.REFERENCE_MODULES

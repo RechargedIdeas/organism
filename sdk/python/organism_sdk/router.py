@@ -464,12 +464,12 @@ class Router:
 
         if ranking_policy == "learned_first_with_t0_fallback":
             # Prefer calibrated/uncalibrated learned as primary; keep T0 in the list as fallback.
-            def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
+            def learned_key(h: ModuleHandle) -> tuple[int, int, int, str]:
                 tier = _tier(h)
                 learned_pref = 0 if tier in ("T2_LEARNED_CALIBRATED", "T3_LEARNED_UNCALIBRATED") else 1
                 return (_health_rank(h), learned_pref, _TIER_RANK.get(tier, 9), h.module_id)
 
-            candidates.sort(key=sort_key)
+            candidates.sort(key=learned_key)
             # Ensure T0 modules stay available as fallbacks even if sorted after learned.
             t0 = [h for h in candidates if _tier(h) == "T0_DETERMINISTIC"]
             rest = [h for h in candidates if _tier(h) != "T0_DETERMINISTIC"]
@@ -481,20 +481,20 @@ class Router:
             deadline = float(task.deadline_ms)
             energy_budget = float(task.energy_budget_j)
 
-            def sort_key(h: ModuleHandle) -> tuple[int, int, float, float, str]:
+            def metabolic_key(h: ModuleHandle) -> tuple[int, int, int, float, float, str]:
                 lat = float(getattr(h, "latency_p95_ms", 0.0) or 0.0)
                 ene = float(getattr(h, "energy_per_inference_j", 0.0) or 0.0)
                 fits_deadline = 0 if (lat <= 0.0 or lat <= deadline) else 1
                 fits_energy = 0 if (ene <= 0.0 or ene <= energy_budget) else 1
                 return (_health_rank(h), fits_deadline, fits_energy, lat if lat > 0 else 1e9, ene, h.module_id)
 
-            candidates.sort(key=sort_key)
+            candidates.sort(key=metabolic_key)
         else:
             # trust_first (default): health → tier (T0 first) → id
-            def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
+            def trust_key(h: ModuleHandle) -> tuple[int, int, str]:
                 return (_health_rank(h), _TIER_RANK.get(_tier(h), 9), h.module_id)
 
-            candidates.sort(key=sort_key)
+            candidates.sort(key=trust_key)
 
         ranking_trace.append(f"order={[c.module_id for c in candidates]}")
 
