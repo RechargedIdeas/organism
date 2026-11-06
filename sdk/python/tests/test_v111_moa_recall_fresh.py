@@ -12,14 +12,14 @@ from pathlib import Path
 
 from organism_sdk.moa import shadow
 from organism_sdk.moa.reference import reference_experts
-from organism_sdk.moa.scorer import ROUTE_EXPERT, ROUTE_UNSURE, LexicalScorer
+from organism_sdk.moa.scorer import ROUTE_EXPERT, ROUTE_UNSURE, LexicalScorer, RouteDecision
 
 FRESH = Path(__file__).parent / "data" / "moa_routing_recall_fresh.json"
 WRONG_ROUTE_GET = "Which email address should the new hire get?"
 WRONG_ROUTE_LIST = "Which email addresses are allowed to post to the all-staff list?"
 
 
-def _decisions() -> list[tuple[shadow.LabeledQuery, object]]:
+def _decisions() -> list[tuple[shadow.LabeledQuery, RouteDecision]]:
     scorer = LexicalScorer()
     return [(row, scorer.decide(row.query, reference_experts())) for row in shadow.load_labeled(FRESH)]
 
