@@ -15,6 +15,7 @@ with whatever runs the tools.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
@@ -110,6 +111,34 @@ def load_spec(path: str | Path) -> dict[str, Any]:
     if not isinstance(data.get("tools"), list):
         raise RouterError(f"{path}: spec has no tools list")
     return data
+
+
+def model_digest(model: str | Path) -> bytes:
+    """The SHA-256 of a model file, as raw bytes, checked against its ``.sha256`` sidecar.
+
+    ``nlp-cli train`` writes the sidecar in ``sha256sum`` format. A missing sidecar, a sidecar that does not
+    hold a digest, or a file whose bytes differ from it is refused. So a contract never names a digest that
+    the file does not have, and the value is computed from the file, not copied from the sidecar.
+    """
+    path = Path(model)
+    sidecar = path.with_name(path.name + ".sha256")
+    try:
+        fields = sidecar.read_text(encoding="utf-8").split()
+    except OSError as exc:
+        raise RouterError(f"no digest sidecar for {path.name}: {exc.strerror}") from exc
+    if not fields or len(fields[0]) != 64:
+        raise RouterError(f"{sidecar.name} does not start with a SHA-256 digest")
+    try:
+        claimed = bytes.fromhex(fields[0])
+    except ValueError as exc:
+        raise RouterError(f"{sidecar.name} does not hold hexadecimal digits") from exc
+    try:
+        actual = hashlib.sha256(path.read_bytes()).digest()
+    except OSError as exc:
+        raise RouterError(f"cannot read {path.name}: {exc.strerror}") from exc
+    if actual != claimed:
+        raise RouterError(f"{path.name} does not match {sidecar.name}; retrain or restore the model")
+    return actual
 
 
 def _has_path(slots: Sequence[Mapping[str, Any]]) -> bool:

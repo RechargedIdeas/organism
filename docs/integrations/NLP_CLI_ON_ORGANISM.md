@@ -40,7 +40,7 @@ feed a training file, and every answer to a confirmation is written to an audit 
 | T1 classifier | Learned backend interface (D2, open before) | Built: `learned.py` `LearnedBackend` and `decide_label`. The MLP itself stays in Rust, behind the adapter |
 | Abstention threshold chosen on validation | Calibration service (D3, open before) | Built: `calibration.choose_threshold` (lowest threshold that meets the target precision with enough support), `fit_temperature`, `expected_calibration_error` |
 | Held-out and safety evaluation | Shadow runner and promote gate (H1, B1, both existing), and the model-quality record (H3) | Built: `quality.py`. A record names the model digest and the evaluation-set digest, holds metrics as parts per million, and carries a `clean` claim. `quality_gate` refuses a promotion on a metric below its minimum, a record for another model, too few samples, or an unclean set. NLP-CLI's eval report is not yet written as a record |
-| Model file and provenance | `ModelArtifact` (A8) and signed registration (A9), both existing | Existing. NLP-CLI's `.sha256` sidecar is the digest. Not wired |
+| Model file and provenance | `ModelArtifact` (A8) and signed registration (A9), both existing | Built: `model_digest()` hashes the model file and checks it against NLP-CLI's `.sha256` sidecar, and `router_contract()` carries that digest. Not yet registered: signed registration (A9) is not wired |
 | Executors | `ToolHost` (G1, open before), plus `ProcessExecutor` and `ProcessJail` from the work agent (existing, Linux-only) | `ToolHost` built. NLP-CLI's executors were added in its own repository (`crates/core/src/exec.rs`, `scope.rs`, branch `feat/nlp-cli-expansion`). See section 5 |
 | Audit log of answers | Trace and op log (C1, open) | Partly built: `ToolHost` keeps a hash-chained record of every call in memory and passes each record to a sink. Durable storage is still open |
 | Degradation when the model is missing | MoA tier T4 deterministic fallback (`moa/tiers.py`, existing) | Mapped. A missing model means grammar and gate only |
@@ -101,23 +101,26 @@ router decided.
 
 ## 7. Verification
 
-- `sdk/python/tests/test_v113_*.py`: 45 tests for the four gap modules, 9 for the quality record and 23
-  for the adapter. The adapter test that runs the real binary needs `NLPCLI_BIN` and `NLPCLI_SPEC`. With
-  both set, all 77 pass against the NLP-CLI build on `feat/nlp-cli-expansion`.
-- `ruff check` is clean on the new files. `mypy` reports one error, in `contract.py` (a generated proto
-  module that is missing in a fresh checkout). It is not in the new code, and CI generates the module first.
+- `sdk/python/tests/test_v113_*.py`: 45 tests for the four gap modules, 9 for the quality record, 23
+  for the adapter and 8 for the model digest. The adapter test that runs the real binary needs `NLPCLI_BIN`
+  and `NLPCLI_SPEC`, and the real-model digest test needs `NLPCLI_MODEL`. With all three set, all 85 pass
+  against the NLP-CLI build on `feat/nlp-cli-expansion`.
+- `ruff check` is clean on the new files. `mypy` on the new modules (with `modules/` on its path) reports
+  one error, in `contract.py` (a generated proto module that is missing in a fresh checkout). It is not in
+  the new code, and CI generates the module first.
 - Symbolic-link tests in `test_v113_substrate_gaps.py` skip when the host cannot create links. On this
   Windows host they skip, because creating links needs an administrator here. The refusal of a link out of
   the scope is tested on NLP-CLI's side only where links can be created.
 - Not run: the full `pytest -m 'not slow'` suite, and the Rust workspace of Organism. Both need the CI
   environment.
-- Changes are uncommitted in the worktree `X:/Projects/Organism-nlp-cli` on branch `feat/nlp-cli-substrate`,
-  which starts from `main` at `094eca2`. The primary Organism checkout has someone else's staged changes,
-  and this work does not touch them.
+- Committed on branch `feat/nlp-cli-substrate` in the worktree `X:/Projects/Organism-nlp-cli`, which starts
+  from `main` at `094eca2`. The primary Organism checkout has someone else's staged changes, and this work
+  does not touch them. Nothing is pushed.
 
 ## 8. Known limits
 
-- The router's artifact digest is passed in by the caller. It is not read from the model file yet.
+- The router contract is not yet registered in Organism's registry, so no promotion decision uses its digest
+  yet. The digest itself is computed from the model file and checked against its sidecar.
 - `ToolHost`'s audit chain is in memory. A durable sink is open (C1).
 - `PathScope` checks paths; it does not stop a command from opening other files. `run_command` and the
   test runner run without an OS sandbox on Windows. The confirmation is the only guard for them.
