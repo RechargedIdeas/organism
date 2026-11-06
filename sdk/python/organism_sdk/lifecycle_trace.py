@@ -44,11 +44,12 @@ def validate_lct3(entry: LifecycleTraceEntry) -> list[LCTViolation]:
     _ = warnings
     op = (entry.operation or entry.event or "").upper()
     accepted_ops = {"PROMOTE", "ROLLBACK", "REGISTER", "promote", "rollback", "register"}
-    accepted = op in accepted_ops or entry.event in ("promote", "rollback", "register")
     # Callers that already rejected should clear ERROR issues or set outcome rejected.
     # We only warn via LCT when the entry looks accepted but still carries ERRORs.
-    if errors and accepted and not any(
-        _severity_of(i) == "ERROR" and getattr(i, "code", "") == "rejected" for i in errors
+    if (
+        errors
+        and (op in accepted_ops or entry.event in ("promote", "rollback", "register"))
+        and not any(_severity_of(i) == "ERROR" and getattr(i, "code", "") == "rejected" for i in errors)
     ):
         out.append(
             LCTViolation(

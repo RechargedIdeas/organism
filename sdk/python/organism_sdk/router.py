@@ -491,10 +491,10 @@ class Router:
             candidates.sort(key=metabolic_key)
         else:
             # trust_first (default): health → tier (T0 first) → id
-            def sort_key(h: ModuleHandle) -> tuple[int, int, str]:
+            def trust_key(h: ModuleHandle) -> tuple[int, int, str]:
                 return (_health_rank(h), _TIER_RANK.get(_tier(h), 9), h.module_id)
 
-            candidates.sort(key=sort_key)
+            candidates.sort(key=trust_key)
 
         ranking_trace.append(f"order={[c.module_id for c in candidates]}")
 

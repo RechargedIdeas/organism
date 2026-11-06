@@ -105,8 +105,7 @@ def capabilities() -> dict[str, Any]:
         import seccomp  # type: ignore[import-not-found]  # noqa: F401
 
         has_seccomp = True
-    # An optional probe: any failure, not only ImportError, means seccomp is treated as absent.
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - a best-effort probe: any failure means seccomp is unavailable
         has_seccomp = False
     return {
         "platform": platform.system(),

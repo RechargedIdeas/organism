@@ -32,15 +32,9 @@ from organism_sdk.sandbox import jail as jail_mod
 from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
 
 
-def _register(
-    rc: RegistryClient,
-    mid: str,
-    *,
-    role: ModuleRole = ModuleRole.SOLVER,
-    tier: ReliabilityTier = ReliabilityTier.T0_DETERMINISTIC,
-    state: str = "DELIBERATION",
-    **kw: Any,
-) -> SubstrateContract:
+def _register(rc: RegistryClient, mid: str, *, role: ModuleRole = ModuleRole.SOLVER,
+              tier: ReliabilityTier = ReliabilityTier.T0_DETERMINISTIC,
+              state: str = "DELIBERATION", **kw: Any) -> SubstrateContract:
     c = make_contract(
         module_id=mid,
         version="0.1.0",
@@ -216,7 +210,8 @@ def test_oc6_custom_thermal_thresholds() -> None:
     m.signals.thermal = 0.01
     m.tick()
     m.advance(5.0)
-    assert str(m.level) == "L1"
+    # mypy keeps the "L0" narrowing from the assert above; the level changed at run time.
+    assert m.level == "L1"  # type: ignore[comparison-overlap]
 
 
 # ---- OC-7 ----
@@ -253,7 +248,8 @@ def test_oc7_ranking_in_policy_digest() -> None:
 
 # ---- OC-8 ----
 def test_oc8_contract_factory_public_and_modules_packaged() -> None:
-    import organism_modules
+    # Not found here (it lives in modules/); installed without stubs on CI. Either way mypy must not fail the gate.
+    import organism_modules  # type: ignore[import-not-found, import-untyped, unused-ignore]
     from organism_sdk.contract_factory import make_contract as mc
 
     assert "reservoir" in organism_modules.REFERENCE_MODULES

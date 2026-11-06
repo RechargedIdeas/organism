@@ -81,7 +81,6 @@ module = [
     "snn_sentinel", "snn_sentinel.*",
     "bio_digital", "bio_digital.*",
     "_common", "_common.*",
-    "organism_modules", "organism_modules.*",
 ]
 ignore_missing_imports = true
 
