@@ -46,6 +46,9 @@
 ## [Unreleased] - v1.11 MoA layer (in progress)
 
 ### Added
+- **Custode upgrade spec** (docs only): `docs/CUSTODE_UPGRADE_PLAN.md` and `docs/custode/` describe how the Custode
+  browser agent would run as an Organism application. Proposed. No code, proto, or CI change is made. The open decisions
+  O-11 (contract numbering) and O-12 (bridge fit) are recorded in the Custode repository.
 - **Work agent decisions adopted** (2026-11-04): W-D1a, the executor is Claude Code in non-interactive print mode, the one CLI in the argv template. W-D2, rules first, with no hosted LLM yet. W-D5 and S1, the approver holds the signing key and the agent verifies only. See `docs/SUPERAGENT_COMPARISON.md`, section 6.
 - **Work agent design record and pure domain** (v1.12, W0 and W1): `docs/v1.12/WORK_AGENT.md` records the decisions and the
   principles. `organism_sdk.work` holds the domain types, the admission gate (`admit`), the Ticket stage table
