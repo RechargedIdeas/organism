@@ -27,6 +27,7 @@ from organism_sdk.contract import (
     SubstrateContract,
     ValidationIssue,
 )
+from organism_sdk.contract_factory import digest_of, make_contract
 from organism_sdk.errors import (
     JustificationMissing,
     ModalityUnavailable,
@@ -38,12 +39,11 @@ from organism_sdk.health import HealthReport, HealthServer
 from organism_sdk.hypervector import DIM, Hypervector
 from organism_sdk.inputs import ModalityPayload, PerceptionInput, TaskDescriptor
 from organism_sdk.justification import Emission, JustificationToken, VerificationResult
+from organism_sdk.lifecycle_trace import validate_lifecycle_entry
 from organism_sdk.module import OrganismModule, run_handle
 from organism_sdk.registry import CapabilityFilter, RegistryClient
-from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
-from organism_sdk.lifecycle_trace import validate_lifecycle_entry
-from organism_sdk.contract_factory import digest_of, make_contract
 from organism_sdk.router import RankingPolicy, Router, compute_policy_digest
+from organism_sdk.trace import LifecycleTraceEntry, TraceEmitter, V02TraceSink
 from organism_sdk.workspace import BindingRecord, WorkspaceClient
 
 __all__ = [
@@ -55,6 +55,7 @@ __all__ = [
     "CapabilityScopes",
     "CircadianClock",
     "DegradationMachine",
+    "DegradationThresholds",
     "DevelopmentalGenome",
     "DevelopmentalStage",
     "Emission",
@@ -80,6 +81,7 @@ __all__ = [
     "JustificationSpec",
     "JustificationToken",
     "Lifecycle",
+    "LifecycleTraceEntry",
     "MemoryExport",
     "MetabolicProfile",
     "ModalityPayload",
@@ -89,9 +91,11 @@ __all__ = [
     "OrganismModule",
     "PerceptionInput",
     "PerceptionSignature",
+    "RankingPolicy",
     "RegistrationRejected",
     "RegistryClient",
     "ReliabilityTier",
+    "Router",
     "RouterExposedParams",
     "SDKInvariantViolation",
     "SafetyDeclaration",
@@ -100,14 +104,10 @@ __all__ = [
     "TaskDescriptor",
     "TraceEmitter",
     "TraceUnavailable",
+    "V02TraceSink",
     "ValidationIssue",
     "VerificationResult",
     "WorkspaceClient",
-    "DegradationThresholds",
-    "LifecycleTraceEntry",
-    "RankingPolicy",
-    "Router",
-    "V02TraceSink",
     "__version__",
     "compute_policy_digest",
     "digest_of",

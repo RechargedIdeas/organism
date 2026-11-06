@@ -26,7 +26,7 @@ def _severity_of(issue: Any) -> str:
     sev = getattr(issue, "severity", None)
     if sev is None and isinstance(issue, dict):
         sev = issue.get("severity")
-    if hasattr(sev, "value"):
+    if sev is not None and hasattr(sev, "value"):
         return str(sev.value)
     return str(sev or "")
 
@@ -44,17 +44,20 @@ def validate_lct3(entry: LifecycleTraceEntry) -> list[LCTViolation]:
     _ = warnings
     op = (entry.operation or entry.event or "").upper()
     accepted_ops = {"PROMOTE", "ROLLBACK", "REGISTER", "promote", "rollback", "register"}
-    if errors and (op in accepted_ops or entry.event in ("promote", "rollback", "register")):
-        # Callers that already rejected should clear ERROR issues or set outcome rejected.
-        # We only warn via LCT when the entry looks accepted but still carries ERRORs.
-        if not any(_severity_of(i) == "ERROR" and getattr(i, "code", "") == "rejected" for i in errors):
-            out.append(
-                LCTViolation(
-                    code="lct3_error_on_accepted",
-                    field_path="validation_issues",
-                    message=f"accepted {op} carries ERROR validation_issues",
-                )
+    # Callers that already rejected should clear ERROR issues or set outcome rejected.
+    # We only warn via LCT when the entry looks accepted but still carries ERRORs.
+    if (
+        errors
+        and (op in accepted_ops or entry.event in ("promote", "rollback", "register"))
+        and not any(_severity_of(i) == "ERROR" and getattr(i, "code", "") == "rejected" for i in errors)
+    ):
+        out.append(
+            LCTViolation(
+                code="lct3_error_on_accepted",
+                field_path="validation_issues",
+                message=f"accepted {op} carries ERROR validation_issues",
             )
+        )
     return out
 
 
@@ -92,7 +95,7 @@ def validate_lct12(
             )
         )
     target_op = (target.operation or target.event or "").upper()
-    if target_op not in {"PROMOTE", "REGISTER", "HOT_SWAP", "promote", "register", "hot_swap", "HOT_SWAP"}:
+    if target_op not in {"PROMOTE", "REGISTER", "HOT_SWAP", "promote", "register", "hot_swap"}:
         out.append(
             LCTViolation(
                 code="lct12_target_not_promote",
