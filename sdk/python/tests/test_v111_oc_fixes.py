@@ -248,7 +248,8 @@ def test_oc7_ranking_in_policy_digest() -> None:
 
 # ---- OC-8 ----
 def test_oc8_contract_factory_public_and_modules_packaged() -> None:
-    import organism_modules  # type: ignore[import-not-found]  # lives in modules/, which mypy does not search
+    # Not found here (it lives in modules/); installed without stubs on CI. Either way mypy must not fail the gate.
+    import organism_modules  # type: ignore[import-not-found, import-untyped, unused-ignore]
     from organism_sdk.contract_factory import make_contract as mc
 
     assert "reservoir" in organism_modules.REFERENCE_MODULES
