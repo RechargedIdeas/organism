@@ -1,0 +1,423 @@
+{
+  "controls": {
+    "lexical_router": {
+      "accuracy": {
+        "mean": 0.9743589743589743,
+        "std": 0.0
+      },
+      "macro_f1": {
+        "mean": 0.9751409640896785,
+        "std": 0.0
+      },
+      "recall_extractor": {
+        "mean": 0.9574468085106383,
+        "std": 0.0
+      },
+      "recall_intent_classifier": {
+        "mean": 0.9655172413793104,
+        "std": 0.0
+      },
+      "recall_unsure": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "wrong_route": {
+        "mean": 0.0,
+        "std": 0.0
+      }
+    },
+    "lexical_router_note": "Rules were tuned on these rows, so this score is optimistic.",
+    "majority_class": {
+      "accuracy": {
+        "mean": 0.4017094017094018,
+        "std": 5.551115123125783e-17
+      },
+      "macro_f1": {
+        "mean": 0.19105691056910568,
+        "std": 0.0
+      },
+      "recall_extractor": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "recall_intent_classifier": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "recall_unsure": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wrong_route": {
+        "mean": 0.5982905982905983,
+        "std": 0.0
+      }
+    },
+    "rows": 117
+  },
+  "folds": 5,
+  "generated_at": "2026-11-06T20:33:05+00:00",
+  "models": [
+    {
+      "accuracy_ci95_seed0": [
+        0.8718,
+        0.9658
+      ],
+      "batch_rows_per_s": 209.2,
+      "dim": 384,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9",
+        "torch": "2.15.0+cpu",
+        "torch_threads": 4
+      },
+      "kind": "sentence",
+      "latency_ms": {
+        "max": 522.891,
+        "p50": 14.648,
+        "p95": 21.835
+      },
+      "license": "apache-2.0",
+      "load_s": 8.302,
+      "name": "minilm-l6",
+      "params": 22713216,
+      "peak_rss_mb": 522.6,
+      "probe_parameters": 1155,
+      "repo": "sentence-transformers/all-MiniLM-L6-v2",
+      "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.8974358974358975,
+          "std": 0.030419026359063593
+        },
+        "macro_f1": {
+          "mean": 0.8855301875783241,
+          "std": 0.034207540627745225
+        },
+        "recall_extractor": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recall_intent_classifier": {
+          "mean": 0.8735632183908045,
+          "std": 0.05860941969646877
+        },
+        "recall_unsure": {
+          "mean": 0.7967479674796748,
+          "std": 0.04599068495522259
+        },
+        "wrong_route": {
+          "mean": 0.07122507122507123,
+          "std": 0.016116393873197663
+        }
+      },
+      "seconds": 13.7,
+      "seeds": 3
+    },
+    {
+      "accuracy_ci95_seed0": [
+        0.8462,
+        0.9487
+      ],
+      "batch_rows_per_s": 112.3,
+      "dim": 384,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9",
+        "torch": "2.15.0+cpu",
+        "torch_threads": 4
+      },
+      "kind": "sentence",
+      "latency_ms": {
+        "max": 42.522,
+        "p50": 25.144,
+        "p95": 35.116
+      },
+      "license": "mit",
+      "load_s": 8.236,
+      "name": "bge-small-en-v1.5",
+      "params": 33360000,
+      "peak_rss_mb": 562.5,
+      "probe_parameters": 1155,
+      "repo": "BAAI/bge-small-en-v1.5",
+      "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.8974358974358975,
+          "std": 0.012087295404898257
+        },
+        "macro_f1": {
+          "mean": 0.8885621007191555,
+          "std": 0.01261868762004788
+        },
+        "recall_extractor": {
+          "mean": 0.9787234042553191,
+          "std": 0.0
+        },
+        "recall_intent_classifier": {
+          "mean": 0.9080459770114943,
+          "std": 0.032510656606278054
+        },
+        "recall_unsure": {
+          "mean": 0.7967479674796749,
+          "std": 0.01149767123880566
+        },
+        "wrong_route": {
+          "mean": 0.07692307692307693,
+          "std": 0.0
+        }
+      },
+      "seconds": 14.9,
+      "seeds": 3
+    },
+    {
+      "accuracy_ci95_seed0": [
+        0.8803,
+        0.9744
+      ],
+      "batch_rows_per_s": 96.9,
+      "dim": 384,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9",
+        "torch": "2.15.0+cpu",
+        "torch_threads": 4
+      },
+      "kind": "sentence",
+      "latency_ms": {
+        "max": 42.984,
+        "p50": 26.591,
+        "p95": 37.581
+      },
+      "license": "mit",
+      "load_s": 8.2,
+      "name": "e5-small-v2",
+      "params": 33360000,
+      "peak_rss_mb": 561.6,
+      "probe_parameters": 1155,
+      "repo": "intfloat/e5-small-v2",
+      "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.9202279202279202,
+          "std": 0.008058196936598854
+        },
+        "macro_f1": {
+          "mean": 0.909693502435438,
+          "std": 0.009273259370083737
+        },
+        "recall_extractor": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recall_intent_classifier": {
+          "mean": 0.8965517241379309,
+          "std": 0.028155054514749183
+        },
+        "recall_unsure": {
+          "mean": 0.8455284552845529,
+          "std": 0.01149767123880566
+        },
+        "wrong_route": {
+          "mean": 0.054131054131054124,
+          "std": 0.004029098468299418
+        }
+      },
+      "seconds": 15.1,
+      "seeds": 3
+    },
+    {
+      "accuracy_ci95_seed0": [
+        0.8547,
+        0.9573
+      ],
+      "batch_rows_per_s": 108.5,
+      "dim": 384,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9",
+        "torch": "2.15.0+cpu",
+        "torch_threads": 4
+      },
+      "kind": "sentence",
+      "latency_ms": {
+        "max": 42.449,
+        "p50": 25.506,
+        "p95": 35.771
+      },
+      "license": "mit",
+      "load_s": 8.215,
+      "name": "gte-small",
+      "params": 33360000,
+      "peak_rss_mb": 563.7,
+      "probe_parameters": 1155,
+      "repo": "thenlper/gte-small",
+      "revision": "17e1f347d17fe144873b1201da91788898c639cd",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.8917378917378919,
+          "std": 0.014527121121346964
+        },
+        "macro_f1": {
+          "mean": 0.880643324987703,
+          "std": 0.01578490269167351
+        },
+        "recall_extractor": {
+          "mean": 0.9858156028368793,
+          "std": 0.010029883421085795
+        },
+        "recall_intent_classifier": {
+          "mean": 0.9080459770114943,
+          "std": 0.032510656606278054
+        },
+        "recall_unsure": {
+          "mean": 0.7723577235772359,
+          "std": 0.02299534247761132
+        },
+        "wrong_route": {
+          "mean": 0.07977207977207977,
+          "std": 0.00805819693659883
+        }
+      },
+      "seconds": 14.9,
+      "seeds": 3
+    },
+    {
+      "accuracy_ci95_seed0": [
+        0.8205,
+        0.9402
+      ],
+      "batch_rows_per_s": 33704.0,
+      "dim": 256,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9"
+      },
+      "kind": "static",
+      "latency_ms": {
+        "max": 0.323,
+        "p50": 0.186,
+        "p95": 0.225
+      },
+      "license": "mit",
+      "load_s": 0.59,
+      "name": "potion-base-8m",
+      "params": 7559168,
+      "peak_rss_mb": 95.6,
+      "probe_parameters": 771,
+      "repo": "minishlab/potion-base-8M",
+      "revision": "bf8b056651a2c21b8d2565580b8569da283cab23",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.8660968660968661,
+          "std": 0.014527121121346964
+        },
+        "macro_f1": {
+          "mean": 0.8563961654775082,
+          "std": 0.01648301465504572
+        },
+        "recall_extractor": {
+          "mean": 0.9361702127659575,
+          "std": 0.017372267679313345
+        },
+        "recall_intent_classifier": {
+          "mean": 0.8160919540229884,
+          "std": 0.043007556169815414
+        },
+        "recall_unsure": {
+          "mean": 0.8211382113821138,
+          "std": 0.01149767123880561
+        },
+        "wrong_route": {
+          "mean": 0.07407407407407408,
+          "std": 0.00805819693659883
+        }
+      },
+      "seconds": 2.0,
+      "seeds": 3
+    },
+    {
+      "accuracy_ci95_seed0": [
+        0.906,
+        0.9829
+      ],
+      "batch_rows_per_s": 4.5,
+      "dim": 1024,
+      "folds": 5,
+      "host": {
+        "cpu_count": 12,
+        "platform": "Windows-10-10.0.19045-SP0",
+        "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+        "python": "3.11.9",
+        "torch": "2.15.0+cpu",
+        "torch_threads": 4
+      },
+      "kind": "sentence",
+      "latency_ms": {
+        "max": 533.583,
+        "p50": 291.437,
+        "p95": 384.308
+      },
+      "license": "apache-2.0",
+      "load_s": 10.268,
+      "name": "qwen3-embedding-0.6b",
+      "params": 595776512,
+      "peak_rss_mb": 2807.4,
+      "probe_parameters": 3075,
+      "repo": "Qwen/Qwen3-Embedding-0.6B",
+      "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+      "rows": 117,
+      "scores": {
+        "accuracy": {
+          "mean": 0.9287749287749287,
+          "std": 0.017562433056891657
+        },
+        "macro_f1": {
+          "mean": 0.9182816758305558,
+          "std": 0.02045254143569674
+        },
+        "recall_extractor": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recall_intent_classifier": {
+          "mean": 0.8620689655172414,
+          "std": 0.04876598490941706
+        },
+        "recall_unsure": {
+          "mean": 0.894308943089431,
+          "std": 0.02299534247761132
+        },
+        "wrong_route": {
+          "mean": 0.03703703703703704,
+          "std": 0.008058196936598833
+        }
+      },
+      "seconds": 78.2,
+      "seeds": 3
+    }
+  ],
+  "rows": 117,
+  "seeds": 3,
+  "threads": 4
+}

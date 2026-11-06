@@ -1,0 +1,59 @@
+{
+  "accuracy_ci95_seed0": [
+    0.8803,
+    0.9744
+  ],
+  "batch_rows_per_s": 96.9,
+  "dim": 384,
+  "folds": 5,
+  "host": {
+    "cpu_count": 12,
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 23 Model 1 Stepping 1, AuthenticAMD",
+    "python": "3.11.9",
+    "torch": "2.15.0+cpu",
+    "torch_threads": 4
+  },
+  "kind": "sentence",
+  "latency_ms": {
+    "max": 42.984,
+    "p50": 26.591,
+    "p95": 37.581
+  },
+  "license": "mit",
+  "load_s": 8.2,
+  "name": "e5-small-v2",
+  "params": 33360000,
+  "peak_rss_mb": 561.6,
+  "probe_parameters": 1155,
+  "repo": "intfloat/e5-small-v2",
+  "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52",
+  "rows": 117,
+  "scores": {
+    "accuracy": {
+      "mean": 0.9202279202279202,
+      "std": 0.008058196936598854
+    },
+    "macro_f1": {
+      "mean": 0.909693502435438,
+      "std": 0.009273259370083737
+    },
+    "recall_extractor": {
+      "mean": 1.0,
+      "std": 0.0
+    },
+    "recall_intent_classifier": {
+      "mean": 0.8965517241379309,
+      "std": 0.028155054514749183
+    },
+    "recall_unsure": {
+      "mean": 0.8455284552845529,
+      "std": 0.01149767123880566
+    },
+    "wrong_route": {
+      "mean": 0.054131054131054124,
+      "std": 0.004029098468299418
+    }
+  },
+  "seeds": 3
+}

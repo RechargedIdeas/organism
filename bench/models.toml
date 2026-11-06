@@ -1,0 +1,40 @@
+# Candidate encoders for the MoA intent router. bench/fetch_models.py downloads each one into
+# bench/models/<name> at the commit recorded in bench/models.lock.json. The weights are never
+# committed. run_bench.py benchmarks them one at a time, in the order listed here.
+#
+# kind:         sentence = a transformer loaded through sentence-transformers
+#               static   = a Model2Vec static embedding table
+# query_prefix: text prepended to every input (e5 expects "query: " on classification inputs)
+#
+# Models that need trust_remote_code are left out: that would run code from the hub at load time.
+
+[[model]]
+name = "minilm-l6"
+repo = "sentence-transformers/all-MiniLM-L6-v2"
+kind = "sentence"
+
+[[model]]
+name = "bge-small-en-v1.5"
+repo = "BAAI/bge-small-en-v1.5"
+kind = "sentence"
+
+[[model]]
+name = "e5-small-v2"
+repo = "intfloat/e5-small-v2"
+kind = "sentence"
+query_prefix = "query: "
+
+[[model]]
+name = "gte-small"
+repo = "thenlper/gte-small"
+kind = "sentence"
+
+[[model]]
+name = "potion-base-8m"
+repo = "minishlab/potion-base-8M"
+kind = "static"
+
+[[model]]
+name = "qwen3-embedding-0.6b"
+repo = "Qwen/Qwen3-Embedding-0.6B"
+kind = "sentence"
