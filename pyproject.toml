@@ -77,6 +77,7 @@ ignore_missing_imports = true
 # In-repo packages under modules/ ship without a py.typed marker, so their types are Any here.
 [[tool.mypy.overrides]]
 module = [
+    "nlp_cli", "nlp_cli.*",
     "learned_module", "learned_module.*",
     "snn_sentinel", "snn_sentinel.*",
     "bio_digital", "bio_digital.*",
